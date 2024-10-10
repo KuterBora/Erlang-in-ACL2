@@ -28,10 +28,6 @@ world_init() ->
     Init_World.
 
 % Add a binding from the name to the module into the world.
-world_add_module(#{}, Module_Name, Module) ->
-    Init_World = world_init(),
-    New_World = Init_World#{Module_Name => Module},
-    New_World;
 world_add_module(World, Module_Name, Module) ->
     New_World = World#{Module_Name => Module},
     New_World.
