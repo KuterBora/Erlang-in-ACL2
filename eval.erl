@@ -7,30 +7,38 @@
 %%% TODO:
 
 %%% Core
-% - built in hd and tl
-% fix/test local binding creation
-% - pattern matching in functions
+%%% - fun expression
+%%% - match _, try matching the empty list
+%%% - match single element list
+%%% - match list when RHS is var, requires refactoring match 
+%%% - tuples matching
 
 %%% Time Allows
-% - tuples matching
 % fix try-catch
+% tests for function call scopes, and variable scopes
 % - maps
 % test the error handling
-% built in guard functions, rest
+% built in guard functions
 % test different pattern matching
 % modify world_add_module to load from an existing erlang file
 %   and handle the Module Map creation automatically.
 
 %%% Utility
+%%% - add to doc that bindings have to be ordered
 % document changes
 % better function commentary
 % add guards and type checking to the evaluator
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  The Evaluator
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Evaluates ASTs with given Bidnings by calling each AST
 % linearly and passing the resulting Bindings to the
 % next AST.
 % - ASTs is the list of trees returned by erl:parse_exprs.
-% - Binding is a dictionary in the form [{'<key>', <val>}, ...].
+% - Bindings is an ordered dictionary in the form [{'<key>', <val>}, ...].
 % - World is TODO
 % Returns {ok, Value, NewBindings} | {error, Message}
 eval_exprs(ASTs, Bindings, World) when tl(ASTs) == [] ->
@@ -81,17 +89,19 @@ eval_expr(AST, Bindings, World) ->
             eval_op(Op, Operand1, Operand2, Bindings);
         % if
         {'if', _, Clasues} -> eval_if(Clasues, Bindings, World);
+        % case of
+        {'case', _, Arg, Clauses} -> eval_case(Arg, Clauses, Bindings, World);
+        % try catch statements (simplified)
+        {'try', _, Exprs, _, _, _} ->
+            eval_try_catch(Exprs, Bindings, World);
         % local calls
         {call, _, {atom, _, Function_Name}, Args} -> 
             eval_call(local, Function_Name, Args, Bindings, World);
         % remote calls
         {call, _, {remote, _, {atom, _, Module_Name}, {atom, _, Function_Name} }, Args} -> 
             eval_call(Module_Name, Function_Name, Args, Bindings, World);
-        % try catch statements (simplified)
-        {'try', _, Exprs, _, _, _} ->
-            eval_try_catch(Exprs, Bindings, World);
-        % unrecognized language
-        _ -> {error, "Language in the AST is not recognized by the evaluator."}
+        % not accepted language
+        _ -> {error, "AST is not accepted by the evaluator."}
     end.
 
 % Given an Operation, Bindings and two expressions as ASTs,
@@ -277,12 +287,51 @@ eval_match(Exp1, Exp2, Bindings, World) ->
 % of condition statements.
 eval_if([], _, _) -> {error, "no true branch found when evaluating an if expression"};
 eval_if([HdClause | TlClauses], Bindings, World) ->
-    {clause, _, [], [Condition], Statement} = HdClause,
-    {ok, Eval_Cond, _} = eval_exprs(Condition, Bindings, World),
-    case Eval_Cond of
+    {clause, _, [], [Conditions], Statement} = HdClause,
+    Eval_Conds = eval_conditions(Conditions, Bindings, World),
+    case Eval_Conds of
         true -> eval_exprs(Statement, Bindings, World);
         _ -> eval_if(TlClauses, Bindings, World)
     end.
+
+% Return true if every expression in the given list evaluates true
+eval_conditions([], _, _) -> true;
+eval_conditions([Condition | Rest], Bindings, World) ->
+    {ok, Condition_Result, _} = eval_expr(Condition, Bindings, World),
+    if
+        Condition_Result -> eval_conditions(Rest, Bindings, World);
+        true -> false
+    end.
+
+% Evaluates a case of expression
+% if there are no conditions to check, implying that no "_" has been seen
+% an error is returned. clasues have lists of arguments to be matched, list of guards,
+% and list of expressions returned.
+eval_case(_, [], _, _) -> {error, "no case clause matching given argument."};
+eval_case(Arg, [HdClause | TlClauses], Bindings, World) ->
+    {clause, _, [Case], Guards, Statement} = HdClause,
+    TryMatch = eval_match(Case, Arg, Bindings, World),
+    case {TryMatch, Guards} of
+        {{ok, _, NewBindings}, [GuardList]} ->
+            Eval_Guards = eval_conditions(GuardList, NewBindings, World),
+            if
+                Eval_Guards -> eval_exprs(Statement, NewBindings, World);
+                true -> eval_case(Arg, TlClauses, Bindings, World)
+            end;
+        {{ok, _, NewBindings}, []} ->
+            eval_exprs(Statement, NewBindings, World);
+        _ -> eval_case(Arg, TlClauses, Bindings, World)
+    end.
+
+
+% [{'case',1,
+%          {var,1,'X'}, Arg
+%          [{clause,1,             
+%                   [{integer,1,1}],
+%                   [[{call,1,{atom,1,is_integer},[{var,1,'X'}]}]],
+%                   [{atom,1,one}]}, Hd Clause
+%           {clause,1,[{integer,1,2}],[],[{atom,1,two}]},
+%           {clause,1,[{integer,1,3}],[],[{atom,1,three}]}]}] TlCauses
 
 % Evaluate a try catch expression
 % Does not have actual functionality currently, catches any error regardless.
@@ -302,19 +351,20 @@ eval_try_catch(Exprs, Bindings, World) ->
 
 % Evaluates calls
 % local calls are made to the module "local"
-% TODO: error handling, bindings must be made in body evaluation when pattern matching is added
+% TODO: error handling
 eval_call(Module_Name, Function_Name, Args, Bindings, World) ->
     Module = maps:get(Module_Name, World),
     Function_Arity = length(Args),
     Function_Def = maps:get({Function_Name, Function_Arity}, Module),
     [HdClause | TlClauses] = Function_Def,
     Local_Module = world:module_add_function_AST(
-        maps:get(local, World),
+        maps:get(local, world:world_init()),
         Function_Name,
         Function_Arity,
         Function_Def
     ),
-    Local_World = world:world_add_module(world:world_init(), local, Local_Module),
+    % ! instead of world_intit(), should probably use World
+    Local_World = world:world_add_module(World, local, Local_Module),
     Function_Result = eval_function_body([HdClause | TlClauses], Args, Bindings,  World, Local_World),
     case Function_Result of
         {ok, EvalVal, _} -> {ok, EvalVal, Bindings};
@@ -331,16 +381,24 @@ eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
 
     Argument_Values = parse_AST_list(Args, Bindings, World, []),
 
-    LocalBindings = lists:map(
-        fun({{var, _, Name}, Arg}) -> 
-            {Name, Arg};
-        
-        ({_, _}) -> {empty, empty}
+    LocalBindings_List = lists:map( % add tuple matching here, as well as list with a single element?
+        fun({{var, _, Name}, Arg}) -> [{Name, Arg}];
+            ({{cons, _, {var, _, Car}, {var, _, Cdr}}, Arg}) ->
+                [{Car, hd(Arg)}, {Cdr, tl(Arg)}];
+            ({{cons, _, {var, _, Car}, _}, Arg}) ->
+                [{Car, hd(Arg)}];
+            ({{cons, _, _, {var, _, Cdr}}, Arg}) ->
+                [{Cdr, tl(Arg)}];
+            ({_, _}) -> [{empty, empty}]
         end, 
         lists:zip(Param_List, Argument_Values)
     ),
+
+    LocalBindings = lists:sort(lists:flatten(LocalBindings_List)),
     
-    % Pattern matching in function signitures cannot make calls, so the world is empty 
+    % Pattern matching in function signitures cannot make calls, so the world is empty
+    % assume ParamList and LocalBindings are of the same length
+    % also assume every variable in Param_Values can be evaluated using LocalBindings
     Param_Values = parse_AST_list(Param_List, LocalBindings, #{}, []),
     if
         Argument_Values == Param_Values ->
@@ -366,6 +424,15 @@ eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
             end;
         true -> eval_function_body(TlClauses, Args, Bindings, World, LocalWorld)
     end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  Evalulate Fun Expressions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Evaluate a fun expression by creating the function it represents, naming it
+% and adding it to the local module of the world. Returns the name (symbol) 
+% of the function created.
+eval_fun() -> notSoFun.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
