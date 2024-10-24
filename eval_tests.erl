@@ -17,7 +17,13 @@ test_matches() ->
   ?assertEqual({ok, [a, b, c], [{'H', a}, {'T', [b, c]}]}, eval:eval_string("[H | T] = [a, b, c].", [{'T', [b, c]}])),
   ?assertEqual({ok, [a, b, c], [{'H', a}, {'T', [b, c]}]}, eval:eval_string("[H | T] = [a, b, c].", [])),
   ?assertEqual({ok, [a, b, c], [{'H', a}]}, eval:eval_string("[H | [b, c]] = [a, b, c].", [])),
-  ?assertEqual({ok, [a, b, c], [{'T', [b, c]}]}, eval:eval_string("[a | T] = [a, b, c].", [])).
+  ?assertEqual({ok, [a, b, c], [{'T', [b, c]}]}, eval:eval_string("[a | T] = [a, b, c].", [])),
+  ?assertEqual({ok, [], []}, eval:eval_string("[] = [].", [])),
+  ?assertEqual({ok, [j], [{'J', j}]}, eval:eval_string("[J] = [j].", [])),
+  ?assertEqual({ok, [1, 2], [{'X', 1}]}, eval:eval_string("[X | _] = [1, 2].", [])),
+  ?assertEqual({ok, [1, 2], [{'Y', [2]}]}, eval:eval_string("[_ | Y] = [1, 2].", [])),
+  ?assertEqual({ok, [1, 2], [{'X', 1}]}, eval:eval_string("[X | _] = [1, 2].", [{'X', 1}])),
+  ?assertEqual({ok, [1, 2], [{'Y', [2]}]}, eval:eval_string("[_ | Y] = [1, 2].", [{'Y', [2]}])).
 
 % Tests for evaluating function calls/guards
 test_world() ->
@@ -105,7 +111,9 @@ test_bindings() ->
     tautology([Hdx | Tlx], [Hdy | Tly]) ->
       X = [Hdx | Tlx],
       Y = [Hdy | Tly],
-      X ++ Y."
+      X ++ Y;
+    tautology(_, _) ->
+      empty."
   ),
   World = world:world_add_module(world:world_init(), module, Module),
 
@@ -209,7 +217,5 @@ test_general() ->
   
   % error handling
   ?assertEqual({error, "No match of right hand side value."}, eval:eval_string("X = 2, X = 3.", [])),
-  ?assertEqual({error, "Operation with given arguments is not recognized by the evaluator."}, 
-    eval:eval_string("1 rem 2.", [])),               % should be allowed eventually.
-  ?assertEqual({error, "AST is not accepted by the evaluator."}, 
-    eval:eval_string("fun(_) -> 2 end, 1.", [])).  % should be allowed eventually.
+  ?assertEqual({error, "Operation with given arguments is not allowed by the evaluator."}, 
+    eval:eval_string("1 rem 2.", [])).               % should be allowed eventually.
