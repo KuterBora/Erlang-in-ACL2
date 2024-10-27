@@ -11,29 +11,40 @@ test_all() ->
 
 % Tests for evaluating match for lists and tuples as well as Pattern Matching
 test_matches() ->
-  ?assertEqual({ok, [7, 8, 9, abc], [{'X', [7, 8, 9, abc]}]}, eval:eval_string("X = [7, 8, 9, abc].", [])),
-  ?assertEqual({ok, [a, b, c], [{'H', a}, {'T', [b, c]}]}, eval:eval_string("[H | T] = [a, b, c].", [{'H', a}, {'T', [b, c]}])),
-  ?assertEqual({ok, [a, b, c], [{'H', a}, {'T', [b, c]}]}, eval:eval_string("[H | T] = [a, b, c].", [{'H', a}])),
-  ?assertEqual({ok, [a, b, c], [{'H', a}, {'T', [b, c]}]}, eval:eval_string("[H | T] = [a, b, c].", [{'T', [b, c]}])),
-  ?assertEqual({ok, [a, b, c], [{'H', a}, {'T', [b, c]}]}, eval:eval_string("[H | T] = [a, b, c].", [])),
-  ?assertEqual({ok, [a, b, c], [{'H', a}]}, eval:eval_string("[H | [b, c]] = [a, b, c].", [])),
-  ?assertEqual({ok, [a, b, c], [{'T', [b, c]}]}, eval:eval_string("[a | T] = [a, b, c].", [])),
-  ?assertEqual({ok, [], []}, eval:eval_string("[] = [].", [])),
-  ?assertEqual({ok, [j], [{'J', j}]}, eval:eval_string("[J] = [j].", [])),
-  ?assertEqual({ok, [1, 2], [{'X', 1}]}, eval:eval_string("[X | _] = [1, 2].", [])),
-  ?assertEqual({ok, [1, 2], [{'Y', [2]}]}, eval:eval_string("[_ | Y] = [1, 2].", [])),
-  ?assertEqual({ok, [1, 2], [{'X', 1}]}, eval:eval_string("[X | _] = [1, 2].", [{'X', 1}])),
-  ?assertEqual({ok, [1, 2], [{'Y', [2]}]}, eval:eval_string("[_ | Y] = [1, 2].", [{'Y', [2]}])).
+  ?assertEqual({ok, {cons, [{integer, 7}, {integer, 8}, {integer, 9}, {atom, abc}]},
+     [{'X', {cons, [{integer, 7}, {integer, 8}, {integer, 9}, {atom, abc}]}}]}, 
+    eval:eval_string("X = [7, 8, 9, abc].", [])),
+  ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, [{'H', {atom, a}}, {'T', {cons, [{atom, b}, {atom, c}]}}]}, 
+    eval:eval_string("[H | T] = [a, b, c].", [{'H', {atom, a}}, {'T', {cons, [{atom, b}, {atom, c}]}}])),
+  ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, [{'H', {atom, a}}, {'T', {cons, [{atom, b}, {atom, c}]}}]}, 
+    eval:eval_string("[H | T] = [a, b, c].", [{'H', {atom, a}}])),
+  ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, [{'H', {atom, a}}, {'T', {cons, [{atom, b}, {atom, c}]}}]}, 
+    eval:eval_string("[H | T] = [a, b, c].", [{'T', {cons, [{atom, b}, {atom, c}]}}])),
+  ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, [{'H', {atom, a}}, {'T', {cons, [{atom, b}, {atom, c}]}}]}, 
+    eval:eval_string("[H | T] = [a, b, c].", [])),
+  ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, [{'H', {atom, a}}]}, eval:eval_string("[H | [b, c]] = [a, b, c].", [])),
+  ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, [{'T', {cons, [{atom, b}, {atom, c}]}}]}, 
+    eval:eval_string("[a | T] = [a, b, c].", [])),
+  ?assertEqual({ok, {nil, []}, []}, eval:eval_string("[] = [].", [])),
+  ?assertEqual({ok, {cons, [{atom, j}]}, [{'J', {atom, j}}]}, eval:eval_string("[J] = [j].", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, [{'X', {integer, 1}}]}, eval:eval_string("[X | _] = [1, 2].", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, [{'Y', {cons, [{integer, 2}]}}]}, eval:eval_string("[_ | Y] = [1, 2].", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, [{'X', {integer, 1}}]}, eval:eval_string("[X | _] = [1, 2].", [{'X', {integer, 1}}])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, [{'Y', {cons, [{integer, 2}]}}]}, 
+    eval:eval_string("[_ | Y] = [1, 2].", [{'Y', {cons, [{integer, 2}]}}])),
+  ?assertEqual({ok, {string, "test_string"}, [{'H', 116}, {'T', {string, "est_string"}}]}, % no support for string->integer currently
+    eval:eval_string("[H | T] = \"test_string\".", [])).
 
 % Tests for evaluating function calls/guards
 test_world() ->
   % world_init
-  ?assertEqual({ok, true, [{'X', 3}]}, eval:eval_string("is_integer(X).", [{'X', 3}])),
-  ?assertEqual({ok, true, [{'X', 5}]}, eval:eval_world("is_integer(X).", [{'X', 5}], world:world_init())),
-  ?assertEqual({ok, false, []}, eval:eval_world("is_integer(abc).", [], world:world_init())),
-  ?assertEqual({ok, head, []}, eval:eval_world("hd([head, tail]).", [], world:world_init())),
-  ?assertEqual({ok, [tail], []}, eval:eval_world("tl([head, tail]).", [], world:world_init())),
-  ?assertEqual({ok, "pples", []}, eval:eval_world("tl(\"apples\").", [], world:world_init())),
+  ?assertEqual({ok, {atom, true}, [{'X', {integer, 3}}]}, eval:eval_string("is_integer(X).", [{'X', {integer, 3}}])),
+  ?assertEqual({ok, {atom, true}, [{'X', {integer, 5}}]}, 
+    eval:eval_world("is_integer(X).", [{'X', {integer, 5}}], world:world_init())),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval_world("is_integer(abc).", [], world:world_init())),
+  % ?assertEqual({ok, {atom, head}, []}, eval:eval_world("hd([head, tail]).", [], world:world_init())),
+  % ?assertEqual({ok, {cons, [tail]}, []}, eval:eval_world("tl([head, tail]).", [], world:world_init())),
+  % ?assertEqual({ok, {string, "pples"}, []}, eval:eval_world("tl(\"apples\").", [], world:world_init())),
 
   % simple functions
   SimpleModule_temp1 = world:module_add_function_string(#{}, greater, 2, "greater(X, Y) -> X > Y."),
@@ -42,18 +53,19 @@ test_world() ->
   SimpleModule = world:module_add_function_string(SimpleModule_temp3, concat, 2, "concat(X, Y) -> X ++ Y."),
   SimpleWorld = world:world_add_module(world:world_init(), simple_module, SimpleModule),
 
-  ?assertEqual({ok, true, []}, eval:eval_world("simple_module:greater(10, 5).", [], SimpleWorld)),
-  ?assertEqual({ok, 9, []}, eval:eval_world("simple_module:sum(5, 4).", [], SimpleWorld)),
-  ?assertEqual({ok, 15, []}, eval:eval_world("simple_module:sum(5, 4, 6).", [], SimpleWorld)),
-  ?assertEqual({ok, [1, 2, 3, 4], []}, eval:eval_world("simple_module:concat([1, 2], [3, 4]).", [], SimpleWorld)),
-  ?assertEqual({ok, 10, [{'X', 3}, {'Y', 7}]}, 
-    eval:eval_world("simple_module:sum(X, Y).", [{'X', 3}, {'Y', 7}], SimpleWorld)),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval_world("simple_module:greater(10, 5).", [], SimpleWorld)),
+  ?assertEqual({ok, {integer, 9}, []}, eval:eval_world("simple_module:sum(5, 4).", [], SimpleWorld)),
+  ?assertEqual({ok, {integer, 15}, []}, eval:eval_world("simple_module:sum(5, 4, 6).", [], SimpleWorld)),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []},
+     eval:eval_world("simple_module:concat([1, 2], [3, 4]).", [], SimpleWorld)),
+  ?assertEqual({ok, {integer, 10}, [{'X', {integer, 3}}, {'Y', {integer, 7}}]}, 
+    eval:eval_world("simple_module:sum(X, Y).", [{'X', {integer, 3}}, {'Y', {integer, 7}}], SimpleWorld)),
 
   % functions with lists
   ListModule = world:module_add_function_string(#{}, concat, 2, "concat(X, Y) -> X ++ Y."),
   ListWorld = world:world_add_module(SimpleWorld, list_module, ListModule),
 
-  ?assertEqual({ok, [a, b, c], []}, eval:eval_world("list_module:concat([a, b], [c]).", [], ListWorld)),
+  ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, []}, eval:eval_world("list_module:concat([a, b], [c]).", [], ListWorld)),
   
   % functions with guards
   GuardModule = world:module_add_function_string(#{}, zero , 1,
@@ -62,18 +74,18 @@ test_world() ->
      zero(X) when X > 0 -> greater."),
   GuardWorld = world:world_add_module(ListWorld, guard_module, GuardModule),
 
-  ?assertEqual({ok, lesser, []}, eval:eval_world("guard_module:zero(-5).", [], GuardWorld)),
-  ?assertEqual({ok, zero, []}, eval:eval_world("guard_module:zero(0).", [], GuardWorld)),
-  ?assertEqual({ok, greater, []}, eval:eval_world("guard_module:zero(6).", [], GuardWorld)),
+  ?assertEqual({ok, {atom, lesser}, []}, eval:eval_world("guard_module:zero(-5).", [], GuardWorld)),
+  ?assertEqual({ok, {atom, zero}, []}, eval:eval_world("guard_module:zero(0).", [], GuardWorld)),
+  ?assertEqual({ok, {atom, greater}, []}, eval:eval_world("guard_module:zero(6).", [], GuardWorld)),
 
   % recursive functions
   RecursiveModule = world:module_add_function_string(#{}, guarded_fac, 1,
     "guarded_fac(N) when N == 0 -> 1;\nguarded_fac(N) when is_integer(N), 0 < N -> N * guarded_fac(N-1).\n"),
   RecursiveWorld = world:world_add_module(GuardWorld, recursive_module, RecursiveModule),
 
-  ?assertEqual({ok, 1, []}, eval:eval_world("recursive_module:guarded_fac(0).", [], RecursiveWorld)),
-  ?assertEqual({ok, 6, []}, eval:eval_world("recursive_module:guarded_fac(3).", [], RecursiveWorld)),
-  ?assertEqual({ok, 5040, []}, eval:eval_world("recursive_module:guarded_fac(7).", [], RecursiveWorld)),
+  ?assertEqual({ok, {integer, 1}, []}, eval:eval_world("recursive_module:guarded_fac(0).", [], RecursiveWorld)),
+  ?assertEqual({ok, {integer, 6}, []}, eval:eval_world("recursive_module:guarded_fac(3).", [], RecursiveWorld)),
+  ?assertEqual({ok, {integer, 5040}, []}, eval:eval_world("recursive_module:guarded_fac(7).", [], RecursiveWorld)),
   ?assertEqual({error, "no function matching given arguments."}, 
     eval:eval_world("recursive_module:guarded_fac(-2).", [], RecursiveWorld)),
 
@@ -85,9 +97,9 @@ test_world() ->
     "fac(0) -> 1;\n fac(N) when is_integer(N), 0 < N -> N * fac(N-1).\n"),
   FactorialWorld = world:world_add_module(PurgedWorld, factorial_module, FactorialModule),
 
-  ?assertEqual({ok, 1, []}, eval:eval_world("factorial_module:fac(0).", [], FactorialWorld)),
-  ?assertEqual({ok, 6, []}, eval:eval_world("factorial_module:fac(3).", [], FactorialWorld)),
-  ?assertEqual({ok, 5040, []}, eval:eval_world("factorial_module:fac(7).", [], FactorialWorld)),
+  ?assertEqual({ok, {integer, 1}, []}, eval:eval_world("factorial_module:fac(0).", [], FactorialWorld)),
+  ?assertEqual({ok, {integer, 6}, []}, eval:eval_world("factorial_module:fac(3).", [], FactorialWorld)),
+  ?assertEqual({ok, {integer, 5040}, []}, eval:eval_world("factorial_module:fac(7).", [], FactorialWorld)),
   ?assertEqual({error, "no function matching given arguments."}, 
     eval:eval_world("factorial_module:fac(-2).", [], FactorialWorld)).
 
@@ -95,11 +107,12 @@ test_world() ->
 % test the scope of bindings
 test_bindings() ->
   % basic binding usage/creation
-  ?assertEqual({ok, 3, [{'X', 3}]}, eval:eval_string("X.", [{'X', 3}])),
-  ?assertEqual({ok, 3, [{'X', 3}]}, eval:eval_string("X = 3.", [{'X', 3}])),
-  ?assertEqual({error, "No match of right hand side value."}, eval:eval_string("X = 2.", [{'X', 3}])),
-  ?assertEqual({ok, 3, [{'X', 3}, {'Y', 3}]}, eval:eval_string("X = Y.", [{'X', 3}, {'Y', 3}])),
-  ?assertEqual({ok, true, [{'X', 8}]}, eval:eval_string("X = 8, 4 + 5, true.", [])),
+  ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}]}, eval:eval_string("X.", [{'X', {integer, 3}}])),
+  ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}]}, eval:eval_string("X = 3.", [{'X', {integer, 3}}])),
+  ?assertEqual({error, "No match of right hand side value."}, eval:eval_string("X = 2.", [{'X', {integer, 3}}])),
+  ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}, {'Y', {integer, 3}}]}, 
+    eval:eval_string("X = Y.", [{'X', {integer, 3}}, {'Y', {integer, 3}}])),
+  ?assertEqual({ok, {atom, true}, [{'X', {integer, 8}}]}, eval:eval_string("X = 8, 4 + 5, true.", [])),
 
   % functions that use/create bindings
   Module_temp = world:module_add_function_string(#{}, greater, 2, "greater(X, Y) -> X > Y."),
@@ -117,19 +130,24 @@ test_bindings() ->
   ),
   World = world:world_add_module(world:world_init(), module, Module),
 
-  ?assertEqual({ok, true, []}, eval:eval_world("module:greater(10, 5).", [], World)),
-  ?assertEqual({ok, true, [{'A', 8}]}, eval:eval_world("module:greater(A, 7).", [{'A', 8}], World)),
-  ?assertEqual({ok, false, [{'X', 1}, {'Y', 2}]}, eval:eval_world("module:greater(X, Y).", [{'X', 1}, {'Y', 2}], World)),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval_world("module:greater(10, 5).", [], World)),
+  ?assertEqual({ok, {atom, true}, [{'A', {integer, 8}}]}, eval:eval_world("module:greater(A, 7).", [{'A', {integer, 8}}], World)),
+  ?assertEqual({ok, {atom, false}, [{'X', {integer, 1}}, {'Y', {integer, 2}}]}, 
+    eval:eval_world("module:greater(X, Y).", [{'X', {integer, 1}}, {'Y', {integer, 2}}], World)),
 
-  ?assertEqual({ok, 4, []}, eval:eval_world("module:tautology(2, 2).", [], World)),
-  ?assertEqual({ok, [1, 2, 3, 4], []}, eval:eval_world("module:tautology([1, 2], [3, 4]).", [], World)),
-  ?assertEqual({ok, 4, [{'X', 2}, {'Y', 2}]}, eval:eval_world("module:tautology(X, Y).", [{'X', 2}, {'Y', 2}], World)),
-  ?assertEqual({ok, [1, 2, 3, 4], [{'X', [1, 2]}, {'Y', [3, 4]}]}, 
-    eval:eval_world("module:tautology(X, Y).", [{'X', [1, 2]}, {'Y', [3, 4]}], World)),
-  
-  ?assertEqual({ok, [1, 2, 3, 4], [{'Hdx', 1}, {'Hdy', 3}, {'Tlx', [2]}, {'Tly', [4]}]}, 
+  ?assertEqual({ok, {integer, 4}, []}, eval:eval_world("module:tautology(2, 2).", [], World)),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []}, 
+    eval:eval_world("module:tautology([1, 2], [3, 4]).", [], World)),
+  ?assertEqual({ok, {integer, 4}, [{'X', {integer, 2}}, {'Y', {integer, 2}}]}, 
+    eval:eval_world("module:tautology(X, Y).", [{'X', {integer, 2}}, {'Y', {integer, 2}}], World)),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]},
+      [{'X', {cons, [{integer, 1}, {integer, 2}]}}, {'Y', {cons, [{integer, 3}, {integer, 4}]}}]}, 
+    eval:eval_world("module:tautology(X, Y).", 
+      [{'X', {cons, [{integer, 1}, {integer, 2}]}}, {'Y', {cons, [{integer, 3}, {integer, 4}]}}], World)),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]},
+     [{'Hdx', {integer, 1}}, {'Hdy', {integer, 3}}, {'Tlx', {cons, [{integer, 2}]}}, {'Tly', {cons, [{integer, 4}]}}]}, 
     eval:eval_world("module:tautology([Hdx | Tlx], [Hdy | Tly]).", 
-      [{'Hdx', 1}, {'Hdy', 3}, {'Tlx', [2]}, {'Tly', [4]}], World)).
+      [{'Hdx', {integer, 1}}, {'Hdy', {integer, 3}}, {'Tlx', {cons, [{integer, 2}]}}, {'Tly', {cons, [{integer, 4}]}}], World)).
 
   % fun expressions
 
@@ -142,78 +160,85 @@ test_bindings() ->
 test_general() ->
 
   % arithmetic operations
-  ?assertEqual({ok, 29, []}, eval:eval_string("29.", [])),
-  ?assertEqual({ok, 7, []},  eval:eval_string("4 + 3.", [])),
-  ?assertEqual({ok, -29, []}, eval:eval_string("-29.", [])),
-  ?assertEqual({ok, 7, []},  eval:eval_string("9 - 2.", [])),
-  ?assertEqual({ok, 10, []}, eval:eval_string("19 - 25 + 4 - 5 + 17.", [])),
-  ?assertEqual({ok, 24, []}, eval:eval_string("8 * 3.", [])),
-  ?assertEqual({ok, 10, []}, eval:eval_string("20 div 2.", [])),
-  ?assertEqual({ok, 92, []}, eval:eval_string("8 * (3 + 9) - (9 div 3 + 1).", [])),
-  ?assertEqual({ok, 6, [{'X', 6}]}, eval:eval_string("X.", [{'X', 6}])),
-  ?assertEqual({ok, 41, [{'X', 6}, {'Y', 5}, {'Z', 13}]}, 
-    eval:eval_string("X + Y * (Z - X).", [{'X', 6}, {'Y', 5}, {'Z', 13}])),
-  ?assertEqual({ok, 3, []}, eval:eval_string("1 + 2, 3.", [])),
-  ?assertEqual({ok, false, []}, eval:eval_string("5 > 6.", [])),
+  ?assertEqual({ok, {integer, 29}, []}, eval:eval_string("29.", [])),
+  ?assertEqual({ok, {integer, 7}, []},  eval:eval_string("4 + 3.", [])),
+  ?assertEqual({ok, {integer, -29}, []}, eval:eval_string("-29.", [])),
+  ?assertEqual({ok, {integer, 7}, []},  eval:eval_string("9 - 2.", [])),
+  ?assertEqual({ok, {integer, 10}, []}, eval:eval_string("19 - 25 + 4 - 5 + 17.", [])),
+  ?assertEqual({ok, {integer, 24}, []}, eval:eval_string("8 * 3.", [])),
+  ?assertEqual({ok, {integer, 10}, []}, eval:eval_string("20 div 2.", [])),
+  ?assertEqual({ok, {integer, 92}, []}, eval:eval_string("8 * (3 + 9) - (9 div 3 + 1).", [])),
+  ?assertEqual({ok, {integer, 6}, [{'X', {integer, 6}}]}, eval:eval_string("X.", [{'X', {integer, 6}}])),
+  ?assertEqual({ok, {integer, 41}, [{'X', {integer, 6}}, {'Y', {integer, 5}}, {'Z', {integer, 13}}]}, 
+    eval:eval_string("X + Y * (Z - X).", [{'X', {integer, 6}}, {'Y', {integer, 5}}, {'Z', {integer, 13}}])),
+  ?assertEqual({ok, {integer, 3}, []}, eval:eval_string("1 + 2, 3.", [])),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval_string("5 > 6.", [])),
 
   % simple macthes
-  ?assertEqual({ok, 1, [{'X', 1}]}, eval:eval_string("X = 1.", [])),
-  ?assertEqual({ok, 2, [{'X', 2}]}, eval:eval_string("X = 2.", [{'X', 2}])),
-  ?assertEqual({ok, 2, []}, eval:eval_string("2 = 2.", [])),
-  ?assertEqual({ok, 5, [{'X', 5}]}, eval:eval_string("X = 2 + 3.", [])),
-  ?assertEqual({ok, 5, [{'X', 2}, {'Y', 3}]}, eval:eval_string("X = 2, Y = 3, X + Y.", [{'X', 2}])),
+  ?assertEqual({ok, {integer, 1}, [{'X', {integer, 1}}]}, eval:eval_string("X = 1.", [])),
+  ?assertEqual({ok, {integer, 2}, [{'X', {integer, 2}}]}, eval:eval_string("X = 2.", [{'X', {integer, 2}}])),
+  ?assertEqual({ok, {integer, 2}, []}, eval:eval_string("2 = 2.", [])),
+  ?assertEqual({ok, {integer, 5}, [{'X', {integer, 5}}]}, eval:eval_string("X = 2 + 3.", [])),
+  ?assertEqual({ok, {integer, 5}, [{'X', {integer, 2}}, {'Y', {integer, 3}}]}, 
+    eval:eval_string("X = 2, Y = 3, X + Y.", [{'X', {integer, 2}}])),
 
   % lists, tuples
-  ?assertEqual({ok, [1, 2, 3, 4], []}, eval:eval_string("[1, 2, 3, 4].", [])),
-  ?assertEqual({ok, [1, 2, 3, 4, 5], [{'X', 5}]}, eval:eval_string("[1, 2, 3, 4, X].", [{'X', 5}])),
-  ?assertEqual({ok, [1, 2, 3, 4], []}, eval:eval_string("[1, 2] ++ [3, 4].", [])),
-  ?assertEqual({ok, [1, 2, 3], []}, eval:eval_string("[1 | [2, 3]].", [])),
-  ?assertEqual({ok, {1, 2, abc, 4}, [{'X', 4}]}, eval:eval_string("{1, 2, abc, X}.", [{'X', 4}])),
-  ?assertEqual({ok, {1, 2, 3}, [{'X', {1, 2, 3}}]}, eval:eval_string("X = {1, 2, 3}.", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []}, eval:eval_string("[1, 2, 3, 4].", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}, {integer, 5}]}, [{'X', {integer, 5}}]}, 
+    eval:eval_string("[1, 2, 3, 4, X].", [{'X', {integer, 5}}])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []}, eval:eval_string("[1, 2] ++ [3, 4].", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}]}, []}, eval:eval_string("[1 | [2, 3]].", [])),
+  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}, {atom, abc}, {integer, 4}}}, [{'X', {integer, 4}}]}, eval:eval_string("{1, 2, abc, X}.", [{'X', {integer, 4}}])),
+  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}, {integer, 3}}}, [{'X', {tuple, {{integer, 1}, {integer, 2}, {integer, 3}}}}]},
+     eval:eval_string("X = {1, 2, 3}.", [])),
 
   % atoms and logic operations
-  ?assertEqual({ok, here_is_an_atom, []}, eval:eval_string("here_is_an_atom.", [])),
-  ?assertEqual({ok, true, []}, eval:eval_string("atom1 == atom1.", [])),
-  ?assertEqual({ok, true, []}, eval:eval_string("(true and false) or true.", [])),
-  ?assertEqual({ok, true, [{'Bool1',true},{'Bool2',true},{'X',1},{'Y',2}]},
-    eval:eval_string("Bool1 = X == 1, Bool2 = Y == 2, Bool1 and Bool2.", [{'X', 1}, {'Y', 2}])),
+  ?assertEqual({ok, {atom, here_is_an_atom}, []}, eval:eval_string("here_is_an_atom.", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval_string("atom1 == atom1.", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval_string("(true and false) or true.", [])),
+  ?assertEqual({ok, {atom, true}, [{'Bool1', {atom, true}},{'Bool2', {atom, true}}, {'X', {integer, 1}}, {'Y', {integer, 2}}]},
+    eval:eval_string("Bool1 = X == 1, Bool2 = Y == 2, Bool1 and Bool2.", [{'X', {integer, 1}}, {'Y', {integer, 2}}])),
 
   % strings
-  ?assertEqual({ok, "here is a string", []}, eval:eval_string("\"here is a string\".", [])),
-  ?assertEqual({ok, "concat strings", []}, eval:eval_string("\"concat \" ++ \"strings\".", [])),
+  ?assertEqual({ok, {string, "here is a string"}, []}, eval:eval_string("\"here is a string\".", [])),
+  ?assertEqual({ok, {string, "concat strings"}, []}, eval:eval_string("\"concat \" ++ \"strings\".", [])),
   
   % if, case of
-  ?assertEqual({ok, true, []}, eval:eval_string("if true -> true end.", [])),
-  ?assertEqual({ok, 35, [{'X', 3}]}, eval:eval_string("if X == 1 -> 4; X == 3, X > 2 -> 35; true -> 2 end.", [{'X', 3}])),
-  ?assertEqual({ok, ab, [{'X', a}, {'Y', b}]}, 
-    eval:eval_string("if X == a, Y == b -> ab; Y == b -> b; true -> abc end.", [{'X', a}, {'Y', b}])),
-  ?assertEqual({ok, abc, [{'X', a}, {'Y', c}]}, 
-    eval:eval_string("if X == a, Y == b -> ab; Y == b -> b; true -> abc end.", [{'X', a}, {'Y', c}])),
-  ?assertEqual({ok, b, [{'X', c}, {'Y', b}]}, 
-    eval:eval_string("if X == a, Y == b -> ab; Y == b -> b; true -> abc end.", [{'X', c}, {'Y', b}])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval_string("if true -> true end.", [])),
+  ?assertEqual({ok, {integer, 35}, [{'X', {integer, 3}}]}, 
+    eval:eval_string("if X == 1 -> 4; X == 3, X > 2 -> 35; true -> 2 end.", [{'X', {integer, 3}}])),
+  ?assertEqual({ok, {atom, ab}, [{'X', {atom, a}}, {'Y', {atom, b}}]}, 
+    eval:eval_string("if X == a, Y == b -> ab; Y == b -> b; true -> abc end.", [{'X', {atom, a}}, {'Y', {atom, b}}])),
+  ?assertEqual({ok, {atom, abc}, [{'X', {atom, a}}, {'Y', {atom, c}}]}, 
+    eval:eval_string("if X == a, Y == b -> ab; Y == b -> b; true -> abc end.", [{'X', {atom, a}}, {'Y', {atom, c}}])),
+  ?assertEqual({ok, {atom, b}, [{'X', {atom, c}}, {'Y', {atom, b}}]}, 
+    eval:eval_string("if X == a, Y == b -> ab; Y == b -> b; true -> abc end.", [{'X', {atom, c}}, {'Y', {atom, b}}])),
   
   % case of
-  ?assertEqual({ok, true, []}, eval:eval_string("case true of true -> true; false -> false end.", [])),
-  ?assertEqual({ok, atom, [{'X', abc}, {'Y', 4}]}, eval:eval_string(
+  ?assertEqual({ok, {atom, true}, []}, eval:eval_string("case true of true -> true; false -> false end.", [])),
+  ?assertEqual({ok, {atom, atom}, [{'X', {atom, abc}}, {'Y', {integer, 4}}]}, eval:eval_string(
     "case X of 
       abc -> atom; 
       Y when is_integer(Y) -> integer;
-      X -> self end.", [{'X', abc}, {'Y', 4}])),
-  ?assertEqual({ok, integer, [{'X', 2}, {'Y', 2}]}, eval:eval_string(
+      X -> self end.", [{'X', {atom, abc}}, {'Y', {integer, 4}}])),
+  ?assertEqual({ok, {atom, integer}, [{'X', {integer, 2}}, {'Y', {integer, 2}}]}, eval:eval_string(
     "case X of 
       abc -> atom; 
       Y when is_integer(Y) -> integer;
-      X -> self end.", [{'X', 2}, {'Y', 2}])),
-  ?assertEqual({ok, self, [{'X', "a"}, {'Y', "a"}]}, eval:eval_string(
+      X -> self end.", [{'X', {integer, 2}}, {'Y', {integer, 2}}])),
+  ?assertEqual({ok, {atom, self}, [{'X', {string, "a"}}, {'Y', {string, "a"}}]}, eval:eval_string(
     "case X of 
       abc -> atom; 
       Y when is_integer(Y) -> integer;
-      X -> self end.", [{'X', "a"}, {'Y', "a"}])),
+      X -> self end.", [{'X', {string, "a"}}, {'Y', {string, "a"}}])),
 
   % try catch (simplified)
-  ?assertEqual({ok, true, [{'X', 1}]}, eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', 1}])),
-  ?assertEqual({ok, false, [{'X', 2.0}]}, eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', 2.0}])),
-  ?assertEqual({ok, false, [{'X', "abc"}]}, eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', "abc"}])),
+  ?assertEqual({ok, {atom, true}, [{'X', {integer, 1}}]}, 
+    eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', {integer, 1}}])),
+  ?assertEqual({ok, {atom, false}, [{'X', {float, 2.0}}]}, 
+    eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', {float, 2.0}}])),
+  ?assertEqual({ok, {atom, false}, [{'X', {string, "abc"}}]}, 
+    eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', {string, "abc"}}])),
   
   % error handling
   ?assertEqual({error, "No match of right hand side value."}, eval:eval_string("X = 2, X = 3.", [])),

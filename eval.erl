@@ -6,27 +6,23 @@
 
 %%% TODO:
 
-% tell mark
-% added _
-% lots of bug fixing and tests
-% types
-% fun
-
-% tuple matching not done yet
+% Question for Mark: should the lists always end in nil by default?
+% by that I mean: should put a {nil, []} at the end of each list,
+% or not since all of them have it.
 
 
-%%% - typed bindings
 %%% - tuples matching
 %%% - fun expression
 
-%%% - control F TODO 
-%%% - refactor match
+
 %%% - fix try-catch
+%%% - no supprt for hd("string") which should return an integer.
 %%% - better function commentary/error handling
 %%% - maps
 %%%
 %%% - add to doc that bindings have to be ordered
-%%% - add to doc the new binding rules
+%%% - add to doc the new binding rules, types 
+%%% - currently no floats are allowed in arithmetic operations
 
 %%% Time Allows
 % test the error handling, add line numbers and 
@@ -48,7 +44,7 @@
 % - World is a map of the form: #{module_name => #{{function_name, arity} => AST}}
 % Returns {ok, term(), NewBindings} | {error, string()}
 eval_exprs(ASTs, Bindings, World) when tl(ASTs) == [] ->
-    eval_expr(hd(ASTs), Bindings, World);
+    eval_expr(hd(ASTs), Bindings, World); 
 eval_exprs(ASTs, Bindings, World) ->
     Eval = eval_expr(hd(ASTs), Bindings, World),
     case Eval of
@@ -66,21 +62,27 @@ eval_exprs(ASTs, Bindings, World) ->
 eval_expr(AST, Bindings, World) ->
     case AST of
         % atom
-        {atom, _, Atom} -> {ok, Atom, Bindings};
+        {atom, _, Atom} -> {ok, {atom, Atom}, Bindings};
         % nil
-        {nil, _} -> {ok, [], Bindings};
+        {nil, _} -> {ok, {nil, []}, Bindings};
         % integer
-        {integer, _, Val} -> {ok, Val, Bindings};
+        {integer, _, Val} -> {ok, {integer, Val}, Bindings};
+        % float
+        {float, _, Val} -> {ok, {float, Val}, Bindings};
         % string
-        {string, _, String} -> {ok, String, Bindings};
+        {string, _, String} -> {ok, {string, String}, Bindings};
         % list
         {cons, _, Car, Cdr} ->
             EvalHead = eval_expr(Car, Bindings, World),
             EvalTail = eval_expr(Cdr, Bindings, World),
             case {EvalHead, EvalTail} of
+                {{ok, Head, _}, {ok, {cons, Tail}, _}} -> 
+                    {ok, {cons, [Head | Tail]}, Bindings};
+                {{ok, Head, _}, {ok, {nil, []}, _}} -> 
+                    {ok, {cons, [Head]}, Bindings};
                 {{ok, Head, _}, {ok, Tail, _}} -> 
-                    {ok, [Head | Tail], Bindings};
-                _ -> {error, "error"}
+                    {ok, {cons, [Head | Tail]}, Bindings};
+                _ -> {error, "illegal list."}
             end;
         % tuple
         {tuple, _, TupleList} -> eval_tuple(TupleList, Bindings, World);
@@ -92,16 +94,19 @@ eval_expr(AST, Bindings, World) ->
                 _ -> {error, "Variable unbound"}
             end;
         % macth
-        {match, _, Exp1, Exp2} -> eval_match(Exp1, Exp2, Bindings, World);
+        {match, _, Exp1, Exp2} -> match:eval_match(Exp1, Exp2, Bindings, World);
         % operation
         {op, _, Op, Exp1, Exp2} -> 
             Operand1 = eval_expr(Exp1, Bindings, World),
             Operand2 = eval_expr(Exp2, Bindings, World),
             eval_op(Op, Operand1, Operand2, Bindings);
         % negtive integer/sign change
-        {op, _, '-', Expr} -> 
-            {ok, Val, _} = eval_expr(Expr, Bindings, World),
-            {ok, -Val, Bindings};
+        {op, _, '-', Expr} ->
+            Eval_Value = eval_expr(Expr, Bindings, World),
+            case Eval_Value of
+                {ok, {_, Val}, _} -> {ok, {integer, -Val}, Bindings};
+                _ -> {error, "illegal expression."}
+            end;
         % if
         {'if', _, Clasues} -> eval_if(Clasues, Bindings, World);
         % case of
@@ -125,195 +130,46 @@ eval_expr(AST, Bindings, World) ->
 % returns {ok, term(), Bindings} | {error, string()}
 eval_op(_, {error, _}, _, _) -> {error, "Invalid argument for the operation."};
 eval_op(_, _, {error, _}, _) -> {error, "Invalid argument for the operation."};
-eval_op(Op, {ok, Operand1, _}, {ok, Operand2, _}, Bindings) ->
+eval_op(Op, {ok, {Type1, Operand1}, _}, {ok, {Type2, Operand2}, _}, Bindings) ->
     case Op of
-        '+' when is_integer(Operand1), is_integer(Operand2) ->
-            {ok, Operand1 + Operand2, Bindings};
-        '-' when is_integer(Operand1), is_integer(Operand2) ->
-            {ok, Operand1 - Operand2, Bindings};
-        '*' when is_integer(Operand1), is_integer(Operand2) ->
-            {ok, Operand1 * Operand2, Bindings};
-        'div' when is_integer(Operand1), is_integer(Operand2) ->
-            {ok, Operand1 div Operand2, Bindings};
-        '++' when is_list(Operand1), is_list(Operand2) ->
-            {ok, Operand1 ++ Operand2, Bindings};
-        '|' when is_list(Operand2) ->
+        '+' when (Type1 == integer orelse Type1 == float), (Type2 == integer orelse Type2 == float) ->
+            {ok, {Type1, Operand1 + Operand2}, Bindings};
+        '-' when (Type1 == integer orelse Type1 == float), (Type2 == integer orelse Type2 == float) ->
+            {ok, {Type1, Operand1 - Operand2}, Bindings};
+        '*' when (Type1 == integer orelse Type1 == float), (Type2 == integer orelse Type2 == float) ->
+            {ok, {Type1, Operand1 * Operand2}, Bindings};
+        'div' when (Type1 == integer), (Type2 == integer) ->
+            {ok, {Type1, Operand1 div Operand2}, Bindings};
+        '++' when (Type1 == string orelse Type1 == cons orelse Type1 == nil), 
+                  (Type2 == string orelse Type2 == cons orelse Type2 == nil) ->
+            {ok, {Type1, Operand1 ++ Operand2}, Bindings};
+        '|' ->
             [Operand1 | Operand2];
-        '==' -> {ok, Operand1 == Operand2, Bindings};
-        '/=' -> {ok, Operand1 /= Operand2, Bindings};
-        '<' -> {ok, Operand1 < Operand2, Bindings};
-        '=<' -> {ok, Operand1 < Operand2, Bindings};
-        '>' -> {ok, Operand1 > Operand2, Bindings};
-        '>=' -> {ok, Operand1 < Operand2, Bindings};
+        '==' -> {ok, {atom, Operand1 == Operand2}, Bindings};
+        '/=' -> {ok, {atom, Operand1 /= Operand2}, Bindings};
+        '<' -> {ok, {atom, Operand1 < Operand2}, Bindings};
+        '=<' -> {ok, {atom, Operand1 < Operand2}, Bindings};
+        '>' -> {ok, {atom, Operand1 > Operand2}, Bindings};
+        '>=' -> {ok, {atom, Operand1 < Operand2}, Bindings};
         'and' when is_atom(Operand1), is_atom(Operand2) ->
-            {ok, Operand1 and Operand2, Bindings};
+            {ok, {atom, Operand1 and Operand2}, Bindings};
         'or' when is_atom(Operand1), is_atom(Operand2) ->
-            {ok, Operand1 or Operand2, Bindings};
-        '=:=' -> {ok, Operand1 =:= Operand2, Bindings};
+            {ok, {atom, Operand1 or Operand2}, Bindings};
+        '=:=' -> {ok, {atom, Operand1 =:= Operand2}, Bindings};
         _ -> {error, "Operation with given arguments is not allowed by the evaluator."}
     end.
 
 % Evaluates given AST with the assumption that it represents a tuple.
 % Tuples are of the form {tuple, Line_Number, TupleList}
 % First parses and evaluates the TupleList, then produces the corresponding tuple.
-eval_tuple([], _, Bindings) -> {ok, {}, Bindings};
+eval_tuple([], _, Bindings) -> {ok, {tuple, {}}, Bindings};
 eval_tuple(TupleList, Bindings, World) when is_list(TupleList)->
     TermList = eval_AST_list(TupleList, Bindings, World, []),
-    {ok, list_to_tuple(TermList), Bindings};
+    case TermList of
+        {error, _} -> TermList;
+        _ -> {ok, {tuple, list_to_tuple(TermList)}, Bindings}
+    end;
 eval_tuple(_, _, _) -> {error, "invalid tuple"}.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%  Evaluate Match
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Given a match statement, if the left hand side is an unbound
-% variable, assigns the value of the right hand side to that variable
-% and adds it to the Bindings. Otherwise, asserts that the left hand side
-% is equal to the right hand side.
-% returns {ok, term(), NewBindings} | {error, string()}
-
-% var = term()
-eval_match({var, _, LHS}, Exp2, Bindings, World) ->
-    Eval_RHS = eval_expr(Exp2, Bindings, World),
-    case Eval_RHS of
-        {ok, RHS, _} -> 
-            IsKey = orddict:is_key(LHS, Bindings),
-            if
-                IsKey ->
-                    Value = orddict:fetch(LHS, Bindings),
-                    case Value of
-                        RHS -> 
-                            {ok, RHS, Bindings};
-                        _ -> {error, "No match of right hand side value."}
-                    end;
-                true ->
-                    NewBindings = orddict:store(LHS, RHS, Bindings),
-                    {ok, RHS, NewBindings}
-            end;
-        _ -> {error, "Failed to evaluate left hand side value."}
-    end;
-
-% macth lists
-% {cons var var} = term()
-% TODO: check RHS is a non-empty list
-eval_match({cons, _, {var, _, Hd}, {var, _, Tl}}, RHS, Bindings, World) ->
-    % TODO: check if RHS_Value is ok
-    {ok, RHS_Value, _} = eval_expr(RHS, Bindings, World),
-    RHS_Head = hd(RHS_Value),
-    RHS_Tail = tl(RHS_Value),
-    Hd_is_key = orddict:is_key(Hd, Bindings),
-    Tl_is_key = orddict:is_key(Tl, Bindings),
-    if
-        Hd == '_' andalso Tl == '_' ->
-            {ok, [RHS_Head | RHS_Tail], Bindings};
-        Hd_is_key andalso Tl_is_key ->
-            Head_Value = orddict:fetch(Hd, Bindings),
-            Tail_Value = orddict:fetch(Tl, Bindings),
-            case {Head_Value, Tail_Value} of
-                {RHS_Head, RHS_Tail} -> {ok, [RHS_Head | RHS_Tail], Bindings};
-                _ -> {error, "No match of right hand side value."}
-            end;
-        Hd_is_key andalso Tl /= '_' ->
-            Head_Value = orddict:fetch(Hd, Bindings),
-            Tl_to_Bindings = orddict:store(Tl, RHS_Tail, Bindings),
-            case Head_Value of
-                RHS_Head -> {ok, [RHS_Head | RHS_Tail], Tl_to_Bindings};
-                _ -> {error, "No match of right hand side value."}
-            end;
-        Tl_is_key andalso Hd /= '_' ->
-            Tail_Value = orddict:fetch(Tl, Bindings),
-            Hd_to_Bindings = orddict:store(Hd, RHS_Head, Bindings),
-            case Tail_Value of
-                RHS_Tail -> {ok, [RHS_Head | RHS_Tail], Hd_to_Bindings};
-                _ -> {error, "No match of right hand side value."}
-            end;
-        Hd_is_key andalso Tl == '_' ->
-            Head_Value = orddict:fetch(Hd, Bindings),
-            case Head_Value of
-                RHS_Head -> {ok, [RHS_Head | RHS_Tail], Bindings};
-                _ -> {error, "No match of right hand side value."}
-            end;
-        Tl_is_key andalso Hd == '_' ->
-            Tail_Value = orddict:fetch(Tl, Bindings),
-            case Tail_Value of
-                RHS_Tail -> {ok, [RHS_Head | RHS_Tail], Bindings};
-                _ -> {error, "No match of right hand side value."}
-            end;
-        Hd == '_' ->
-            Tl_to_Bindings = orddict:store(Tl, RHS_Tail, Bindings),
-            {ok, [RHS_Head | RHS_Tail], Tl_to_Bindings};
-        Tl == '_' ->
-            Hd_to_Bindings = orddict:store(Hd, RHS_Head, Bindings),
-            {ok, [RHS_Head | RHS_Tail], Hd_to_Bindings};
-        true ->
-            Hd_to_Bindings = orddict:store(Hd, RHS_Head, Bindings),
-            Tl_to_Bindings = orddict:store(Tl, RHS_Tail, Hd_to_Bindings),
-            {ok, [RHS_Head | RHS_Tail], Tl_to_Bindings}
-    end;
-
-% {cons term() var} = term()
-% TODO: check RHS is a non-empty list
-eval_match({cons, _, Hd, {var, _, Tl}}, RHS, Bindings, World) ->
-    % TODO: check if RHS_Value is ok
-    {ok, RHS_Value, _} = eval_expr(RHS, Bindings, World),
-    RHS_Head = hd(RHS_Value),
-    RHS_Tail = tl(RHS_Value),
-    % TODO: check if LHS_Value is ok
-    {ok, LHS_Head, _} = eval_expr(Hd, Bindings, World),
-    IsKey = orddict:is_key(Tl, Bindings),
-    if
-        RHS_Head == LHS_Head andalso IsKey ->
-            Value = orddict:fetch(Tl, Bindings),
-            case Value of
-                RHS_Tail -> 
-                    {ok, [RHS_Head | RHS_Tail], Bindings};
-                _ -> {error, "No match of right hand side value."}
-            end;
-        RHS_Head == LHS_Head andalso Tl == '_' ->
-            {ok, [RHS_Head | RHS_Tail], Bindings};
-        RHS_Head == LHS_Head ->
-            NewBindings = orddict:store(Tl, RHS_Tail, Bindings),
-            {ok, [RHS_Head | RHS_Tail], NewBindings};
-        true ->
-            {error, "No match of right hand side value."}
-    end;
-
-% {cons var term()} = term()
-% TODO: check RHS is a non-empty list
-eval_match({cons, _, {var, _, Hd}, Tl}, RHS, Bindings, World) ->
-    % TODO: check if RHS_Value is ok
-    {ok, RHS_Value, _} = eval_expr(RHS, Bindings, World),
-    RHS_Head = hd(RHS_Value),
-    RHS_Tail = tl(RHS_Value),
-    % TODO: check if LHS_Value is ok
-    {ok, LHS_Tail, _} = eval_expr(Tl, Bindings, World),
-    IsKey = orddict:is_key(Hd, Bindings),
-    if
-        RHS_Tail == LHS_Tail andalso IsKey ->
-            Value = orddict:fetch(Hd, Bindings),
-            case Value of
-                RHS_Head -> 
-                    {ok, [RHS_Head | RHS_Tail], Bindings};
-                _ -> {error, "No match of right hand side value."}
-            end;
-        RHS_Tail == LHS_Tail andalso Hd == '_' ->
-            {ok, [RHS_Head | RHS_Tail], Bindings};
-        RHS_Tail == LHS_Tail ->
-            NewBindings = orddict:store(Hd, RHS_Head, Bindings),
-            {ok, [RHS_Head | RHS_Tail], NewBindings};
-        true ->
-            {error, "No match of right hand side value."}
-    end;
-
-% term() = term()
-eval_match(Exp1, Exp2, Bindings, World) ->
-    % TODO: check if LHS and RHS are ok
-    {ok, LHS, Bindings} = eval_expr(Exp1, Bindings, World),
-    {ok, RHS, Bindings} = eval_expr(Exp2, Bindings, World),
-    case LHS of
-        RHS -> {ok, RHS, Bindings};
-        _ -> {error, "No match of right hand side value."} 
-    end.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -340,7 +196,7 @@ eval_if([HdClause | TlClauses], Bindings, World) ->
 eval_case(_, [], _, _) -> {error, "no case clause matching given argument."};
 eval_case(Arg, [HdClause | TlClauses], Bindings, World) ->
     {clause, _, [Case], Guards, Statement} = HdClause,
-    TryMatch = eval_match(Case, Arg, Bindings, World),
+    TryMatch = match:eval_match(Case, Arg, Bindings, World),
     case {TryMatch, Guards} of
         {{ok, _, NewBindings}, [GuardList]} ->
             % TODOC: only pass in world_init() as guards can't make remote calls.
@@ -362,7 +218,7 @@ eval_try_catch(Exprs, Bindings, World) ->
     Eval_Result = eval_exprs(Exprs, Bindings, World),
     case Eval_Result of 
         {ok, EvalVal, _} -> {ok, EvalVal, Bindings}; 
-        {error, _} -> {ok, false, Bindings};
+        {error, _} -> {ok, {atom, false}, Bindings};
         _ -> {error, "Failed to catch any errors, but evaluator did not return ok."}
     end.
 
@@ -398,30 +254,42 @@ eval_function_body([], _, _, _, _) -> {error, "no function matching given argume
 eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
     {clause, _, Param_List, _, _} = HdClause,
 
-    Argument_Values = eval_AST_list(Args, Bindings, World, []),
+    % TYPE-TODO
+    Typed_Argument_Values = eval_AST_list(Args, Bindings, World, []),
+    Argument_Values = lists:map(fun({_, Val}) -> Val end, Typed_Argument_Values),
     % TODO: check correctness of Argument Values
 
     LocalBindings_List = lists:map( %TODO: add tuple matching here, as well as list with a single element
         % TODO: use match rather than this as this does not guarantee the validity of the bindings
+        % TODO: correct types should be used here
         fun({{var, _, Name}, Arg}) -> [{Name, Arg}];
-            ({{cons, _, {var, _, Car}, {var, _, Cdr}}, Arg}) ->
+            ({{cons, _, {var, _, Car}, {var, _, Cdr}}, {cons, Arg}}) ->
                 [{Car, hd(Arg)}, {Cdr, tl(Arg)}];
-            ({{cons, _, {var, _, Car}, _}, Arg}) ->
+            ({{cons, _, {var, _, Car}, _}, {cons, Arg}}) ->
                 [{Car, hd(Arg)}];
-            ({{cons, _, _, {var, _, Cdr}}, Arg}) ->
+            ({{cons, _, _, {var, _, Cdr}}, {cons, Arg}}) ->
                 [{Cdr, tl(Arg)}];
             ({_, _}) -> [{empty, empty}]
-        end, 
-        lists:zip(Param_List, Argument_Values)
+        end,
+        lists:zip(Param_List, Typed_Argument_Values) % Typed_Argument_Values
     ),
 
     LocalBindings = lists:sort(lists:flatten(LocalBindings_List)),
-    
-    % Pattern matching in function signitures cannot make calls, so the world is init()
+
+    % Pattern matching in function signitures cannot make calls, so the World is wordl:init()
     % Assume ParamList and LocalBindings are of the same length.
     % Also assume every variable in Param_Values can be evaluated using LocalBindings.
     % TODO: use world:init() instead of empty
-    Param_Values = eval_AST_list(Param_List, LocalBindings, #{}, []),
+    % TYPE-TODO
+
+    Typed_Param_Values = eval_AST_list(Param_List, LocalBindings, #{}, []),
+    Param_Values = lists:map(fun({_, Val}) -> Val end, Typed_Param_Values),
+
+    %io:format("\nThe Param_List is: ~p.", [Param_List]),
+    %io:format("\nThe Argument_Values are: ~p.", [Argument_Values]),
+    %io:format("\nThe Param_Values are: ~p.", [Param_Values]),
+    %io:format("\nThe LocalBindings are: ~p.", [LocalBindings]),
+
     % TODO: check correctness of Param Values
     if
         Argument_Values == Param_Values ->
@@ -450,16 +318,49 @@ eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
 % of the function created.
 % eval_fun(Clauses, Bindings, World) -> notSoFun.
 
+% returns an atom : #fun + FileName + LineNumber, but its type is {fun, function_name}
+% which will be treated as a function in the evaluator.
+% there is a special call, made to a variable.
+% eval:get_AST("X()."). -> [{call,1,{var,1,'X'},[]}]
+
+% only have to change the call section in the evaluator
+% evaluate X, check if it is of fun type, call that atom on the module as usual.
+
+
+% maps the function in the world's local moddule to that atom an its arity
+
+% Now the world can be modified, so shouldd it be returned?
+% probably better to save it in the bindings, not the world...
+
+% if saved to bindings,
+% in the call check if X is of type fun_atom, then check that
+% the value of X and its arity as key in the bindings is of tyep fun_def
+% then call fun_def normally.
+
+% should the fun have access to the functions in the file it was declared on?
+
+% might require some logic on free variables 
+
+% eval_fun(Line_Number, Clauses, Bindings, World) ->
+%     % TODO: use mark's naming method
+%     FunName = "#fun " ++ integer_to_list(Line_Number),
+%     [{clause, _, ArgList, _, _} | _] = Clauses,
+%     FunArity = length(ArgList),
+%     NewBindings = orddict:store({{FunName, FunArity}, {fun_def, Clauses}}, Bindings),
+%     {ok, FunName, NewBindings}.
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Helpers
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Given list of ASTs, produce the list of values produced by each AST
+% returns Acc | {error, string()}
 eval_AST_list([], _, _, Acc) -> Acc;
 eval_AST_list([Hd | Tl], Bindings, World, Acc) ->
-    {ok, Head, _} = eval_expr(Hd, Bindings, World),
-    eval_AST_list(Tl, Bindings, World, Acc ++ [Head]);
+    {ok, Value, _} = eval_expr(Hd, Bindings, World),
+    eval_AST_list(Tl, Bindings, World, Acc ++ [Value]);
 eval_AST_list(_, _, _, _) -> {error, "invalid AST List."}.
 
 % Evalutes a list of AST as if it represents a list of bool expressions
@@ -468,7 +369,7 @@ eval_conditions([], _, _) -> true;
 eval_conditions([Condition | Rest], Bindings, World) ->
     Condition_Result = eval_expr(Condition, Bindings, World),
     case Condition_Result of
-        {ok, true, _} -> eval_conditions(Rest, Bindings, World);
+        {ok, {_, true}, _} -> eval_conditions(Rest, Bindings, World);
         _ -> false
     end.
 
