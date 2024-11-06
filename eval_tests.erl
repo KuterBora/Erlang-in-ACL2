@@ -33,7 +33,56 @@ test_matches() ->
   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, [{'Y', {cons, [{integer, 2}]}}]}, 
     eval:eval_string("[_ | Y] = [1, 2].", [{'Y', {cons, [{integer, 2}]}}])),
   ?assertEqual({ok, {string, "test_string"}, [{'H', 116}, {'T', {string, "est_string"}}]}, % no support for string->integer currently
-    eval:eval_string("[H | T] = \"test_string\".", [])).
+    eval:eval_string("[H | T] = \"test_string\".", [])),
+
+  % tuple matching
+  ?assertEqual({ok, {tuple, {{integer, 1}, {atom, abc}, {integer, 3}}}, []},
+    eval:eval_string("{1, abc, 3} = {1, abc, 3}.", [])),
+  
+  ?assertEqual({ok, {tuple, {{integer, 1}, {atom, abc}, 
+    {tuple, {{integer, 7}, {cons, [{integer, 8}, {integer, 9}]}}}}}, []},
+    eval:eval_string("{1, abc, {7, [8, 9]}} = {1, abc, {7, [8, 9]}}.", [])),
+  
+  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}, {integer, 3}}}, [{'A', {integer, 2}}]},
+    eval:eval_string("{1, A, 3} = {1, 2, 3}.", [])),
+  ?assertEqual({ok, {tuple, {{integer, 1}, {cons, [{integer, 2}]}, {tuple, {{integer, 3}}}}},
+    [{'A', {integer, 1}}, {'B', {cons, [{integer, 2}]}}, {'C', {tuple, {{integer, 3}}}}]},
+    eval:eval_string("{A, B, C} = {1, [2], {3}}.", [])),
+  ?assertEqual({ok, {tuple, {{integer, 1}, {atom, abc}, 
+    {tuple, {{integer, 7}, {cons, [{integer, 8}, {integer, 9}]}}}}},
+    [{'A', {integer, 7}}, {'B', {integer, 8}}]},
+    eval:eval_string("{1, abc, {A, [B, 9]}} = {1, abc, {7, [8, 9]}}.", [])),
+  
+  % more lists
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, []}, eval:eval_string("[1, 2] = [1, 2].", [])),
+
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, [{'A', {integer, 1}}, {'B', {integer, 2}}]},
+     eval:eval_string("[A, B] = [1, 2].", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}]}, [{'A', {integer, 3}}]},
+    eval:eval_string("[1, 2, A] = [1, 2, 3].", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {cons, [{integer, 2}, {cons, [{integer, 3}, 
+    {cons, [{integer, 4}]}]}]}]}, [{'A', {integer, 4}}]},
+    eval:eval_string("[1, [2, [3, [A]]]] = [1, [2, [3, [4]]]].", [])),
+  ?assertEqual({ok, {cons, [{integer, 4}, {integer, 5}, {integer, 6}]}, []},
+    eval:eval_string("[_, _, 6] = [4, 5, 6].", [])),
+
+
+  % tuple/list combined
+  ?assertEqual({ok, {tuple, {{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}}}, 
+    [{'A', {integer, 1}}, {'B', {integer, 2}}, {'C', {cons, [{integer, 3}]}}]},
+    eval:eval_string("{A, [B | C]} = {1, [2, 3]}.", [{'B', {integer, 2}}])),
+  
+  %?assertEqual({ok, {cons, [{tuple, {{integer, 1}, {integer, 2}}}]}, [{'A', {integer, 1}}, {'B', {integer, 2}}]}, 
+  %  eval:eval_string("[{A, B}] = [{1, 2}].", [])).
+  
+  %?assertEqual({ok, {cons, [{tuple, {{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}}}, 
+  %  {cons, [{integer, 4}, {integer, 5}]}, {tuple, {{integer, 6}, {tuple, {{integer, 7}}}, {integer, 8}}}, 
+  %  {integer, 9}, {integer, 10}]}, [{'A', {integer, 1}}, {'B', {integer, 2}}, {'C', {integer, 3}}, 
+  %    {'D', {integer, 4}}, {'E', {integer, 5}}, {'F', {integer, 7}}]},
+  %  eval:eval_string("[{A, [B, C]}, [D | [E]], {_, {F}, _}, 9, 10] 
+  %    = [{1, [2, 3]}, [4, 5], {6, {7}, 8}, 9, 10].", [{'B', {integer, 2}}])).
+
+  
 
 % Tests for evaluating function calls/guards
 test_world() ->
@@ -42,9 +91,9 @@ test_world() ->
   ?assertEqual({ok, {atom, true}, [{'X', {integer, 5}}]}, 
     eval:eval_world("is_integer(X).", [{'X', {integer, 5}}], world:world_init())),
   ?assertEqual({ok, {atom, false}, []}, eval:eval_world("is_integer(abc).", [], world:world_init())),
-  % ?assertEqual({ok, {atom, head}, []}, eval:eval_world("hd([head, tail]).", [], world:world_init())),
-  % ?assertEqual({ok, {cons, [tail]}, []}, eval:eval_world("tl([head, tail]).", [], world:world_init())),
-  % ?assertEqual({ok, {string, "pples"}, []}, eval:eval_world("tl(\"apples\").", [], world:world_init())),
+  ?assertEqual({ok, {atom, head}, []}, eval:eval_world("hd([head, tail]).", [], world:world_init())),
+  ?assertEqual({ok, {cons, [{atom, tail}]}, []}, eval:eval_world("tl([head, tail]).", [], world:world_init())),
+  ?assertEqual({ok, {string, "pples"}, []}, eval:eval_world("tl(\"apples\").", [], world:world_init())),
 
   % simple functions
   SimpleModule_temp1 = world:module_add_function_string(#{}, greater, 2, "greater(X, Y) -> X > Y."),
@@ -82,7 +131,6 @@ test_world() ->
   RecursiveModule = world:module_add_function_string(#{}, guarded_fac, 1,
     "guarded_fac(N) when N == 0 -> 1;\nguarded_fac(N) when is_integer(N), 0 < N -> N * guarded_fac(N-1).\n"),
   RecursiveWorld = world:world_add_module(GuardWorld, recursive_module, RecursiveModule),
-
   ?assertEqual({ok, {integer, 1}, []}, eval:eval_world("recursive_module:guarded_fac(0).", [], RecursiveWorld)),
   ?assertEqual({ok, {integer, 6}, []}, eval:eval_world("recursive_module:guarded_fac(3).", [], RecursiveWorld)),
   ?assertEqual({ok, {integer, 5040}, []}, eval:eval_world("recursive_module:guarded_fac(7).", [], RecursiveWorld)),
@@ -232,14 +280,20 @@ test_general() ->
       Y when is_integer(Y) -> integer;
       X -> self end.", [{'X', {string, "a"}}, {'Y', {string, "a"}}])),
 
-  % try catch (simplified)
+  % try catch (simplified) TODO: tests for full try catch / without 'after' 
   ?assertEqual({ok, {atom, true}, [{'X', {integer, 1}}]}, 
     eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', {integer, 1}}])),
   ?assertEqual({ok, {atom, false}, [{'X', {float, 2.0}}]}, 
     eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', {float, 2.0}}])),
   ?assertEqual({ok, {atom, false}, [{'X', {string, "abc"}}]}, 
     eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', {string, "abc"}}])),
-  
+  ?assertEqual({ok, {atom, first}, [{'X', {integer, 0}}]}, 
+    eval:eval_string("try X+1 of 2 -> second; 1 -> first; _ -> third catch error:E -> false end.", [{'X', {integer, 0}}])),
+  ?assertEqual({ok, {atom, second}, [{'X', {integer, 1}}]}, 
+    eval:eval_string("try X+1 of 2 -> second; 1 -> first; _ -> third catch error:E -> false end.", [{'X', {integer, 1}}])),
+  ?assertEqual({ok, {atom, third}, [{'X', {integer, 2}}]}, 
+    eval:eval_string("try X+1 of 2 -> second; 1 -> first; _ -> third catch error:E -> false end.", [{'X', {integer, 2}}])),
+
   % error handling
   ?assertEqual({error, "No match of right hand side value."}, eval:eval_string("X = 2, X = 3.", [])),
   ?assertEqual({error, "Operation with given arguments is not allowed by the evaluator."}, 

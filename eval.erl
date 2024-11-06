@@ -5,28 +5,25 @@
 -export([get_AST/1, get_AST_form/1]).
 
 %%% TODO:
-
-% Question for Mark: should the lists always end in nil by default?
-% by that I mean: should put a {nil, []} at the end of each list,
-% or not since all of them have it.
-
-
-%%% - tuples matching
-%%% - fun expression
-
-
-%%% - fix try-catch
-%%% - no supprt for hd("string") which should return an integer.
+%%% [[], []]
+%%% - fun expressions
+%%% 
 %%% - better function commentary/error handling
-%%% - maps
-%%%
+%%% - fix try-catch
+%%% - maps?
+%%% string instead of cons in match
+
+%%% - no supprt for hd("string") which should return an integer.
 %%% - add to doc that bindings have to be ordered
 %%% - add to doc the new binding rules, types 
 %%% - currently no floats are allowed in arithmetic operations
+%%% - add to doc new match that takes AST and term()
+%%% - try catch is complete except for the after functionality
+%% should I return differently for | and ,
 
 %%% Time Allows
 % test the error handling, add line numbers and 
-%   proper error messages.
+%   proper error messages, atoms from erlang docs.
 % built in guard functions
 % test different pattern matching
 % modify world_add_module to load from an existing erlang file
@@ -93,8 +90,16 @@ eval_expr(AST, Bindings, World) ->
                 {ok, Value} -> {ok, Value, Bindings};
                 _ -> {error, "Variable unbound"}
             end;
-        % macth
-        {match, _, Exp1, Exp2} -> match:eval_match(Exp1, Exp2, Bindings, World);
+        % match tuple
+        {match, _, {tuple, _, LHS_List}, {tuple, RHS_Line, RHS_List}} ->
+            match:match_tuple(LHS_List, {tuple, RHS_Line, RHS_List}, Bindings, World);
+        % all other match
+        {match, _, Exp1, Exp2} ->
+            Eval_RHS = eval_expr(Exp2, Bindings, World),
+            case Eval_RHS of
+                {ok, RHS, _} -> match:eval_match(Exp1, RHS, Bindings, World);
+                _ -> {error, "invalid expression on RHS"}
+            end;
         % operation
         {op, _, Op, Exp1, Exp2} -> 
             Operand1 = eval_expr(Exp1, Bindings, World),
@@ -110,10 +115,15 @@ eval_expr(AST, Bindings, World) ->
         % if
         {'if', _, Clasues} -> eval_if(Clasues, Bindings, World);
         % case of
-        {'case', _, Arg, Clauses} -> eval_case(Arg, Clauses, Bindings, World);
-        % try catch statements (simplified)
-        {'try', _, Exprs, _, _, _} ->
-            eval_try_catch(Exprs, Bindings, World);
+        {'case', _, Arg, Clauses} -> 
+            Eval_Arg = eval_expr(Arg, Bindings, World),
+            case Eval_Arg of
+                {ok, ArgVal, _} -> eval_case(ArgVal, Clauses, Bindings, World);
+                _ -> {error,"illegal argument to case."}
+            end;
+        % try catch (without 'after')
+        {'try', _, Exprs, Patterns, CatchClauses, _} ->
+            eval_try_catch(Exprs, Patterns, CatchClauses, Bindings, World);
         % local calls
         {call, _, {atom, _, Function_Name}, Args} -> 
             eval_call(local, Function_Name, Args, Bindings, World);
@@ -211,15 +221,21 @@ eval_case(Arg, [HdClause | TlClauses], Bindings, World) ->
     end.
 
 % Evaluates a try catch expression
-% Does not have actual functionality currently, catches any error regardless.
-% Only handles try catches of the form try <Exp> catch error:<E> -> false end.
-% TODO: complete the try-catch design
-eval_try_catch(Exprs, Bindings, World) ->
+% TODO: purpose statement
+% complete the try-catch design
+%eval_try_catch(Exprs, Patterns, CatchClauses, Bindings, World);
+% eval:get_AST("try X =:= X div 1 catch error:E -> false end."). 
+eval_try_catch(Exprs, [], _, Bindings, World) ->
     Eval_Result = eval_exprs(Exprs, Bindings, World),
-    case Eval_Result of 
+    case Eval_Result of
         {ok, EvalVal, _} -> {ok, EvalVal, Bindings}; 
-        {error, _} -> {ok, {atom, false}, Bindings};
-        _ -> {error, "Failed to catch any errors, but evaluator did not return ok."}
+        {error, _} -> {ok, {atom, false}, Bindings} % Handle error clauses here
+    end;
+eval_try_catch(Exprs, Patterns, _, Bindings, World) ->
+    Eval_Result = eval_exprs(Exprs, Bindings, World),
+    case Eval_Result of
+        {ok, EvalVal, _} -> eval_case(EvalVal, Patterns, Bindings, World); 
+        {error, _} -> {ok, {atom, false}, Bindings} % Handle error clauses here
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -240,74 +256,57 @@ eval_call(Module_Name, Function_Name, Args, Bindings, World) ->
         Function_Def
     ),
     Local_World = world:world_add_module(World, local, Local_Module),
-    Function_Result = eval_function_body([HdClause | TlClauses], Args, Bindings,  World, Local_World),
-    case Function_Result of
-        {ok, EvalVal, _} -> {ok, EvalVal, Bindings};
-        {error, Message} -> {error, Message};
-        _ -> {error, "Function evaluation failed."}
+    Argument_Values = eval_AST_list(Args, Bindings, World, []),
+    case Argument_Values of
+        {error, _} -> {error, "Illegal Arguments."};
+        _ ->
+            Function_Result = 
+                eval_function_body([HdClause | TlClauses], 
+                                    Argument_Values,
+                                    Bindings,
+                                    World,
+                                    Local_World),
+            case Function_Result of
+                {ok, EvalVal, _} -> {ok, EvalVal, Bindings};
+                {error, Message} -> {error, Message};
+                _ -> {error, "Function evaluation failed."}
+            end
     end.
-
 
 % Evaluates the function body in form of AST
 % Currently there is no type checking when binding parameters.
 eval_function_body([], _, _, _, _) -> {error, "no function matching given arguments."};
 eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
     {clause, _, Param_List, _, _} = HdClause,
-
-    % TYPE-TODO
-    Typed_Argument_Values = eval_AST_list(Args, Bindings, World, []),
-    Argument_Values = lists:map(fun({_, Val}) -> Val end, Typed_Argument_Values),
-    % TODO: check correctness of Argument Values
-
-    LocalBindings_List = lists:map( %TODO: add tuple matching here, as well as list with a single element
-        % TODO: use match rather than this as this does not guarantee the validity of the bindings
-        % TODO: correct types should be used here
-        fun({{var, _, Name}, Arg}) -> [{Name, Arg}];
-            ({{cons, _, {var, _, Car}, {var, _, Cdr}}, {cons, Arg}}) ->
-                [{Car, hd(Arg)}, {Cdr, tl(Arg)}];
-            ({{cons, _, {var, _, Car}, _}, {cons, Arg}}) ->
-                [{Car, hd(Arg)}];
-            ({{cons, _, _, {var, _, Cdr}}, {cons, Arg}}) ->
-                [{Cdr, tl(Arg)}];
-            ({_, _}) -> [{empty, empty}]
-        end,
-        lists:zip(Param_List, Typed_Argument_Values) % Typed_Argument_Values
-    ),
-
-    LocalBindings = lists:sort(lists:flatten(LocalBindings_List)),
-
-    % Pattern matching in function signitures cannot make calls, so the World is wordl:init()
-    % Assume ParamList and LocalBindings are of the same length.
-    % Also assume every variable in Param_Values can be evaluated using LocalBindings.
-    % TODO: use world:init() instead of empty
-    % TYPE-TODO
-
-    Typed_Param_Values = eval_AST_list(Param_List, LocalBindings, #{}, []),
-    Param_Values = lists:map(fun({_, Val}) -> Val end, Typed_Param_Values),
-
-    %io:format("\nThe Param_List is: ~p.", [Param_List]),
-    %io:format("\nThe Argument_Values are: ~p.", [Argument_Values]),
-    %io:format("\nThe Param_Values are: ~p.", [Param_Values]),
-    %io:format("\nThe LocalBindings are: ~p.", [LocalBindings]),
-
-    % TODO: check correctness of Param Values
-    if
-        Argument_Values == Param_Values ->
-            case HdClause of
-                {clause, _, _, [], Exprs} ->
+    LocalBindings = create_local_bindings(Param_List, Args, Bindings, [], World),
+    case {HdClause, LocalBindings} of
+        {_, {error, _}} -> eval_function_body(TlClauses, Args, Bindings, World, LocalWorld);
+        {{clause, _, _, [], Exprs}, _} ->
+            eval_exprs(Exprs, LocalBindings, LocalWorld);
+        {{clause, _, _, [Guards], Exprs}, _} ->
+            Guards_Result = eval_conditions(Guards, LocalBindings, world:world_init()),
+            case Guards_Result of
+                true ->
                     eval_exprs(Exprs, LocalBindings, LocalWorld);
-                {clause, _, _, [Guards], Exprs} ->
-                    Guards_Result = eval_conditions(Guards, LocalBindings, world:world_init()),
-                    case Guards_Result of
-                        true ->
-                            eval_exprs(Exprs, LocalBindings, LocalWorld);
-                        _ ->
-                            eval_function_body(TlClauses, Args, Bindings, World, LocalWorld)
-                    end;
-                _ -> {error, "The function guards are invalid."}
+                _ ->
+                    eval_function_body(TlClauses, Args, Bindings, World, LocalWorld)
             end;
-        true -> eval_function_body(TlClauses, Args, Bindings, World, LocalWorld)
+        _ -> {error, "The function guards are invalid."}
     end.
+
+
+% Assume the length of Args and Paramlist are equal
+% Return the Newbindings obtained by adding each {Param, Arg} to the Bidnings 
+create_local_bindings([], [], _, BindingsIn, _) -> BindingsIn;
+create_local_bindings(ParamList, Args, Bindings, BindingsAcc, World) when length(ParamList) == length(Args) ->
+    Eval_Value = match:eval_match(hd(ParamList), hd(Args), BindingsAcc, World),
+    case Eval_Value of
+        {ok, _, NewBindings} ->
+            create_local_bindings(tl(ParamList), tl(Args), Bindings, NewBindings, World);
+         _ -> {error, "No match of parameters to arguments."}
+    end;
+create_local_bindings(_, _, _, _, _) -> {error, "illegal param-arg lists."}.
+ 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evalulate Fun Expressions
@@ -359,8 +358,12 @@ eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
 % returns Acc | {error, string()}
 eval_AST_list([], _, _, Acc) -> Acc;
 eval_AST_list([Hd | Tl], Bindings, World, Acc) ->
-    {ok, Value, _} = eval_expr(Hd, Bindings, World),
-    eval_AST_list(Tl, Bindings, World, Acc ++ [Value]);
+    Eval_Result = eval_expr(Hd, Bindings, World),
+    case Eval_Result of
+        {ok, Value, _} -> 
+            eval_AST_list(Tl, Bindings, World, Acc ++ [Value]);
+        _ -> Eval_Result
+    end;
 eval_AST_list(_, _, _, _) -> {error, "invalid AST List."}.
 
 % Evalutes a list of AST as if it represents a list of bool expressions
@@ -369,7 +372,7 @@ eval_conditions([], _, _) -> true;
 eval_conditions([Condition | Rest], Bindings, World) ->
     Condition_Result = eval_expr(Condition, Bindings, World),
     case Condition_Result of
-        {ok, {_, true}, _} -> eval_conditions(Rest, Bindings, World);
+        {ok, {atom, true}, _} -> eval_conditions(Rest, Bindings, World);
         _ -> false
     end.
 
