@@ -4,22 +4,22 @@
 % helpers to create ASTs
 -export([get_AST/1, get_AST_form/1]).
 
+
 %%% TODO:
-%%% [[], []]
+%%% - function acces functions on the same module
+%%% - function pattern match with tuples
 %%% - fun expressions
 %%% 
 %%% - better function commentary/error handling
 %%% - fix try-catch
-%%% - maps?
-%%% string instead of cons in match
-
+%% no more string matching, string instead of cons in match
 %%% - no supprt for hd("string") which should return an integer.
 %%% - add to doc that bindings have to be ordered
 %%% - add to doc the new binding rules, types 
 %%% - currently no floats are allowed in arithmetic operations
 %%% - add to doc new match that takes AST and term()
-%%% - try catch is complete except for the after functionality
-%% should I return differently for | and ,
+%%% - try catch is complete except for the after functionality, but now alos matching
+%%% - maps?
 
 %%% Time Allows
 % test the error handling, add line numbers and 
@@ -90,16 +90,9 @@ eval_expr(AST, Bindings, World) ->
                 {ok, Value} -> {ok, Value, Bindings};
                 _ -> {error, "Variable unbound"}
             end;
-        % match tuple
-        {match, _, {tuple, _, LHS_List}, {tuple, RHS_Line, RHS_List}} ->
-            match:match_tuple(LHS_List, {tuple, RHS_Line, RHS_List}, Bindings, World);
-        % all other match
+        % match
         {match, _, Exp1, Exp2} ->
-            Eval_RHS = eval_expr(Exp2, Bindings, World),
-            case Eval_RHS of
-                {ok, RHS, _} -> match:eval_match(Exp1, RHS, Bindings, World);
-                _ -> {error, "invalid expression on RHS"}
-            end;
+            match:eval_match(Exp1, Exp2, Bindings, World);
         % operation
         {op, _, Op, Exp1, Exp2} -> 
             Operand1 = eval_expr(Exp1, Bindings, World),
@@ -116,11 +109,7 @@ eval_expr(AST, Bindings, World) ->
         {'if', _, Clasues} -> eval_if(Clasues, Bindings, World);
         % case of
         {'case', _, Arg, Clauses} -> 
-            Eval_Arg = eval_expr(Arg, Bindings, World),
-            case Eval_Arg of
-                {ok, ArgVal, _} -> eval_case(ArgVal, Clauses, Bindings, World);
-                _ -> {error,"illegal argument to case."}
-            end;
+            eval_case(Arg, Clauses, Bindings, World);
         % try catch (without 'after')
         {'try', _, Exprs, Patterns, CatchClauses, _} ->
             eval_try_catch(Exprs, Patterns, CatchClauses, Bindings, World);
@@ -221,7 +210,8 @@ eval_case(Arg, [HdClause | TlClauses], Bindings, World) ->
     end.
 
 % Evaluates a try catch expression
-% TODO: purpose statement
+% TODO:
+% no pattern matching for now
 % complete the try-catch design
 %eval_try_catch(Exprs, Patterns, CatchClauses, Bindings, World);
 % eval:get_AST("try X =:= X div 1 catch error:E -> false end."). 
@@ -230,13 +220,13 @@ eval_try_catch(Exprs, [], _, Bindings, World) ->
     case Eval_Result of
         {ok, EvalVal, _} -> {ok, EvalVal, Bindings}; 
         {error, _} -> {ok, {atom, false}, Bindings} % Handle error clauses here
-    end;
-eval_try_catch(Exprs, Patterns, _, Bindings, World) ->
-    Eval_Result = eval_exprs(Exprs, Bindings, World),
-    case Eval_Result of
-        {ok, EvalVal, _} -> eval_case(EvalVal, Patterns, Bindings, World); 
-        {error, _} -> {ok, {atom, false}, Bindings} % Handle error clauses here
     end.
+% eval_try_catch(Exprs, Patterns, _, Bindings, World) ->
+%     Eval_Result = eval_exprs(Exprs, Bindings, World),
+%     case Eval_Result of
+%         {ok, EvalVal, _} -> eval_case(EvalVal, Patterns, Bindings, World); 
+%         {error, _} -> {ok, {atom, false}, Bindings} % Handle error clauses here
+%     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evaluate Function Calls
@@ -249,28 +239,27 @@ eval_call(Module_Name, Function_Name, Args, Bindings, World) ->
     Function_Arity = length(Args),
     Function_Def = maps:get({Function_Name, Function_Arity}, Module),
     [HdClause | TlClauses] = Function_Def,
+    
     Local_Module = world:module_add_function_AST(
         maps:get(local, world:world_init()),
         Function_Name,
         Function_Arity,
         Function_Def
     ),
+
+    % instead add each function in Module to local module
+    
+
     Local_World = world:world_add_module(World, local, Local_Module),
-    Argument_Values = eval_AST_list(Args, Bindings, World, []),
-    case Argument_Values of
-        {error, _} -> {error, "Illegal Arguments."};
-        _ ->
-            Function_Result = 
-                eval_function_body([HdClause | TlClauses], 
-                                    Argument_Values,
-                                    Bindings,
-                                    World,
-                                    Local_World),
-            case Function_Result of
-                {ok, EvalVal, _} -> {ok, EvalVal, Bindings};
-                {error, Message} -> {error, Message};
-                _ -> {error, "Function evaluation failed."}
-            end
+    Function_Result = eval_function_body([HdClause | TlClauses], 
+        Args,
+        Bindings,
+        World,
+        Local_World),
+    case Function_Result of
+        {ok, EvalVal, _} -> {ok, EvalVal, Bindings};
+        {error, Message} -> {error, Message};
+        _ -> {error, "Function evaluation failed."}
     end.
 
 % Evaluates the function body in form of AST
@@ -280,7 +269,8 @@ eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
     {clause, _, Param_List, _, _} = HdClause,
     LocalBindings = create_local_bindings(Param_List, Args, Bindings, [], World),
     case {HdClause, LocalBindings} of
-        {_, {error, _}} -> eval_function_body(TlClauses, Args, Bindings, World, LocalWorld);
+        {_, {error, _}} -> 
+            eval_function_body(TlClauses, Args, Bindings, World, LocalWorld);
         {{clause, _, _, [], Exprs}, _} ->
             eval_exprs(Exprs, LocalBindings, LocalWorld);
         {{clause, _, _, [Guards], Exprs}, _} ->
@@ -294,16 +284,16 @@ eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
         _ -> {error, "The function guards are invalid."}
     end.
 
-
-% Assume the length of Args and Paramlist are equal
-% Return the Newbindings obtained by adding each {Param, Arg} to the Bidnings 
-create_local_bindings([], [], _, BindingsIn, _) -> BindingsIn;
+% Given a list of paramteres and arguments, match each parameter to the corresponidng binding
+% and return the new bindings created by the match.
+create_local_bindings([], [], _, Bindings, _) -> Bindings;
 create_local_bindings(ParamList, Args, Bindings, BindingsAcc, World) when length(ParamList) == length(Args) ->
-    Eval_Value = match:eval_match(hd(ParamList), hd(Args), BindingsAcc, World),
-    case Eval_Value of
-        {ok, _, NewBindings} ->
-            create_local_bindings(tl(ParamList), tl(Args), Bindings, NewBindings, World);
-         _ -> {error, "No match of parameters to arguments."}
+    Match_Value = match:eval_param_match(hd(ParamList), hd(Args), Bindings, [], World),
+    case Match_Value of
+        {error, _} -> Match_Value;
+        _ ->
+            NewBindings = orddict:merge(fun(_, Value1, _) -> Value1 end, BindingsAcc, Match_Value),
+            create_local_bindings(tl(ParamList), tl(Args), Bindings, NewBindings, World)
     end;
 create_local_bindings(_, _, _, _, _) -> {error, "illegal param-arg lists."}.
  

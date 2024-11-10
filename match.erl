@@ -1,26 +1,10 @@
 -module(match).
 
--export([eval_match/4, match_tuple/4]).
+-export([eval_match/4, eval_param_match/5]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evaluate Match
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% TODO: should not need world in match, as it cannot make function calls on LHS?
-
-% TODO: comma seperated lists matching: [1, A, 3] = [1, 2, 3].
-
-% Plan: 
-% test what cases are not working
-
-% change tuple representation to {tuple, []} instead of {tuple, {}} which makes 
-% implementation easier
-% rewrite match tuple, and put the calls to it inside the main match
-
-% OR, same thing except make match take in unevaluated RHS. This seems more rigorous
-
-% clean up match
-
 
 % Given a match statement, if the left hand side is an unbound
 % variable, assigns the value of the right hand side to that variable
@@ -28,300 +12,252 @@
 % is equal to the right hand side.
 % returns {ok, term(), NewBindings} | {error, string()}
 
-% Evaluate matches of ASTs on the left hand side to terms on the right side
-eval_match({var, _, '_'}, RHS, Bindings, _) ->
-    {ok, RHS, Bindings};
-eval_match({var, _, LHS}, RHS, Bindings, _) ->
-    IsKey = orddict:is_key(LHS, Bindings),
-    if
-        IsKey ->
-            Value = orddict:fetch(LHS, Bindings),
-            case Value of
-                RHS -> 
-                    {ok, RHS, Bindings};
+% match '_'
+eval_match({var, _, '_'}, Exp2, Bindings, World) ->
+    eval:eval_expr(Exp2, Bindings, World);
+
+% match var = term()/list()/tuple()
+eval_match({var, _, Var}, Exp2, Bindings, World) ->
+    IsKey = orddict:is_key(Var, Bindings),
+    RHS = eval:eval_expr(Exp2, Bindings, World),
+    case {IsKey, RHS} of
+        {true, {ok, RHS_Value, _}} ->
+            LHS_Value = orddict:fetch(Var, Bindings),
+            case LHS_Value of
+                RHS_Value -> {ok, LHS_Value, Bindings};
                 _ -> {error, "No match of right hand side value."}
             end;
-        true ->
-            NewBindings = orddict:store(LHS, RHS, Bindings),
-            {ok, RHS, NewBindings}
+        {false, {ok, RHS_Value, _}} ->
+            {ok, RHS_Value, orddict:store(Var, RHS_Value, Bindings)};
+        _ -> {error, "Illegal pattern."}
     end;
 
-% {cons var var} = term()
-eval_match({cons, _, {var, _, Hd}, {var, _, Tl}}, RHS, Bindings, _) ->
-    case RHS of
-        {RHS_Type, RHS_Value} when RHS_Type /= nil ->
-            RHS_Head = hd(RHS_Value),
-            RHS_Tail = tl(RHS_Value),
-            Hd_is_key = orddict:is_key(Hd, Bindings),
-            Tl_is_key = orddict:is_key(Tl, Bindings),
-            if
-                Hd == '_' andalso Tl == '_' ->
-                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Bindings};
-                Hd_is_key andalso Tl_is_key ->
-                    Head_Value = orddict:fetch(Hd, Bindings),
-                    {TailType, Tail_Value} = orddict:fetch(Tl, Bindings),
-                    case {Head_Value, Tail_Value, TailType} of
-                        {RHS_Head, RHS_Tail, RHS_Type} -> 
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Bindings};
-                        {RHS_Head, RHS_Tail, nil} -> 
-                            {ok, {RHS_Type, [RHS_Head]}, Bindings};
-                        _ -> {error, "No match of right hand side value 10."}
-                    end;
-                Hd_is_key andalso Tl /= '_' ->
-                    Head_Value = orddict:fetch(Hd, Bindings),
-                    case {Head_Value, RHS_Tail} of
-                        {RHS_Head, []} ->
-                            Tl_to_Bindings = orddict:store(Tl, {nil, RHS_Tail}, Bindings),
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Tl_to_Bindings};
-                        {RHS_Head, _} -> 
-                            Tl_to_Bindings = orddict:store(Tl, {RHS_Type, RHS_Tail}, Bindings),
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Tl_to_Bindings};
-                        _ -> {error, "No match of right hand side value 9."}
-                    end;
-                Tl_is_key andalso Hd /= '_' ->
-                    {TailType, Tail_Value} = orddict:fetch(Tl, Bindings),
-                    Hd_to_Bindings = orddict:store(Hd, RHS_Head, Bindings),
-                    case {Tail_Value, TailType} of
-                        {RHS_Tail, RHS_Type} -> 
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Hd_to_Bindings};
-                        {RHS_Tail, nil} -> 
-                            {ok, {RHS_Type, [RHS_Head]}, Hd_to_Bindings};
-                        _ -> {error, "No match of right hand side value 8."}
-                    end;
-                Hd_is_key andalso Tl == '_' ->
-                    Head_Value = orddict:fetch(Hd, Bindings),
-                    case Head_Value of
-                        RHS_Head -> {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Bindings};
-                        _ -> {error, "No match of right hand side value 7."}
-                    end;
-                Tl_is_key andalso Hd == '_' ->
-                    {TailType, Tail_Value} = orddict:fetch(Tl, Bindings),
-                    case {Tail_Value, TailType} of
-                        {RHS_Tail, RHS_Type} -> 
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Bindings};
-                        {RHS_Tail, nil} -> 
-                            {ok, {RHS_Type, [RHS_Head]}, Bindings};
-                        _ -> {error, "No match of right hand side value 6."}
-                    end;
-                Hd == '_' andalso RHS_Tail == [] ->
-                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Bindings};
-                Hd == '_' ->
-                    Tl_to_Bindings = orddict:store(Tl, {RHS_Type, RHS_Tail}, Bindings),
-                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Tl_to_Bindings};
-                Tl == '_' ->
-                    Hd_to_Bindings = orddict:store(Hd, RHS_Head, Bindings),
-                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Hd_to_Bindings};
-                RHS_Tail == [] ->
-                    Hd_to_Bindings = orddict:store(Hd, RHS_Head, Bindings),
-                    Tl_to_Bindings = orddict:store(Tl, {nil, RHS_Tail}, Hd_to_Bindings),
-                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Tl_to_Bindings};
-                true ->
-                    Hd_to_Bindings = orddict:store(Hd, RHS_Head, Bindings),
-                    Tl_to_Bindings = orddict:store(Tl, {RHS_Type, RHS_Tail}, Hd_to_Bindings),
-                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Tl_to_Bindings}
+% list() = list()
+eval_match({cons, _, L_Hd, L_Tl}, {cons, _, R_Hd, R_Tl}, Bindings, World) ->
+    Match_Heads = eval_match(L_Hd, R_Hd, Bindings, World),
+    case Match_Heads of
+        {ok, V_Hd, Hd_Bindings} -> 
+            Match_Tails = eval_match(L_Tl, R_Tl, Hd_Bindings, World),
+            case Match_Tails of
+                {ok, {nil, []}, Tl_Bindings} ->
+                    {ok, {cons, [V_Hd]}, Tl_Bindings};
+                {ok, {cons, V_Tl}, Tl_Bindings} ->
+                    {ok, {cons, [V_Hd | V_Tl]}, Tl_Bindings};
+                _ -> Match_Tails
             end;
-        _ -> {error, "illegal pattern 1."}
+        _ -> Match_Heads
     end;
 
-% TODO: nil case?
+% list() = var()
+eval_match({cons, Line, L_Hd, L_Tl}, {var, _, Var}, Bindings, World) ->
+    RHS = orddict:fetch(Var, Bindings),
+    eval_match_rhs_value({cons, Line, L_Hd, L_Tl}, RHS, Bindings, World);
 
-% TODO, nil case? variable in head case?
-% {cons term() var} = term()
-eval_match({cons, _, Hd, {var, _, Tl}}, RHS, Bindings, World) ->
-    case RHS of
-        {RHS_Type, RHS_Value} when RHS_Type /= nil->
-            RHS_Head = hd(RHS_Value),
-            RHS_Tail = tl(RHS_Value),
-            Eval_LHS_Head = eval_match(Hd, RHS_Head, Bindings, World),
-            case Eval_LHS_Head of
-                {ok, LHS_Head, Hd_Bindings} ->
-                    IsKey = orddict:is_key(Tl, Bindings),
-                    if
-                        RHS_Head == LHS_Head andalso IsKey ->
-                            Value = orddict:fetch(Tl, Bindings),
-                            case Value of
-                                {RHS_Type, RHS_Tail} -> 
-                                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Hd_Bindings};
-                                {nil, RHS_Tail} -> 
-                                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Hd_Bindings};
-                                _ -> {error, "No match of right hand side value 5."}
-                            end;
-                        RHS_Head == LHS_Head andalso Tl == '_' ->
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Hd_Bindings};
-                        RHS_Head == LHS_Head andalso RHS_Tail == [] ->
-                            NewBindings = orddict:store(Tl, {nil, RHS_Tail}, Hd_Bindings),
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, NewBindings};
-                        RHS_Head == LHS_Head ->
-                            NewBindings = orddict:store(Tl, {RHS_Type, RHS_Tail}, Hd_Bindings),
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, NewBindings};
-                        true ->
-                            {error, "No match of right hand side value 4."}
-                    end;
-                _ -> {error, "illegal pattern 2."}
-            end;
-        _ -> {error, "illegal pattern 3."}
+% tuple() = tuple()
+eval_match({tuple, _, L_List}, {tuple, R_Line, R_List}, Bindings, World) ->
+    NewBindings = match_tuple_vars(L_List, R_List, Bindings, World),
+    case NewBindings of
+        {error, _} -> NewBindings;
+        _ -> eval:eval_expr({tuple, R_Line, R_List}, NewBindings, World)
     end;
 
-% TODO
-% {cons var term()} = term()
-eval_match({cons, _, {var, _, Hd}, {nil, _}}, RHS, Bindings, _) ->
-    case RHS of
-        {RHS_Type, RHS_Value} when RHS_Type /= nil->
-            RHS_Head = hd(RHS_Value),
-            RHS_Tail = tl(RHS_Value),
+% tuple() = var()
+eval_match({tuple, Line, TupleList}, {var, _, Var}, Bindings, World) ->
+    RHS = orddict:fetch(Var, Bindings),
+    eval_match_rhs_value({tuple, Line, TupleList}, RHS, Bindings, World);
 
-            %io:format("\nTail is: ~p", [Tl]),
-            %io:format("\nRHS_Tail: ~p", [RHS_Tail]),
-            %io:format("\nEval_LHS: ~p", [Eval_LHS]),
-            % what if Eval_LHS is a cons that has vars in it?
-            % instead of eval, call match with Tl and RHS Tail
-            IsKey = orddict:is_key(Hd, Bindings),
-            if
-                RHS_Tail == [] andalso IsKey ->
-                    Value = orddict:fetch(Hd, Bindings),
-                    case Value of
-                        RHS_Head -> 
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Bindings};
-                        _ -> {error, "No match of right hand side value 1."}
-                    end;
-                RHS_Tail == [] andalso Hd == '_' ->
-                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Bindings};
-                RHS_Tail == [] ->
-                    NewBindings = orddict:store(Hd, RHS_Head, Bindings),
-                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, NewBindings};
-                true ->
-                    {error, "No match of right hand side value 2."}
-            end;
-        _ -> {error, "illegal pattern 5."}
-    end;
-
-
-% {cons var term()} = term()
-eval_match({cons, _, {var, _, Hd}, Tl}, RHS, Bindings, World) ->
-    case RHS of
-        {RHS_Type, RHS_Value} when RHS_Type /= nil->
-            RHS_Head = hd(RHS_Value),
-            RHS_Tail = tl(RHS_Value),
-
-            %io:format("\nTail is: ~p", [Tl]),
-            %io:format("\nRHS_Tail: ~p", [RHS_Tail]),
-
-            Eval_LHS = eval_match(Tl, {RHS_Type, RHS_Tail}, Bindings, World),
-            %io:format("\nEval_LHS: ~p", [Eval_LHS]),
-            % what if Eval_LHS is a cons that has vars in it?
-            % instead of eval, call match with Tl and RHS Tail
-            case Eval_LHS of
-                {ok, {LHS_Type, LHS_Tail}, Tl_Bindings} when LHS_Type == RHS_Type orelse LHS_Type == nil ->
-                    IsKey = orddict:is_key(Hd, Bindings),
-                    if
-                        RHS_Tail == LHS_Tail andalso IsKey ->
-                            Value = orddict:fetch(Hd, Bindings),
-                            case Value of
-                                RHS_Head -> 
-                                    {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Tl_Bindings};
-                                _ -> {error, "No match of right hand side value 1."}
-                            end;
-                        RHS_Tail == LHS_Tail andalso Hd == '_' ->
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, Tl_Bindings};
-                        RHS_Tail == LHS_Tail ->
-                            NewBindings = orddict:store(Hd, RHS_Head, Tl_Bindings),
-                            {ok, {RHS_Type, [RHS_Head | RHS_Tail]}, NewBindings};
-                        true ->
-                            {error, "No match of right hand side value 2."}
-                    end;
-                _ -> {error, "illegal pattern 4."}
-                end;
-        _ -> {error, "illegal pattern 5."}
-    end;
-
-% TODO
-eval_match({cons, _, Hd, {nil, _}}, {cons, RHS}, Bindings, World) ->
-    Match_Hd = eval_match(Hd, hd(RHS), Bindings, World),
-    case Match_Hd of
-        {ok, _, Hd_NewBindings} ->
-            {ok, {cons, RHS}, Hd_NewBindings};
-        _ -> {error, "illegal pattern 72."}
-    end;
-
-% TODO
-eval_match({cons, _, Hd, Tl}, {cons, RHS}, Bindings, World) ->
-    Match_Hd = eval_match(Hd, hd(RHS), Bindings, World),
-    io:format("\nmatch head: ~p", [Match_Hd]),
-    case Match_Hd of
-        {ok, _, Hd_NewBindings} ->
-            %io:format("\n RHS tail is: ~p", [tl(RHS)]),
-            Match_Tl = eval_match(Tl, {cons, tl(RHS)}, Hd_NewBindings, World),
-            %io:format("\n Match_Tl is: ~p", [Match_Tl]),
-            case Match_Tl of
-                {ok, _, Tl_NewBindings} ->
-                    {ok, {cons, RHS}, Tl_NewBindings};
-                _ -> {error, "illegal pattern 6."}
-            end;
-        _ -> {error, "illegal pattern 7."}
-    end;
-
-    % what id Tl is nil?
-    % also need to checl for size equality of the two lists
-    % match Hd to RHS car to recieve Hd_NewBindings
-    % match Tl to RHS cdr with Hd_NewBindings to obtain Tl_NewBindings
-    % return {ok, RHS, Tl_NewBindings}
-
-%{match, _, {cons, _, {cons, _, Exp1}, {cons, _, Exp2}}, ExpRHS} ->
-%{match, _, {cons, _, {cons, _, }, Exp1}, ExpRHS} ->
-%{match, _, {cons, _, Exp1, {cons}}, ExpRHS} ->
-
-% {cons {cons AST} {cons AST}} = term()
-
-% {cons {cons AST} AST} = 
-
-% tuple?
 % term() = term()
-eval_match(Exp1, RHS, Bindings, World) ->
-    % TODO: this has to be matched too
-    io:format("\nExp1: ~p", [Exp1]),
-    io:format("\nBindings: ~p", [Bindings]),
+eval_match(Exp1, Exp2, Bindings, World) ->
     Eval_LHS = eval:eval_expr(Exp1, Bindings, World),
-    io:format("\nEval LHS: ~p", [Eval_LHS]),
-    case {Eval_LHS, RHS} of
-        {{ok, LHS, NewBindings}, RHS} when LHS == RHS ->
-            {ok, RHS, NewBindings};
-        {{ok, _, _}, _} ->
-            {error, "No match of right hand side value 3."};
-        _ -> {error, "illegal pattern 8."}
+    Eval_RHS = eval:eval_expr(Exp2, Bindings, World),
+    case {Eval_LHS, Eval_RHS} of
+        {{ok, LHS, _}, {ok, RHS, _}} when LHS == RHS ->
+            {ok, RHS, Bindings};
+        {{ok, _, _}, {ok, _, _}} ->
+            {error, "No match of right hand side value."};
+        _ -> {error, "Illegal pattern."}
     end.
 
-
-
-% TODO: descriptions of the functions below
-
-match_tuple(TupleList, {tuple, RHS_Line, RHS_List}, Bindings, World) ->
-    NewBindings = match_tuple_vars(TupleList, RHS_List, Bindings, World),
-    RHS = eval:eval_expr({tuple, RHS_Line, RHS_List}, Bindings, World),
-    case {RHS, NewBindings} of
-        {{error, _}, _} -> {error, "illegal pattern 9."};
-        {_, {error, _}} -> NewBindings;
-        {{ok, RHS_Value, _}, _} -> {ok, RHS_Value, NewBindings};
-        _ -> {error, "illegal pattern 10."}
-    end.
-
-% {tuple, list()} = term()
+% Given two lists that represent two tuples, call match on each corresponding 
+% element pair. Return combination of the new Bindings obtained from each match. 
+% [term()] = [term()]
 match_tuple_vars([], [], Bindings, _) -> Bindings;
 match_tuple_vars([LHS_First | LHS_Rest], [RHS_First | RHS_Rest], Bindings, World) ->
-    Eval_RHS_First = eval:eval_expr(RHS_First, Bindings, World),
-    % TODO: what if LHS is a tuple?
-    case {Eval_RHS_First, LHS_First} of
-        {{ok, _, _}, {tuple, _, TupleList}} ->
-            Eval_Tuple = match_tuple(TupleList, RHS_First, Bindings, World),
-            case Eval_Tuple of
-                {ok, _, NewBindings} -> match_tuple_vars(LHS_Rest, RHS_Rest, NewBindings, World);
-                _ -> {error, "illegal pattern 11."}
-            end;
-        {{ok, RHS_Value, _}, _} ->
-            Eval_Match = eval_match(LHS_First, RHS_Value, Bindings, World),
-            case Eval_Match of
-                {ok, _, NewBindings} -> match_tuple_vars(LHS_Rest, RHS_Rest, NewBindings, World);
-                _ -> Eval_Match
-            end;
-        _ -> {error, "Failed to evaluate right hand side."}
+    Match_First = eval_match(LHS_First, RHS_First, Bindings, World),
+    case Match_First of
+        {ok, _, NewBindings} ->
+            match_tuple_vars(LHS_Rest, RHS_Rest, NewBindings, World);
+        _ -> Match_First
     end;
-match_tuple_vars(_, _, _, _) -> {error, "illegal pattern 12."}.
+match_tuple_vars(_, _, _, _) -> {error, "Illegal pattern."}.
+
+% Return the same as eval_match, except the RHS is pre-evaluated. 
+eval_match_rhs_value(LHS, RHS, Bindings, World) ->
+    case {LHS, RHS} of
+        {_, {error, _}} -> RHS;
+        {{var, _, '_'}, _} -> {ok, RHS, Bindings};
+        {{var, _, Var}, _} ->
+            IsKey = orddict:is_key(Var, Bindings),
+            case IsKey of
+                true ->
+                    LHS_Value = orddict:fetch(Var, Bindings),
+                    case LHS_Value of
+                        RHS -> {ok, RHS, Bindings};
+                        _ -> {error, "No match of right hand side value."}
+                    end;
+                false ->
+                    {ok, RHS, orddict:store(Var, RHS, Bindings)};
+                _ -> {error, "Illegal pattern."}
+            end;
+        {{cons, _, L_Hd, L_Tl}, {cons, R_List}} ->
+            Match_Head = eval_match_rhs_value(L_Hd, hd(R_List), Bindings, World),
+            case {Match_Head, L_Tl} of
+                {{ok, _, _}, {nil, _}} when tl(R_List) == [] ->
+                    Match_Head;
+                {{ok, _, Hd_Bindings}, _} ->
+                    Match_Tail = eval_match_rhs_value(L_Tl, {cons, tl(R_List)}, Hd_Bindings, World),
+                    case Match_Tail of 
+                        {ok, _, Tl_Bindings} -> {ok, {cons, R_List}, Tl_Bindings};
+                        _ -> Match_Tail
+                    end;
+                _ -> Match_Head
+            end;
+        {{tuple, L_Line, LTupleList}, {tuple, RTuple}} ->
+            RTupleList = tuple_to_list(RTuple), 
+            case {LTupleList, RTupleList} of
+                {[], []} -> {ok, {tuple, {}}, Bindings};
+                _ ->
+                    Match_Head = eval_match_rhs_value(hd(LTupleList), hd(RTupleList), Bindings, World),
+                    case Match_Head of
+                        {ok, _, Hd_Bindings} ->
+                            Match_Tail = eval_match_rhs_value({tuple, L_Line, tl(LTupleList)}, 
+                                {tuple, list_to_tuple(tl(RTupleList))}, Hd_Bindings, World),
+                            case Match_Tail of
+                                {ok, _, Tl_Bindings} -> {ok, {tuple, RTuple}, Tl_Bindings};
+                                _ -> Match_Tail
+                            end;
+                        _ -> Match_Head
+                    end
+            end;
+        _ ->
+            Eval_LHS = eval:eval_expr(LHS, Bindings, World),
+            case Eval_LHS of
+                {ok, RHS, _} -> {ok, RHS, Bindings};
+                {ok, _, _} -> {error, "No match of righ hand side value."};
+                _ -> {error, "Illegal pattern."}
+            end
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  Evaluate Function Parameter Match
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Given LHS and RHS, match LHS to RHS, but treat every variable in LHS as
+% unbound, even if they exist in BindingsIn. Return the new bindings created
+% by this match or error.
+
+% match '_'
+eval_param_match({var, _, '_'}, _, _, BindingsAcc, _) ->
+    BindingsAcc;
+
+% match var = term()/list()/tuple()
+eval_param_match({var, _, Var}, Exp2, BindingsIn, BindingsAcc, World) ->
+    RHS = eval:eval_expr(Exp2, BindingsIn, World),
+    case RHS of
+        {ok, RHS_Value, _} ->
+            orddict:store(Var, RHS_Value, BindingsAcc);
+        _ -> {error, "Illegal Pattern."}
+    end;
+
+% list() = list()
+eval_param_match({cons, _, L_Hd, L_Tl}, {cons, _, R_Hd, R_Tl}, BindingsIn, BindingsAcc, World) ->
+    Match_Heads = eval_param_match(L_Hd, R_Hd, BindingsIn, BindingsAcc, World),
+    case Match_Heads of
+        {error, _} -> Match_Heads;
+        _ ->
+            NewBindingsAcc = orddict:merge(fun(_, Value1, _) -> Value1 end, Match_Heads, BindingsAcc),
+            eval_param_match(L_Tl, R_Tl, BindingsIn, NewBindingsAcc, World)
+    end;
+
+% list() = var()
+eval_param_match({cons, Line, L_Hd, L_Tl}, {var, _, Var}, BindingsIn, BindingsAcc, World) ->
+    RHS = orddict:fetch(Var, BindingsIn),
+    eval_param_match_rhs_value({cons, Line, L_Hd, L_Tl}, RHS, BindingsIn, BindingsAcc, World);
+
+% tuple() = tuple()
+eval_param_match({tuple, _, L_List}, {tuple, _, R_List}, BindingsIn, BindingsAcc, World) ->
+    param_match_tuple_vars(L_List, R_List, BindingsIn, BindingsAcc, World);
+
+% tuple() = var()
+eval_param_match({tuple, Line, TupleList}, {var, _, Var}, BindingsIn, BindingsAcc, World) ->
+    RHS = orddict:fetch(Var, BindingsIn),
+    eval_param_match_rhs_value({tuple, Line, TupleList}, RHS, BindingsIn, BindingsAcc, World);
+
+% term() = term()
+eval_param_match(Exp1, Exp2, BindingsIn, BindingsAcc, World) -> 
+    %io:format("\nFirst expression: ~p", [Exp1]),
+    %io:format("\nSecond expression: ~p", [Exp2]),
+    Eval_LHS = eval:eval_expr(Exp1, BindingsIn, World),
+    Eval_RHS = eval:eval_expr(Exp2, BindingsIn, World),
+    %io:format("\nResult of first expression: ~p", [Eval_LHS]),
+    %io:format("\nResult of second expression: ~p", [Eval_RHS]),
+    case {Eval_LHS, Eval_RHS} of
+        {{ok, LHS, _}, {ok, RHS, _}} when LHS == RHS ->
+            BindingsAcc;
+        {{ok, _, _}, {ok, _, _}} ->
+            {error, "No match of right hand side value."};
+        _ -> {error, "Illegal pattern."}
+    end.
+
+% Given two lists that represent two tuples, call match on each corresponding 
+% element pair. Return combination of the new Bindings obtained from each match.
+% However, treat every variable in LHS as unbound. 
+% [term()] = [term()]
+param_match_tuple_vars([], [], _, BindingsAcc, _) -> BindingsAcc;
+param_match_tuple_vars([LHS_First | LHS_Rest], [RHS_First | RHS_Rest], BindingsIn, BindingsAcc, World) ->
+    Match_First = eval_param_match(LHS_First, RHS_First, BindingsIn, BindingsAcc, World),
+    case Match_First of
+        {error, _} -> Match_First;
+        _ -> 
+            NewBindingsAcc = orddict:merge(fun(_, Value1, _) -> Value1 end, Match_First, BindingsAcc),
+            param_match_tuple_vars(LHS_Rest, RHS_Rest, BindingsIn, NewBindingsAcc, World)
+    end;
+param_match_tuple_vars(_, _, _, _, _) -> {error, "Illegal pattern."}.
+
+% Match LHS to a pre-evaluated RHS while treating every variable in LHS
+% as unbound. Return the new bindings created by the match or error.
+eval_param_match_rhs_value(LHS, RHS, BindingsIn, BindingsAcc, World) ->
+    case {LHS, RHS} of
+        {_, {error, _}} -> RHS;
+        {{var, _, '_'}, _} -> BindingsAcc;
+        {{var, _, Var}, _} -> orddict:store(Var, RHS, BindingsAcc);
+
+        {{cons, _, L_Hd, L_Tl}, {cons, R_List}} ->
+            Match_Head = eval_param_match_rhs_value(L_Hd, hd(R_List), BindingsIn, BindingsAcc, World),
+            case {Match_Head, L_Tl} of
+                {{error, _}, _} -> Match_Head;
+                {_, {nil, _}} when tl(R_List) == [] -> Match_Head;
+                _ -> eval_param_match_rhs_value(L_Tl, {cons, tl(R_List)}, BindingsIn, Match_Head, World)
+            end;
+        {{tuple, L_Line, LTupleList}, {tuple, RTuple}} ->
+            RTupleList = tuple_to_list(RTuple), 
+            case {LTupleList, RTupleList} of
+                {[], []} -> BindingsAcc;
+                _ ->
+                    Match_Head = eval_param_match_rhs_value(hd(LTupleList), hd(RTupleList), 
+                        BindingsIn, BindingsAcc, World),
+                    case Match_Head of
+                        {error, _} -> Match_Head;
+                        _ ->
+                            eval_param_match_rhs_value({tuple, L_Line, tl(LTupleList)}, 
+                                {tuple, list_to_tuple(tl(RTupleList))}, BindingsIn, Match_Head, World)
+                    end
+            end;
+        _ ->
+            Eval_LHS = eval:eval_expr(LHS, BindingsIn, World),
+            case Eval_LHS of
+                {ok, RHS, _} -> BindingsAcc;
+                {ok, _, _} -> {error, "No match of righ hand side value."};
+                _ -> {error, "Illegal pattern."}
+            end
+    end.
