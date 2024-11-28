@@ -4,31 +4,25 @@
 % helpers to create ASTs
 -export([get_AST/1, get_AST_form/1]).
 
+
 %%% TODO:
-
-% Question for Mark: should the lists always end in nil by default?
-% by that I mean: should put a {nil, []} at the end of each list,
-% or not since all of them have it.
-
-
-%%% - tuples matching
-%%% - fun expression
-
-
-%%% - fix try-catch
-%%% - no supprt for hd("string") which should return an integer.
+%%% handle arity missmatch in function calls
 %%% - better function commentary/error handling
-%%% - maps
-%%%
+%%% - fix try-catch
+%% no more string matching, string instead of cons in match
+%%% - no supprt for hd("string") which should return an integer.
 %%% - add to doc that bindings have to be ordered
 %%% - add to doc the new binding rules, types 
 %%% - currently no floats are allowed in arithmetic operations
+%%% - add to doc new match that takes AST and term()
+%%% - try catch is complete except for the after functionality, but now alos matching
+%%% - maps?
+%%% %%% new types: ast and fun. add all types to the doc
 
 %%% Time Allows
 % test the error handling, add line numbers and 
-%   proper error messages.
+%   proper error messages, atoms from erlang docs.
 % built in guard functions
-% test different pattern matching
 % modify world_add_module to load from an existing erlang file
 %   and handle the Module Map creation automatically.
 
@@ -76,12 +70,16 @@ eval_expr(AST, Bindings, World) ->
             EvalHead = eval_expr(Car, Bindings, World),
             EvalTail = eval_expr(Cdr, Bindings, World),
             case {EvalHead, EvalTail} of
-                {{ok, Head, _}, {ok, {cons, Tail}, _}} -> 
-                    {ok, {cons, [Head | Tail]}, Bindings};
-                {{ok, Head, _}, {ok, {nil, []}, _}} -> 
-                    {ok, {cons, [Head]}, Bindings};
-                {{ok, Head, _}, {ok, Tail, _}} -> 
-                    {ok, {cons, [Head | Tail]}, Bindings};
+                % TODO: remove duplication
+                {{ok, Head, HdBindings}, {ok, {cons, Tail}, TlBindings}} ->
+                    NewBindings = orddict:merge(fun(_, Value1, _) -> Value1 end, HdBindings, TlBindings),
+                    {ok, {cons, [Head | Tail]}, NewBindings};
+                {{ok, Head, HdBindings}, {ok, {nil, []}, TlBindings}} ->
+                    NewBindings = orddict:merge(fun(_, Value1, _) -> Value1 end, HdBindings, TlBindings),
+                    {ok, {cons, [Head]}, NewBindings};
+                {{ok, Head, HdBindings}, {ok, Tail, TlBindings}} ->
+                    NewBindings = orddict:merge(fun(_, Value1, _) -> Value1 end, HdBindings, TlBindings),
+                    {ok, {cons, [Head | Tail]}, NewBindings};
                 _ -> {error, "illegal list."}
             end;
         % tuple
@@ -93,8 +91,9 @@ eval_expr(AST, Bindings, World) ->
                 {ok, Value} -> {ok, Value, Bindings};
                 _ -> {error, "Variable unbound"}
             end;
-        % macth
-        {match, _, Exp1, Exp2} -> match:eval_match(Exp1, Exp2, Bindings, World);
+        % match
+        {match, _, Exp1, Exp2} ->
+            match:eval_match(Exp1, Exp2, Bindings, World);
         % operation
         {op, _, Op, Exp1, Exp2} -> 
             Operand1 = eval_expr(Exp1, Bindings, World),
@@ -110,26 +109,43 @@ eval_expr(AST, Bindings, World) ->
         % if
         {'if', _, Clasues} -> eval_if(Clasues, Bindings, World);
         % case of
-        {'case', _, Arg, Clauses} -> eval_case(Arg, Clauses, Bindings, World);
-        % try catch statements (simplified)
-        {'try', _, Exprs, _, _, _} ->
-            eval_try_catch(Exprs, Bindings, World);
-        % local calls
+        {'case', _, Arg, Clauses} -> 
+            eval_case(Arg, Clauses, Bindings, World);
+        % try catch (without 'after')
+        {'try', _, Exprs, Patterns, CatchClauses, _} ->
+            eval_try_catch(Exprs, Patterns, CatchClauses, Bindings, World);
+        % local call
         {call, _, {atom, _, Function_Name}, Args} -> 
             eval_call(local, Function_Name, Args, Bindings, World);
-        % remote calls
+        % remote call
         {call, _, {remote, _, {atom, _, Module_Name}, {atom, _, Function_Name} }, Args} -> 
             eval_call(Module_Name, Function_Name, Args, Bindings, World);
-        % fun (not so fun)
-        % {'fun', _, {clauses, Clauses}} -> eval_fun(Clauses, Bindings, World);
+        % call to fun expression
+        {call, _, Fun_Call, Args} ->
+            Fun_Exp = eval_expr(Fun_Call, Bindings, World),
+            case Fun_Exp of
+                {ok, {'fun', {Name, Arity}}, NewBindings} ->
+                    % TODO: error handlig for when the number of args is incorrect,
+                    % also  this to the eval_call function
+                    {{clauses, Clauses}, Fun_Bindings} = orddict:fetch({Name, Arity}, NewBindings),
+                    Eval_Value = eval_function_body(Clauses, Args, NewBindings, Fun_Bindings, World, World),
+                    case Eval_Value of
+                        % TODO,  new   bindings if it returns a fun
+                        {ok, Value, _} -> {ok, Value, NewBindings};
+                        _ -> Eval_Value
+                    end;
+                _ -> Fun_Exp
+            end;
+        % fun
+        {'fun', Line, {clauses, Clauses}} -> eval_fun(Clauses, Line, Bindings, World);
         % not accepted language
         _ -> {error, "AST is not accepted by the evaluator."}
     end.
 
 % Given two pre-evaluated expressions, applies the given operation.
 % returns {ok, term(), Bindings} | {error, string()}
-eval_op(_, {error, _}, _, _) -> {error, "Invalid argument for the operation."};
-eval_op(_, _, {error, _}, _) -> {error, "Invalid argument for the operation."};
+eval_op(_, {error, Message}, _, _) -> {error, "Invalid first argument for the operation+ " ++ Message};
+eval_op(_, _, {error, Message}, _) -> {error, "Invalid second argument for the operation: + " ++ Message};
 eval_op(Op, {ok, {Type1, Operand1}, _}, {ok, {Type2, Operand2}, _}, Bindings) ->
     case Op of
         '+' when (Type1 == integer orelse Type1 == float), (Type2 == integer orelse Type2 == float) ->
@@ -151,11 +167,13 @@ eval_op(Op, {ok, {Type1, Operand1}, _}, {ok, {Type2, Operand2}, _}, Bindings) ->
         '=<' -> {ok, {atom, Operand1 < Operand2}, Bindings};
         '>' -> {ok, {atom, Operand1 > Operand2}, Bindings};
         '>=' -> {ok, {atom, Operand1 < Operand2}, Bindings};
-        'and' when is_atom(Operand1), is_atom(Operand2) ->
+        'and' when (Type1 == atom andalso Type2 == atom) ->
             {ok, {atom, Operand1 and Operand2}, Bindings};
-        'or' when is_atom(Operand1), is_atom(Operand2) ->
+        'or' when (Type1 == atom andalso Type2 == atom) ->
             {ok, {atom, Operand1 or Operand2}, Bindings};
         '=:=' -> {ok, {atom, Operand1 =:= Operand2}, Bindings};
+        '!' when Type1 == pid ->
+            {{ok, Operand2, Bindings}, {message, {{Type1, Operand1}, {Type2, Operand2}}}};
         _ -> {error, "Operation with given arguments is not allowed by the evaluator."}
     end.
 
@@ -211,16 +229,23 @@ eval_case(Arg, [HdClause | TlClauses], Bindings, World) ->
     end.
 
 % Evaluates a try catch expression
-% Does not have actual functionality currently, catches any error regardless.
-% Only handles try catches of the form try <Exp> catch error:<E> -> false end.
-% TODO: complete the try-catch design
-eval_try_catch(Exprs, Bindings, World) ->
+% TODO:
+% no pattern matching for now
+% complete the try-catch design
+%eval_try_catch(Exprs, Patterns, CatchClauses, Bindings, World);
+% eval:get_AST("try X =:= X div 1 catch error:E -> false end."). 
+eval_try_catch(Exprs, [], _, Bindings, World) ->
     Eval_Result = eval_exprs(Exprs, Bindings, World),
-    case Eval_Result of 
+    case Eval_Result of
         {ok, EvalVal, _} -> {ok, EvalVal, Bindings}; 
-        {error, _} -> {ok, {atom, false}, Bindings};
-        _ -> {error, "Failed to catch any errors, but evaluator did not return ok."}
+        {error, _} -> {ok, {atom, false}, Bindings} % Handle error clauses here
     end.
+% eval_try_catch(Exprs, Patterns, _, Bindings, World) ->
+%     Eval_Result = eval_exprs(Exprs, Bindings, World),
+%     case Eval_Result of
+%         {ok, EvalVal, _} -> eval_case(EvalVal, Patterns, Bindings, World); 
+%         {error, _} -> {ok, {atom, false}, Bindings} % Handle error clauses here
+%     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evaluate Function Calls
@@ -233,123 +258,72 @@ eval_call(Module_Name, Function_Name, Args, Bindings, World) ->
     Function_Arity = length(Args),
     Function_Def = maps:get({Function_Name, Function_Arity}, Module),
     [HdClause | TlClauses] = Function_Def,
-    Local_Module = world:module_add_function_AST(
-        maps:get(local, world:world_init()),
-        Function_Name,
-        Function_Arity,
-        Function_Def
-    ),
+    Local_Module = maps:merge(maps:get(local, world:world_init()), Module),
     Local_World = world:world_add_module(World, local, Local_Module),
-    Function_Result = eval_function_body([HdClause | TlClauses], Args, Bindings,  World, Local_World),
+    Function_Result = eval_function_body([HdClause | TlClauses], 
+        Args,
+        Bindings,
+        [],
+        World,
+        Local_World),
     case Function_Result of
+        {ok, {'fun', NameAndArity}, FunBindings} ->
+            % TODO: error handling for failed fetch
+            FunBody = orddict:fetch(NameAndArity, FunBindings),
+            {ok, {'fun', NameAndArity}, orddict:store(NameAndArity, FunBody, Bindings)};
         {ok, EvalVal, _} -> {ok, EvalVal, Bindings};
         {error, Message} -> {error, Message};
         _ -> {error, "Function evaluation failed."}
     end.
 
-
 % Evaluates the function body in form of AST
 % Currently there is no type checking when binding parameters.
-eval_function_body([], _, _, _, _) -> {error, "no function matching given arguments."};
-eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
+eval_function_body([], _, _, _, _, _) -> {error, "no function matching given arguments."};
+eval_function_body([HdClause | TlClauses], Args, Bindings, BodyBindings, World, LocalWorld) ->
     {clause, _, Param_List, _, _} = HdClause,
-
-    % TYPE-TODO
-    Typed_Argument_Values = eval_AST_list(Args, Bindings, World, []),
-    Argument_Values = lists:map(fun({_, Val}) -> Val end, Typed_Argument_Values),
-    % TODO: check correctness of Argument Values
-
-    LocalBindings_List = lists:map( %TODO: add tuple matching here, as well as list with a single element
-        % TODO: use match rather than this as this does not guarantee the validity of the bindings
-        % TODO: correct types should be used here
-        fun({{var, _, Name}, Arg}) -> [{Name, Arg}];
-            ({{cons, _, {var, _, Car}, {var, _, Cdr}}, {cons, Arg}}) ->
-                [{Car, hd(Arg)}, {Cdr, tl(Arg)}];
-            ({{cons, _, {var, _, Car}, _}, {cons, Arg}}) ->
-                [{Car, hd(Arg)}];
-            ({{cons, _, _, {var, _, Cdr}}, {cons, Arg}}) ->
-                [{Cdr, tl(Arg)}];
-            ({_, _}) -> [{empty, empty}]
-        end,
-        lists:zip(Param_List, Typed_Argument_Values) % Typed_Argument_Values
-    ),
-
-    LocalBindings = lists:sort(lists:flatten(LocalBindings_List)),
-
-    % Pattern matching in function signitures cannot make calls, so the World is wordl:init()
-    % Assume ParamList and LocalBindings are of the same length.
-    % Also assume every variable in Param_Values can be evaluated using LocalBindings.
-    % TODO: use world:init() instead of empty
-    % TYPE-TODO
-
-    Typed_Param_Values = eval_AST_list(Param_List, LocalBindings, #{}, []),
-    Param_Values = lists:map(fun({_, Val}) -> Val end, Typed_Param_Values),
-
-    %io:format("\nThe Param_List is: ~p.", [Param_List]),
-    %io:format("\nThe Argument_Values are: ~p.", [Argument_Values]),
-    %io:format("\nThe Param_Values are: ~p.", [Param_Values]),
-    %io:format("\nThe LocalBindings are: ~p.", [LocalBindings]),
-
-    % TODO: check correctness of Param Values
-    if
-        Argument_Values == Param_Values ->
-            case HdClause of
-                {clause, _, _, [], Exprs} ->
+    LocalBindings = create_local_bindings(Param_List, Args, Bindings, BodyBindings, World),
+    case {HdClause, LocalBindings} of
+        {_, {error, _}} -> 
+            eval_function_body(TlClauses, Args, Bindings, BodyBindings, World, LocalWorld);
+        {{clause, _, _, [], Exprs}, _} ->
+            eval_exprs(Exprs, LocalBindings, LocalWorld);
+        {{clause, _, _, [Guards], Exprs}, _} ->
+            Guards_Result = eval_conditions(Guards, LocalBindings, world:world_init()),
+            case Guards_Result of
+                true ->
                     eval_exprs(Exprs, LocalBindings, LocalWorld);
-                {clause, _, _, [Guards], Exprs} ->
-                    Guards_Result = eval_conditions(Guards, LocalBindings, world:world_init()),
-                    case Guards_Result of
-                        true ->
-                            eval_exprs(Exprs, LocalBindings, LocalWorld);
-                        _ ->
-                            eval_function_body(TlClauses, Args, Bindings, World, LocalWorld)
-                    end;
-                _ -> {error, "The function guards are invalid."}
+                _ ->
+                    eval_function_body(TlClauses, Args, Bindings, BodyBindings, World, LocalWorld)
             end;
-        true -> eval_function_body(TlClauses, Args, Bindings, World, LocalWorld)
+        _ -> {error, "The function guards are invalid."}
     end.
+
+% Given a list of paramteres and arguments, match each parameter to the corresponidng binding
+% and return the new bindings created by the match.
+create_local_bindings([], [], _, Bindings, _) -> Bindings;
+create_local_bindings(ParamList, Args, Bindings, BindingsAcc, World) when length(ParamList) == length(Args) ->
+    Match_Value = match:eval_param_match(hd(ParamList), hd(Args), Bindings, [], World),
+    case Match_Value of
+        {error, _} -> Match_Value;
+        _ ->
+            NewBindings = orddict:merge(fun(_, Value1, _) -> Value1 end, BindingsAcc, Match_Value),
+            create_local_bindings(tl(ParamList), tl(Args), Bindings, NewBindings, World)
+    end;
+create_local_bindings(_, _, _, _, _) -> {error, "illegal param-arg lists."}.
+ 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evalulate Fun Expressions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Evaluate a fun expression by creating the function it represents, naming it
-% and adding it to the local module of the world. Returns the name (symbol) 
-% of the function created.
-% eval_fun(Clauses, Bindings, World) -> notSoFun.
-
-% returns an atom : #fun + FileName + LineNumber, but its type is {fun, function_name}
-% which will be treated as a function in the evaluator.
-% there is a special call, made to a variable.
-% eval:get_AST("X()."). -> [{call,1,{var,1,'X'},[]}]
-
-% only have to change the call section in the evaluator
-% evaluate X, check if it is of fun type, call that atom on the module as usual.
-
-
-% maps the function in the world's local moddule to that atom an its arity
-
-% Now the world can be modified, so shouldd it be returned?
-% probably better to save it in the bindings, not the world...
-
-% if saved to bindings,
-% in the call check if X is of type fun_atom, then check that
-% the value of X and its arity as key in the bindings is of tyep fun_def
-% then call fun_def normally.
-
-% should the fun have access to the functions in the file it was declared on?
-
-% might require some logic on free variables 
-
-% eval_fun(Line_Number, Clauses, Bindings, World) ->
-%     % TODO: use mark's naming method
-%     FunName = "#fun " ++ integer_to_list(Line_Number),
-%     [{clause, _, ArgList, _, _} | _] = Clauses,
-%     FunArity = length(ArgList),
-%     NewBindings = orddict:store({{FunName, FunArity}, {fun_def, Clauses}}, Bindings),
-%     {ok, FunName, NewBindings}.
-
-
+% Evaluates a fun statement by generating a unique name and the {name, arity} 
+% pair as a key for the given clauses in the Bindings. Returns the generated name
+% which has a 'fun' type.
+eval_fun(Clauses, Line, Bindings, _) ->
+    FunName = list_to_atom("#Fun<" ++ integer_to_list(Line) ++ "."++ integer_to_list(erlang:unique_integer([positive])) ++ ">"),
+    [{clause, _, ArgList, _, _} | _] = Clauses,
+    FunArity = length(ArgList),
+    {ok, {'fun', {FunName, FunArity}}, orddict:store({FunName, FunArity}, {{clauses, Clauses}, Bindings}, Bindings)}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Helpers
@@ -359,8 +333,12 @@ eval_function_body([HdClause | TlClauses], Args, Bindings, World, LocalWorld) ->
 % returns Acc | {error, string()}
 eval_AST_list([], _, _, Acc) -> Acc;
 eval_AST_list([Hd | Tl], Bindings, World, Acc) ->
-    {ok, Value, _} = eval_expr(Hd, Bindings, World),
-    eval_AST_list(Tl, Bindings, World, Acc ++ [Value]);
+    Eval_Result = eval_expr(Hd, Bindings, World),
+    case Eval_Result of
+        {ok, Value, _} -> 
+            eval_AST_list(Tl, Bindings, World, Acc ++ [Value]);
+        _ -> Eval_Result
+    end;
 eval_AST_list(_, _, _, _) -> {error, "invalid AST List."}.
 
 % Evalutes a list of AST as if it represents a list of bool expressions
@@ -369,7 +347,7 @@ eval_conditions([], _, _) -> true;
 eval_conditions([Condition | Rest], Bindings, World) ->
     Condition_Result = eval_expr(Condition, Bindings, World),
     case Condition_Result of
-        {ok, {_, true}, _} -> eval_conditions(Rest, Bindings, World);
+        {ok, {atom, true}, _} -> eval_conditions(Rest, Bindings, World);
         _ -> false
     end.
 

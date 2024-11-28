@@ -37,13 +37,13 @@ world_purge_module(World, Module_Name) when is_map(World) ->
     New_World = maps:remove(Module_Name, World),
     New_World.
 
-% add the function description described by the String to to the module.
+% Add the function description described by the String to to the module.
 module_add_function_string(Module, Function_Name, Function_Arity, Function_String) when is_map(Module) ->
     {function, _, _, _, Function_Def} = eval:get_AST_form(Function_String),
     New_Module = Module#{{Function_Name, Function_Arity} => Function_Def},
     New_Module.
 
-% % add the function description described by the AST to the module.
+% Add the function description described by the AST to the module.
 module_add_function_AST(Module, Function_Name, Function_Arity, {function, _, _, _, Function_Def}) ->
     New_Module = Module#{{Function_Name, Function_Arity} => Function_Def},
     New_Module;
@@ -51,7 +51,7 @@ module_add_function_AST(Module, Function_Name, Function_Arity, Function_Def) ->
     New_Module = Module#{{Function_Name, Function_Arity} => Function_Def},
     New_Module.
 
-% % remove the function with the given name and arity from the module.
+% Remove the function with the given name and arity from the module.
 module_purge_function(Module, Function_Name, Arity) when is_map(Module) ->
     New_Module = maps:remove({Function_Name, Arity}, Module),
     New_Module.
