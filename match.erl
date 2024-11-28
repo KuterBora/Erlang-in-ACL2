@@ -12,6 +12,8 @@
 % is equal to the right hand side.
 % returns {ok, term(), NewBindings} | {error, string()}
 
+% TODO: error handling for when orddict:fetch fails
+
 % match '_'
 eval_match({var, _, '_'}, Exp2, Bindings, World) ->
     eval:eval_expr(Exp2, Bindings, World);
@@ -21,14 +23,14 @@ eval_match({var, _, Var}, Exp2, Bindings, World) ->
     IsKey = orddict:is_key(Var, Bindings),
     RHS = eval:eval_expr(Exp2, Bindings, World),
     case {IsKey, RHS} of
-        {true, {ok, RHS_Value, _}} ->
-            LHS_Value = orddict:fetch(Var, Bindings),
+        {true, {ok, RHS_Value, RBindings}} ->
+            LHS_Value = orddict:fetch(Var, RBindings),
             case LHS_Value of
-                RHS_Value -> {ok, LHS_Value, Bindings};
+                RHS_Value -> {ok, LHS_Value, RBindings};
                 _ -> {error, "No match of right hand side value."}
             end;
-        {false, {ok, RHS_Value, _}} ->
-            {ok, RHS_Value, orddict:store(Var, RHS_Value, Bindings)};
+        {false, {ok, RHS_Value, RBindings}} ->
+            {ok, RHS_Value, orddict:store(Var, RHS_Value, RBindings)};
         _ -> {error, "Illegal pattern."}
     end;
 
@@ -71,8 +73,8 @@ eval_match(Exp1, Exp2, Bindings, World) ->
     Eval_LHS = eval:eval_expr(Exp1, Bindings, World),
     Eval_RHS = eval:eval_expr(Exp2, Bindings, World),
     case {Eval_LHS, Eval_RHS} of
-        {{ok, LHS, _}, {ok, RHS, _}} when LHS == RHS ->
-            {ok, RHS, Bindings};
+        {{ok, LHS, _}, {ok, RHS, RBindings}} when LHS == RHS ->
+            {ok, RHS, RBindings};
         {{ok, _, _}, {ok, _, _}} ->
             {error, "No match of right hand side value."};
         _ -> {error, "Illegal pattern."}
@@ -160,10 +162,16 @@ eval_match_rhs_value(LHS, RHS, Bindings, World) ->
 eval_param_match({var, _, '_'}, _, _, BindingsAcc, _) ->
     BindingsAcc;
 
-% match var = term()/list()/tuple()
+% match var = term()/list()/tuple()/fun()
 eval_param_match({var, _, Var}, Exp2, BindingsIn, BindingsAcc, World) ->
     RHS = eval:eval_expr(Exp2, BindingsIn, World),
     case RHS of
+        % TODO: maybe RBindings?
+        {ok,  {'fun', NameAndArity}, FunBindings} ->
+            % TODO: error handling for failed fetch
+            FunBody = orddict:fetch(NameAndArity, FunBindings),
+            NewBindings = orddict:store(NameAndArity, FunBody, BindingsAcc),
+            orddict:store(Var, {'fun', NameAndArity}, NewBindings); 
         {ok, RHS_Value, _} ->
             orddict:store(Var, RHS_Value, BindingsAcc);
         _ -> {error, "Illegal Pattern."}
@@ -195,12 +203,8 @@ eval_param_match({tuple, Line, TupleList}, {var, _, Var}, BindingsIn, BindingsAc
 
 % term() = term()
 eval_param_match(Exp1, Exp2, BindingsIn, BindingsAcc, World) -> 
-    %io:format("\nFirst expression: ~p", [Exp1]),
-    %io:format("\nSecond expression: ~p", [Exp2]),
     Eval_LHS = eval:eval_expr(Exp1, BindingsIn, World),
     Eval_RHS = eval:eval_expr(Exp2, BindingsIn, World),
-    %io:format("\nResult of first expression: ~p", [Eval_LHS]),
-    %io:format("\nResult of second expression: ~p", [Eval_RHS]),
     case {Eval_LHS, Eval_RHS} of
         {{ok, LHS, _}, {ok, RHS, _}} when LHS == RHS ->
             BindingsAcc;

@@ -1,5 +1,5 @@
 -module(eval_tests).
--export([test_world/0, test_general/0, test_matches/0, test_bindings/0, test_all/0]).
+-export([test_world/0, test_general/0, test_matches/0, test_bindings/0, test_fun/0, test_proc/0, test_all/0]).
 -include_lib("eunit/include/eunit.hrl").
 
 % Run all tests
@@ -7,7 +7,91 @@ test_all() ->
   test_general(),
   test_matches(),
   test_world(),
-  test_bindings().
+  test_bindings(),
+  test_fun().
+
+% Tests for process operations
+test_proc() ->
+  ok.
+
+% Tests for fun expressions
+test_fun() ->
+  % simple fun, no arguments
+  ?assertMatch({ok, {'fun', Name}, [{Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
+    eval:eval_string("fun() -> 1 end.", [])),
+
+  % bind to a variable
+  ?assertMatch({ok, {'fun', Name}, [{'X', {'fun', Name}}, 
+    {Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
+    eval:eval_string("X = fun() -> 1 end.", [])),
+
+  % call to simple fun
+  ?assertMatch({ok, {integer, 1}, [{'X', {'fun', Name}}, 
+    {Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
+    eval:eval_string("X = fun() -> 1 end, X().", [])),
+
+  % call right away (fun())()
+  ?assertMatch({ok, {integer, 1}, [{{_, 0}, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
+    eval:eval_string("(fun() -> 1 end)().", [])),
+
+  % single argument
+  ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1,[{var,1,'X'}],[], [{op,1,'+',{var,1,'X'},{integer,1,1}}]}]}, []}}]},
+    eval:eval_string("X = fun(X) -> X + 1 end, X(2).", [])),
+
+  % many arguments
+  ?assertMatch({ok, {integer, 6}, [ {'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1, [{var,1,'X'},{var,1,'Y'},{var,1,'Z'}], [],
+    [{op,1,'+', {op,1,'+',{var,1,'X'},{var,1,'Y'}}, {var,1,'Z'}}]}]}, []}}]},
+    eval:eval_string("X = fun(X, Y, Z) -> X + Y + Z end, X(1, 2, 3).", [])),
+
+  % pattern matching
+  ?assertMatch({ok, {integer, 1}, [{'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
+    {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
+    {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
+    eval:eval_string("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(1).", [])),
+  ?assertMatch({ok, {integer, 2}, [{'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
+    {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
+    {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
+    eval:eval_string("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(2).", [])),
+  ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
+    {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
+    {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
+    eval:eval_string("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(3).", [])),  
+  ?assertMatch({ok, {integer, 1}, [{'X', {cons, [{'fun', Name}]}}, {'Y', {'fun', Name}}, 
+    {Name, {_, []}}]},
+    eval:eval_string("X = [fun() -> 1 end], [Y] = X, Y().", [])),
+
+  % bindings received during creation being used in the fun
+  ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}}, {'Y', {integer, 1}}, {Name, _}]},
+    eval:eval_string("Y = 1, X = fun(X) -> X + Y end, X(2).", [])),
+  ?assertMatch({ok, {integer, 15}, [{'Y', {'fun', _}}, {'Z', {'fun', _}},
+    {{_, 0}, _}, {{_, 0}, _}]},
+    eval:eval_string(
+      "Z = fun() -> Y = 3, Y * 5 end, 
+       Y = fun() -> Z end,
+       (Y())().", [])),
+  
+  % simple functions
+  FunModule_temp1 = world:module_add_function_string(#{}, square, 1, 
+    "square(X) -> Y = fun(X) -> X * X end, Y(X)."),
+  FunModule_temp2 = world:module_add_function_string(FunModule_temp1, adder, 1, "adder(X) -> fun(Y) -> X + Y end."),
+  FunModule = world:module_add_function_string(FunModule_temp2, apply, 2, "apply(X, Y) -> X(Y)."),
+  FunWorld = world:world_add_module(world:world_init(), fun_module, FunModule),
+
+  ?assertMatch({ok, {integer, 100}, []}, 
+    eval:eval_world("fun_module:square(10).", [], FunWorld)),
+  ?assertMatch({ok, {integer, 5}, [{'X', _}, {_,  _}]}, 
+    eval:eval_world("X = fun_module:adder(3), X(2).", [], FunWorld)),
+  ?assertMatch({ok, {integer, 5}, [{'X', _}, {_,  _}]}, 
+    eval:eval_world("X = fun_module:adder(3), fun_module:apply(X, 2).", [], FunWorld)),
+  ?assertMatch({ok, {integer, 3}, []}, 
+    eval:eval_world("fun_module:apply(fun(X) -> X + 1 end, 2).", [], FunWorld)),
+  ?assertMatch({ok, {integer, 5}, [{'X', _}, {_, _}]}, 
+    eval:eval_world("X = fun_module:adder(3), fun_module:apply(X, 2).", [], FunWorld)).
 
 % Tests for evaluating match for lists and tuples as well as Pattern Matching
 test_matches() ->
@@ -42,7 +126,9 @@ test_matches() ->
   ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}}},
     [{'H', {integer, 1}}, {'T', {integer, 2}}, {'X', {tuple, {{integer, 1}, {integer, 2}}}}]},
     eval:eval_string("X = {1, 2}, {H,  T} = X.", [])),
-  % ?assertEqual({ok, {string, "test_string"}, [{'H', 116}, {'T', {string, "est_string"}}]}, % no support for string->integer currently
+  % TODO:
+  % ?assertEqual({ok, {string, "test_string"}, 
+  % [{'H', 116}, {'T', {string, "est_string"}}]}, % no support for string->integer currently
   %   eval:eval_string("[H | T] = \"test_string\".", [])),
   ?assertEqual({ok, {cons, [{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}]}, 
     [{'A', {integer, 1}}, {'B', {cons, [{integer, 2}, {integer, 3}]}}, 
@@ -141,6 +227,7 @@ test_world() ->
   ?assertEqual({ok, {atom, false}, []}, eval:eval_world("is_integer(abc).", [], world:world_init())),
   ?assertEqual({ok, {atom, head}, []}, eval:eval_world("hd([head, tail]).", [], world:world_init())),
   ?assertEqual({ok, {cons, [{atom, tail}]}, []}, eval:eval_world("tl([head, tail]).", [], world:world_init())),
+  % TODO:
   % ?assertEqual({ok, {string, "pples"}, []}, eval:eval_world("tl(\"apples\").", [], world:world_init())),
 
   % simple functions
@@ -206,7 +293,9 @@ test_world() ->
     "recurse(List) ->
       if 
         List /= [] -> 
-          unwrap(hd(List)) + recurse(tl(List));
+          Head = hd(List),
+          Tail = tl(List),
+          unwrap(Head) + recurse(Tail);
         true ->
           0
       end."),
@@ -263,13 +352,6 @@ test_bindings() ->
     [{'Hdx', {integer, 1}}, {'Hdy', {integer, 3}}, {'Tlx', {cons, [{integer, 2}]}}, {'Tly', {cons, [{integer, 4}]}}]}, 
    eval:eval_world("module:tautology([Hdx | Tlx], [Hdy | Tly]).", 
     [{'Hdx', {integer, 1}}, {'Hdy', {integer, 3}}, {'Tlx', {cons, [{integer, 2}]}}, {'Tly', {cons, [{integer, 4}]}}], World)).
-
-  % fun expressions
-
-  % - create a function and save it local
-  % - return its name
-  % - bindings inside should be bound
-  % - bindings in parameters should be left unbound
 
 % General Tests for the evalution of basic erlang statements/operations 
 test_general() ->
@@ -354,6 +436,7 @@ test_general() ->
     eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', {float, 2.0}}])),
   ?assertEqual({ok, {atom, false}, [{'X', {string, "abc"}}]}, 
     eval:eval_string("try X =:= X div 1 catch error:E -> false end.", [{'X', {string, "abc"}}])),
+  % TODO:
   % ?assertEqual({ok, {atom, first}, [{'X', {integer, 0}}]}, 
   %  eval:eval_string("try X+1 of 2 -> second; 1 -> first; _ -> third catch error:E -> false end.", [{'X', {integer, 0}}])),
   % ?assertEqual({ok, {atom, second}, [{'X', {integer, 1}}]}, 
@@ -362,6 +445,7 @@ test_general() ->
   %   eval:eval_string("try X+1 of 2 -> second; 1 -> first; _ -> third catch error:E -> false end.", [{'X', {integer, 2}}])),
 
   % error handling
+  % TODO: more tests
   ?assertEqual({error, "No match of right hand side value."}, eval:eval_string("X = 2, X = 3.", [])),
   ?assertEqual({error, "Operation with given arguments is not allowed by the evaluator."}, 
-    eval:eval_string("1 rem 2.", [])).               % should be allowed eventually.
+    eval:eval_string("1 rem 2.", [])). % should be allowed eventually.
