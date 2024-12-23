@@ -10,6 +10,20 @@ test_all() ->
   test_bindings(),
   test_fun().
 
+% TODO
+% negative float
+% negative string error
+% -(2 = 2). 
+% -(X = 2).
+% test for | 
+% test for empty tuple
+% {1 = 1, 2}. should work
+% fun that returns a fun
+% (fun() -> 1 end)() + (fun() -> 2 end)().
+% send message inside a tuple
+% send message inside a list
+% send message inside a match
+
 % Tests for process operations
 test_proc() ->
   ok.
@@ -64,6 +78,12 @@ test_fun() ->
   ?assertMatch({ok, {integer, 1}, [{'X', {cons, [{'fun', Name}]}}, {'Y', {'fun', Name}}, 
     {Name, {_, []}}]},
     eval:eval_string("X = [fun() -> 1 end], [Y] = X, Y().", [])),
+
+
+  ?assertMatch({ok, {integer, 5}, _},
+    eval:eval_string("Z = 2, X = fun(Z) -> Z + 3 end, X(2).", [])),
+  ?assertMatch({ok, {integer, 6} , _},
+    eval:eval_string("Z = 2, X = fun(Z) -> Z + 3 end, X(3).", [])),
 
   % bindings received during creation being used in the fun
   ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}}, {'Y', {integer, 1}}, {Name, _}]},
