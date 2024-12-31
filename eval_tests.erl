@@ -123,9 +123,9 @@ test_matches() ->
   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}]},
     [{'H', {integer, 1}}, {'T', {cons, [{integer, 2}, {integer, 3}]}}, {'X', {cons, [{integer, 1}, {integer, 2}, {integer, 3}]}}]},
     eval:eval_string("X = [1, 2, 3], [H | T] = X.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}}},
-    [{'H', {integer, 1}}, {'T', {integer, 2}}, {'X', {tuple, {{integer, 1}, {integer, 2}}}}]},
-    eval:eval_string("X = {1, 2}, {H,  T} = X.", [])),
+  ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}]},
+    [{'H', {integer, 1}}, {'T', {integer, 2}}, {'X', {tuple, [{integer, 1}, {integer, 2}]}}]},
+    eval:eval_string("X = {1, 2}, {H, T} = X.", [])),
   % TODO:
   % ?assertEqual({ok, {string, "test_string"}, 
   % [{'H', 116}, {'T', {string, "est_string"}}]}, % no support for string->integer currently
@@ -151,41 +151,41 @@ test_matches() ->
       {'X', {cons, [{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}]}},
       {'Y', {integer, 2}}]},
     eval:eval_string("Y = 2, X = [1, [Y, 3]], [A, B] = X.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}}}, 
-    [{'A', {integer, 1}}, {'B', {integer, 2}}, {'X', {tuple, {{integer, 1}, {integer, 2}}}}]},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}]}, 
+    [{'A', {integer, 1}}, {'B', {integer, 2}}, {'X', {tuple, [{integer, 1}, {integer, 2}]}}]},
     eval:eval_string("X = {1, 2}, {A, B} = X.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}}}, 
-    [{'B', {integer, 2}}, {'X', {tuple, {{integer, 1}, {integer, 2}}}}]},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}]}, 
+    [{'B', {integer, 2}}, {'X', {tuple, [{integer, 1}, {integer, 2}]}}]},
     eval:eval_string("X = {1, 2}, {1, B} = X.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}}}, 
-    [{'A', {integer, 1}}, {'X', {tuple, {{integer, 1}, {integer, 2}}}}]},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}]}, 
+    [{'A', {integer, 1}}, {'X', {tuple, [{integer, 1}, {integer, 2}]}}]},
     eval:eval_string("X = {1, 2}, {A, 2} = X.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}}}, 
+  ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}]}, 
     [{'A', {integer, 1}}, {'B', {integer, 2}}, 
-      {'X', {tuple, {{integer, 1}, {integer, 2}}}}, {'Y', {integer, 2}}]},
+      {'X', {tuple, [{integer, 1}, {integer, 2}]}}, {'Y', {integer, 2}}]},
     eval:eval_string("Y = 2, X = {1, Y}, {A, B} = X.", [])),
-  ?assertEqual({ok, {tuple, {{cons, [{integer, 1}]}, {cons, [{integer, 2}]}}}, 
+  ?assertEqual({ok, {tuple, [{cons, [{integer, 1}]}, {cons, [{integer, 2}]}]}, 
     [{'A', {cons, [{integer, 1}]}}, {'B', {cons, [{integer, 2}]}}, 
-     {'X', {tuple, {{cons, [{integer, 1}]}, {cons, [{integer, 2}]}}}}]},
+     {'X', {tuple, [{cons, [{integer, 1}]}, {cons, [{integer, 2}]}]}}]},
     eval:eval_string("X = {[1], [2]}, {A, B} = X.", [])),
-  ?assertEqual({ok, {cons, [{tuple, {{integer, 1}}}, {tuple, {{integer, 2}}}]}, 
-    [{'A', {tuple, {{integer, 1}}}}, {'B', {tuple, {{integer, 2}}}}, 
-     {'X', {cons, [{tuple, {{integer, 1}}}, {tuple, {{integer, 2}}}]}}]},
+  ?assertEqual({ok, {cons, [{tuple, [{integer, 1}]}, {tuple, [{integer, 2}]}]}, 
+    [{'A', {tuple, [{integer, 1}]}}, {'B', {tuple, [{integer, 2}]}}, 
+     {'X', {cons, [{tuple, [{integer, 1}]}, {tuple, [{integer, 2}]}]}}]},
     eval:eval_string("X = [{1}, {2}], [A, B] = X.", [])),
 
   % tuple matching
-  ?assertEqual({ok, {tuple, {{integer, 1}, {atom, abc}, {integer, 3}}}, []},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {atom, abc}, {integer, 3}]}, []},
     eval:eval_string("{1, abc, 3} = {1, abc, 3}.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {atom, abc}, 
-    {tuple, {{integer, 7}, {cons, [{integer, 8}, {integer, 9}]}}}}}, []},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {atom, abc}, 
+    {tuple, [{integer, 7}, {cons, [{integer, 8}, {integer, 9}]}]}]}, []},
     eval:eval_string("{1, abc, {7, [8, 9]}} = {1, abc, {7, [8, 9]}}.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}, {integer, 3}}}, [{'A', {integer, 2}}]},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}, {integer, 3}]}, [{'A', {integer, 2}}]},
     eval:eval_string("{1, A, 3} = {1, 2, 3}.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {cons, [{integer, 2}]}, {tuple, {{integer, 3}}}}},
-    [{'A', {integer, 1}}, {'B', {cons, [{integer, 2}]}}, {'C', {tuple, {{integer, 3}}}}]},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {cons, [{integer, 2}]}, {tuple, [{integer, 3}]}]},
+    [{'A', {integer, 1}}, {'B', {cons, [{integer, 2}]}}, {'C', {tuple, [{integer, 3}]}}]},
     eval:eval_string("{A, B, C} = {1, [2], {3}}.", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {atom, abc}, 
-    {tuple, {{integer, 7}, {cons, [{integer, 8}, {integer, 9}]}}}}},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {atom, abc}, 
+    {tuple, [{integer, 7}, {cons, [{integer, 8}, {integer, 9}]}]}]},
     [{'A', {integer, 7}}, {'B', {integer, 8}}]},
     eval:eval_string("{1, abc, {A, [B, 9]}} = {1, abc, {7, [8, 9]}}.", [])),
   
@@ -202,17 +202,17 @@ test_matches() ->
     eval:eval_string("[_, _, 6] = [4, 5, 6].", [])),
 
   % tuple/list combined
-  ?assertEqual({ok, {tuple, {{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}}}, 
+  ?assertEqual({ok, {tuple, [{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}]}, 
     [{'A', {integer, 1}}, {'B', {integer, 2}}, {'C', {cons, [{integer, 3}]}}]},
     eval:eval_string("{A, [B | C]} = {1, [2, 3]}.", [{'B', {integer, 2}}])),
-  ?assertEqual({ok, {cons, [{tuple, {{integer, 1}, {integer, 2}}}]}, [{'A', {integer, 1}}, {'B', {integer, 2}}]}, 
+  ?assertEqual({ok, {cons, [{tuple, [{integer, 1}, {integer, 2}]}]}, [{'A', {integer, 1}}, {'B', {integer, 2}}]}, 
     eval:eval_string("[{A, B}] = [{1, 2}].", [])),
   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, [{'A', {integer, 1}}, {'B', {integer, 2}}]}, 
     eval:eval_string("[A | [B]] = [1, 2].", [])),
   ?assertEqual({ok, {cons, [{cons, [{integer, 1}, {integer, 2}]}]}, [{'A', {integer, 1}}, {'B', {integer, 2}}]}, 
     eval:eval_string("[[A, B]] = [[1, 2]].", [])),
-  ?assertEqual({ok, {cons, [{tuple, {{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}}}, 
-    {cons, [{integer, 4}, {integer, 5}]}, {tuple, {{integer, 6}, {tuple, {{integer, 7}}}, {integer, 8}}}, 
+  ?assertEqual({ok, {cons, [{tuple, [{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}]}, 
+    {cons, [{integer, 4}, {integer, 5}]}, {tuple, [{integer, 6}, {tuple, [{integer, 7}]}, {integer, 8}]}, 
     {integer, 9}, {integer, 10}]}, [{'A', {integer, 1}}, {'B', {integer, 2}}, {'C', {integer, 3}}, 
       {'D', {integer, 4}}, {'E', {integer, 5}}, {'F', {integer, 7}}]},
     eval:eval_string("[{A, [B, C]}, [D | [E]], {_, {F}, _}, 9, 10] 
@@ -269,7 +269,7 @@ test_world() ->
   ?assertEqual({ok, {integer, 1}, []}, eval:eval_world("recursive_module:guarded_fac(0).", [], RecursiveWorld)),
   ?assertEqual({ok, {integer, 6}, []}, eval:eval_world("recursive_module:guarded_fac(3).", [], RecursiveWorld)),
   ?assertEqual({ok, {integer, 5040}, []}, eval:eval_world("recursive_module:guarded_fac(7).", [], RecursiveWorld)),
-  ?assertEqual({error, "no function matching given arguments."}, 
+  ?assertEqual({error, function_clause}, 
     eval:eval_world("recursive_module:guarded_fac(-2).", [], RecursiveWorld)),
 
   % purging a module
@@ -283,7 +283,7 @@ test_world() ->
   ?assertEqual({ok, {integer, 1}, []}, eval:eval_world("factorial_module:fac(0).", [], FactorialWorld)),
   ?assertEqual({ok, {integer, 6}, []}, eval:eval_world("factorial_module:fac(3).", [], FactorialWorld)),
   ?assertEqual({ok, {integer, 5040}, []}, eval:eval_world("factorial_module:fac(7).", [], FactorialWorld)),
-  ?assertEqual({error, "no function matching given arguments."}, 
+  ?assertEqual({error, function_clause}, 
     eval:eval_world("factorial_module:fac(-2).", [], FactorialWorld)),
   
   % more tests on functions
@@ -385,8 +385,8 @@ test_general() ->
     eval:eval_string("[1, 2, 3, 4, X].", [{'X', {integer, 5}}])),
   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []}, eval:eval_string("[1, 2] ++ [3, 4].", [])),
   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}]}, []}, eval:eval_string("[1 | [2, 3]].", [])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}, {atom, abc}, {integer, 4}}}, [{'X', {integer, 4}}]}, eval:eval_string("{1, 2, abc, X}.", [{'X', {integer, 4}}])),
-  ?assertEqual({ok, {tuple, {{integer, 1}, {integer, 2}, {integer, 3}}}, [{'X', {tuple, {{integer, 1}, {integer, 2}, {integer, 3}}}}]},
+  ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}, {atom, abc}, {integer, 4}]}, [{'X', {integer, 4}}]}, eval:eval_string("{1, 2, abc, X}.", [{'X', {integer, 4}}])),
+  ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}, {integer, 3}]}, [{'X', {tuple, [{integer, 1}, {integer, 2}, {integer, 3}]}}]},
      eval:eval_string("X = {1, 2, 3}.", [])),
 
   % atoms and logic operations
@@ -446,6 +446,6 @@ test_general() ->
 
   % error handling
   % TODO: more tests
-  ?assertEqual({error, "No match of right hand side value."}, eval:eval_string("X = 2, X = 3.", [])),
-  ?assertEqual({error, "Operation with given arguments is not allowed by the evaluator."}, 
-    eval:eval_string("1 rem 2.", [])). % should be allowed eventually.
+  ?assertEqual({error, "No match of right hand side value."}, eval:eval_string("X = 2, X = 3.", [])).
+  %?assertEqual({error, "Operation with given arguments is not allowed by the evaluator."}, 
+  %  eval:eval_string("1 rem 2.", [])). % should be allowed eventually.

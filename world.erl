@@ -1,7 +1,7 @@
 -module(world).
 
 % helpers to load/purge worlds
--export([world_init/0, world_add_module/3, world_purge_module/2]).
+-export([world_init/0, local_module/0, world_add_module/3, world_purge_module/2]).
 % helpers to load/purge modules
 -export([module_add_function_string/4, module_add_function_AST/4, module_purge_function/3]).
 
@@ -17,15 +17,15 @@
 % returns a world with the local module that contains built in erlang functions
 % TODO : purpose statement
 
-world_init() -> 
+local_module() ->
     Local_Module_temp1 = module_add_function_string(#{}, is_integer, 1,
         "is_integer(X) -> try X =:= X div 1 catch error:E -> false end."),
     Local_Module_temp2 = module_add_function_string(Local_Module_temp1, hd, 1,
         "hd([Hd | Tl]) -> Hd."),
-    Local_Module = module_add_function_string(Local_Module_temp2, tl, 1,
-        "tl([Hd | Tl]) -> Tl."),
-    Init_World = #{local => Local_Module},
-    Init_World.
+    module_add_function_string(Local_Module_temp2, tl, 1,
+        "tl([Hd | Tl]) -> Tl.").
+world_init() -> #{local => local_module()}.
+
 
 % Add a binding from the name to the module into the world.
 world_add_module(World, Module_Name, Module) ->

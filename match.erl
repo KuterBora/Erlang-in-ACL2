@@ -1,6 +1,6 @@
 -module(match).
 
--export([eval_match/4, eval_param_match/5]).
+-export([eval_match/4, eval_param_match/5, eval_match_rhs_value/4]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evaluate Match
@@ -105,7 +105,7 @@ eval_match_rhs_value(LHS, RHS, Bindings, World) ->
                     LHS_Value = orddict:fetch(Var, Bindings),
                     case LHS_Value of
                         RHS -> {ok, RHS, Bindings};
-                        _ -> {error, "No match of right hand side value."}
+                        _ -> {error, {badmatch, RHS}}
                     end;
                 false ->
                     {ok, RHS, orddict:store(Var, RHS, Bindings)};
@@ -125,7 +125,7 @@ eval_match_rhs_value(LHS, RHS, Bindings, World) ->
                 _ -> Match_Head
             end;
         {{tuple, L_Line, LTupleList}, {tuple, RTuple}} ->
-            RTupleList = tuple_to_list(RTuple), 
+            RTupleList = RTuple, 
             case {LTupleList, RTupleList} of
                 {[], []} -> {ok, {tuple, {}}, Bindings};
                 _ ->
@@ -133,7 +133,7 @@ eval_match_rhs_value(LHS, RHS, Bindings, World) ->
                     case Match_Head of
                         {ok, _, Hd_Bindings} ->
                             Match_Tail = eval_match_rhs_value({tuple, L_Line, tl(LTupleList)}, 
-                                {tuple, list_to_tuple(tl(RTupleList))}, Hd_Bindings, World),
+                                {tuple, tl(RTupleList)}, Hd_Bindings, World),
                             case Match_Tail of
                                 {ok, _, Tl_Bindings} -> {ok, {tuple, RTuple}, Tl_Bindings};
                                 _ -> Match_Tail
@@ -145,7 +145,7 @@ eval_match_rhs_value(LHS, RHS, Bindings, World) ->
             Eval_LHS = eval:eval_expr(LHS, Bindings, World),
             case Eval_LHS of
                 {ok, RHS, _} -> {ok, RHS, Bindings};
-                {ok, _, _} -> {error, "No match of righ hand side value."};
+                {ok, _, _} -> {error, {badmatch, RHS}};
                 _ -> {error, "Illegal pattern."}
             end
     end.
@@ -244,7 +244,7 @@ eval_param_match_rhs_value(LHS, RHS, BindingsIn, BindingsAcc, World) ->
                 _ -> eval_param_match_rhs_value(L_Tl, {cons, tl(R_List)}, BindingsIn, Match_Head, World)
             end;
         {{tuple, L_Line, LTupleList}, {tuple, RTuple}} ->
-            RTupleList = tuple_to_list(RTuple), 
+            RTupleList = RTuple, 
             case {LTupleList, RTupleList} of
                 {[], []} -> BindingsAcc;
                 _ ->
@@ -254,7 +254,7 @@ eval_param_match_rhs_value(LHS, RHS, BindingsIn, BindingsAcc, World) ->
                         {error, _} -> Match_Head;
                         _ ->
                             eval_param_match_rhs_value({tuple, L_Line, tl(LTupleList)}, 
-                                {tuple, list_to_tuple(tl(RTupleList))}, BindingsIn, Match_Head, World)
+                                {tuple, tl(RTupleList)}, BindingsIn, Match_Head, World)
                     end
             end;
         _ ->
