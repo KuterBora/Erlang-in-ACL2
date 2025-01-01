@@ -1,5 +1,5 @@
 -module(eval_tests).
--export([test_world/0, test_general/0, test_matches/0, test_bindings/0, test_fun/0, test_proc/0, test_all/0]).
+-export([test_world/0, test_general/0, test_matches/0, test_bindings/0, test_fun/0, test_all/0]).
 -include_lib("eunit/include/eunit.hrl").
 
 % Run all tests
@@ -10,9 +10,10 @@ test_all() ->
   test_bindings(),
   test_fun().
 
-% Tests for process operations
-test_proc() ->
-  ok.
+
+% % Tests for built in functions
+% test_bif() ->
+%   ?assertMatch({ok, {atom, true}, []}, eval:eval("is_atom(atom).", [])).
 
 % Tests for fun expressions
 test_fun() ->
