@@ -1,15 +1,8 @@
 -module(eval).
 % evaluators
--export([eval_exprs/3, eval_expr/3, eval_string/2, eval_world/3]).
+-export([eval_exprs/3, eval_expr/3, eval/2, eval/3]).
 % helpers to create ASTs
 -export([get_AST/1, get_AST_form/1]).
-
-
-%%% TODO:
-%% string matching - no supprt for hd("string") which should return an integer.
-% built in guard functions
-% modify world_add_module to load from an existing erlang file
-%   and handle the Module Map creation automatically.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  The Evaluator
@@ -53,7 +46,15 @@ eval_expr(AST, Bindings, World) ->
                 _ -> {error, unbound}
             end;
         {match, _Line, Expr1, Expr2} ->
-            match:eval_match(Expr1, Expr2, Bindings, World);
+            EvalRHS = eval_expr(Expr2, Bindings, World),
+            case EvalRHS of
+                {ok, Value, NewBindings} ->
+                    match:eval_match(Expr1, Value, NewBindings, World);
+                {yield, _Kont, _Out} ->
+                    yield_todo;
+                _ ->
+                    EvalRHS
+            end;
         {op, _Line, Op, Expr} ->
             eval_op(Op, Expr, Bindings, World);
         {op, _Line, Op, Expr1, Expr2} -> 
@@ -90,7 +91,7 @@ eval_expr(AST, Bindings, World) ->
                 {ok, {'fun', {Name, Arity}}, NewBindings} ->
                     % TODO: error handlig for when the number of args is incorrect,
                     {{clauses, Clauses}, Fun_Bindings} = orddict:fetch({Name, Arity}, NewBindings),
-                    Eval_Value = eval_function_body(Clauses, Args, Bindings, Fun_Bindings, World, World),
+                    Eval_Value = eval_fun_body(Clauses, Args, Bindings, Fun_Bindings, World, World),
                     case Eval_Value of
                         % TODO,  new   bindings if it returns a fun
                         {ok, Value, _} -> {ok, Value, NewBindings};
@@ -101,7 +102,7 @@ eval_expr(AST, Bindings, World) ->
         % fun
         {'fun', Line, {clauses, Clauses}} -> eval_fun(Clauses, Line, Bindings, World);
         % not accepted language
-        _ -> {error, "AST is not accepted by the evaluator."}
+        _ -> {error, bad_AST}
     end.
 
 
@@ -331,7 +332,7 @@ eval_if([HdClause | TlClauses], Bindings, World) ->
 eval_case(Value, [], _, _) -> {error, {case_clause, Value}};
 eval_case(Value, [HdClause | TlClauses], Bindings, World) ->
     {clause, _Line, [Case], Guards, Body} = HdClause,
-    TryMatch = match:eval_match_rhs_value(Case, Value, Bindings, World),
+    TryMatch = match:eval_match(Case, Value, Bindings, World),
     case TryMatch of
         {ok, _Result, NewBindings} ->
             GuardResult = case Guards of
@@ -383,66 +384,113 @@ eval_call(Module_Name, Function_Name, Args, Bindings, World)
             Function_Def = maps:get({Function_Name, Arity}, Module),
             Local_Module = maps:merge(world:local_module(), Module),
             Local_World = world:world_add_module(World, local, Local_Module),
-            [HdClause | TlClauses] = Function_Def,
-            Function_Result = eval_function_body(
-                    [HdClause | TlClauses], 
-                    Args,
-                    Bindings,
-                    [],
-                    World,
-                    Local_World),
-            case Function_Result of
-                {ok, {'fun', FunTag}, FunBindings} ->
-                    FunBody = orddict:fetch(FunTag, FunBindings),    
-                    NewBindings = orddict:store(FunTag, FunBody, Bindings),
-                    {ok, {'fun', FunTag}, NewBindings};
-                {ok, EvalVal, _} -> 
-                    {ok, EvalVal, Bindings};
-                {yield, _Kont, _Out} ->
-                    yield_todo;
+            ArgValues = eval_args(Args, Bindings, World, []),
+            case ArgValues of
+                {Results, ArgBindings} ->
+                    Function_Result = eval_function_body(
+                        Function_Def, 
+                        Results,
+                        ArgBindings,
+                        World,
+                        Local_World
+                    ),
+                    case Function_Result of
+                        {ok, {'fun', FunTag}, FunBindings} ->
+                            FunBody = orddict:fetch(FunTag, FunBindings),    
+                            NewBindings = 
+                                orddict:store(
+                                    FunTag,
+                                    FunBody,
+                                    ArgBindings
+                                ),
+                            {ok, {'fun', FunTag}, NewBindings};
+                        {ok, EvalVal, _} -> 
+                            {ok, EvalVal, ArgBindings};
+                        {yield, _Kont, _Out} ->
+                            yield_todo;
+                        _ ->
+                            Function_Result
+                    end;
                 _ ->
-                    Function_Result
+                    ArgValues
             end;
         true ->
             {error, undef}
     end;
 eval_call(_, _, _, _, _) -> {error, undef}.
 
-
-% Checks if there is a matching function clause with valid guards, then 
-% evaluates the body. BodyBindings are 
-eval_function_body([], _, _, _, _, _) -> {error, function_clause};
-eval_function_body([HdClause | TlClauses], Args, Bindings, BodyBindings, World, LocalWorld) ->
-    {clause, _, Param_List, _, _} = HdClause,
-    LocalBindings = create_local_bindings(Param_List, Args, Bindings, BodyBindings, World),
-    case {HdClause, LocalBindings} of
-        {_, {error, _}} -> 
-            eval_function_body(TlClauses, Args, Bindings, BodyBindings, World, LocalWorld);
-        {{clause, _, _, [], Exprs}, _} ->
-            eval_exprs(Exprs, LocalBindings, LocalWorld);
-        {{clause, _, _, [Guards], Exprs}, _} ->
-            Guards_Result = eval_guards(Guards, LocalBindings, world:world_init()),
-            case Guards_Result of
-                true ->
-                    eval_exprs(Exprs, LocalBindings, LocalWorld);
-                _ ->
-                    eval_function_body(TlClauses, Args, Bindings, BodyBindings, World, LocalWorld)
-            end;
-        _ -> {error, "The function guards are invalid."}
+% Evaluate each argument in order and return the list of results
+% and the Bindings obtained.
+eval_args(Args, Bindings, _World, Results) when Args == [] ->
+    {lists:reverse(Results), Bindings}; 
+eval_args(Args, Bindings, World, Results) when Args /= [] ->
+    case eval_expr(hd(Args), Bindings, World) of
+        {ok, Result, NextBindings} -> 
+            eval_args(tl(Args), NextBindings, World, [Result | Results]);
+        {yield, _Kont, _Out} ->
+            yield_todo;
+        {error, Exception} -> 
+            {error, Exception}
     end.
 
-% Given a list of paramteres and arguments, match each parameter to the corresponidng binding
-% and return the new bindings created by the match.
-create_local_bindings([], [], _, Bindings, _) -> Bindings;
-create_local_bindings(ParamList, Args, Bindings, BindingsAcc, World) when length(ParamList) == length(Args) ->
-    Match_Value = match:eval_param_match(hd(ParamList), hd(Args), Bindings, [], World),
-    case Match_Value of
-        {error, _} -> Match_Value;
+% Checks if there is a matching function clause with valid guards, then 
+% evaluates the body.
+eval_function_body([], _, _, _, _) -> {error, function_clause};
+eval_function_body([HdClause | Rest], Args, Bindings, World, LocalWorld) ->
+    {clause, _Line, Param, GuardsList, Body} = HdClause,
+    LocalBindings = create_local_bindings(Param, Args, Bindings, [], World),
+    case LocalBindings of
+        false ->
+            eval_function_body(Rest, Args, Bindings, World, LocalWorld);
         _ ->
-            NewBindings = orddict:merge(fun(_, Value1, _) -> Value1 end, BindingsAcc, Match_Value),
-            create_local_bindings(tl(ParamList), tl(Args), Bindings, NewBindings, World)
+            case GuardsList of
+                [Guards] ->
+                    GuardsResult = eval_guards(
+                                    Guards,
+                                    LocalBindings,
+                                    world:world_init()
+                                ),
+                    case GuardsResult of
+                        true ->
+                            eval_exprs(Body, LocalBindings, LocalWorld);
+                        _ ->
+                            eval_function_body(
+                                Rest,
+                                Args,
+                                Bindings,
+                                World,
+                                LocalWorld
+                            )
+                    end;
+                _ ->
+                    eval_exprs(Body, LocalBindings, LocalWorld)
+            end
+    end.
+
+% Given a list of paramteres and arguments, match each parameter to the
+% corresponidng argumnt and return the new bindings created by the match.
+create_local_bindings([], [], _, BindingsAcc, _) -> BindingsAcc;
+create_local_bindings(Param, Args, Bindings, BindingsAcc, World)
+        when length(Param) == length(Args) ->
+    TryMatch = match:eval_param_match_rhs_value(hd(Param), hd(Args), Bindings, [], World),
+    case TryMatch of
+        {error, _} ->
+            false;
+        _ ->
+            NewBindings =
+                orddict:merge(
+                    fun(_, V, _) -> V end,
+                    BindingsAcc,
+                    TryMatch
+                ),
+            create_local_bindings(
+                tl(Param),
+                tl(Args),
+                Bindings,
+                NewBindings,
+                World)
     end;
-create_local_bindings(_, _, _, _, _) -> {error, "illegal param-arg lists."}.
+create_local_bindings(_, _, _, _, _) -> false.
  
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -458,29 +506,64 @@ eval_fun(Clauses, Line, Bindings, _) ->
     FunArity = length(ArgList),
     {ok, {'fun', {FunName, FunArity}}, orddict:store({FunName, FunArity}, {{clauses, Clauses}, Bindings}, Bindings)}.
 
+% Checks if there is a matching function clause with valid guards, then 
+% evaluates the body. BodyBindings are 
+eval_fun_body([], _, _, _, _, _) -> {error, function_clause};
+eval_fun_body([HdClause | TlClauses], Args, Bindings, BodyBindings, World, LocalWorld) ->
+    {clause, _, Param_List, _, _} = HdClause,
+    LocalBindings = create_local_bindings_fun(Param_List, Args, Bindings, BodyBindings, World),
+    case {HdClause, LocalBindings} of
+        {_, false} -> 
+            eval_fun_body(TlClauses, Args, Bindings, BodyBindings, World, LocalWorld);
+        {{clause, _, _, [], Exprs}, _} ->
+            eval_exprs(Exprs, LocalBindings, LocalWorld);
+        {{clause, _, _, [Guards], Exprs}, _} ->
+            Guards_Result = eval_guards(Guards, LocalBindings, world:world_init()),
+            case Guards_Result of
+                true ->
+                    eval_exprs(Exprs, LocalBindings, LocalWorld);
+                _ ->
+                    eval_fun_body(TlClauses, Args, Bindings, BodyBindings, World, LocalWorld)
+            end;
+        _ -> {error, "The function guards are invalid."}
+    end.
+
+% Given a list of paramteres and arguments, match each parameter to the 
+% corresponidng binding and return the new bindings created by the match.
+create_local_bindings_fun([], [], _, BindingsAcc, _) -> BindingsAcc;
+create_local_bindings_fun(Param, Args, Bindings, BindingsAcc, World) when length(Param) == length(Args) ->
+    TryMatch = match:param_match(hd(Param), hd(Args), Bindings, [], World),
+    case TryMatch of
+        {error, _} -> false;
+        _ ->
+            NewBindings = orddict:merge(fun(_, V, _) -> V end, BindingsAcc, TryMatch),
+            create_local_bindings_fun(tl(Param), tl(Args), Bindings, NewBindings, World)
+    end;
+create_local_bindings_fun(_, _, _, _, _) -> false.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Helpers
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Return AST structure respresented by the given string erlang expression
+% Return the AST respresented by the given erlang expression in string form.
 get_AST(Str) ->
     {ok, Tokens, _} = erl_scan:string(Str),
     {ok, AST} = erl_parse:parse_exprs(Tokens),
     AST.
 
-% Return AST structure respresented by the given string erlang form
+% Return the AST respresented by the given erlang form in string form.
 get_AST_form(Str) ->
     {ok, Tokens, _} = erl_scan:string(Str),
     {ok, AST} = erl_parse:parse_form(Tokens),
     AST.
 
-% call eval after parsing the given string, ignores the World
-eval_string(Str, Bindings) ->
+% Parse the given erlang expression in string form, then evaluate it.
+% The World parameter is filled with world:world_init()
+eval(Str, Bindings) ->
     AST = get_AST(Str),
     eval_exprs(AST, Bindings, world:world_init()).
 
-% same as eval string, but does not ignore the World
-eval_world(Str, Bindings, World) ->
+% Parse the given erlang expression in string form, then evaluate it.
+eval(Str, Bindings, World) ->
     AST = get_AST(Str),
     eval_exprs(AST, Bindings, World).
