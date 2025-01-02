@@ -25,27 +25,23 @@
 world_init() -> #{}.
 
 % Add a module to the given world.
-world_add_module(World, ModuleName, Module) ->
-    World#{ModuleName => Module}.
+world_add_module(World, Name, Module) ->
+    World#{Name => Module}.
 
 % Remove the given Module from the world.
-world_purge_module(World, ModuleName) when is_map(World) ->
-    maps:remove(ModuleName, World).
+world_purge_module(World, Name) ->
+    maps:remove(Name, World).
 
 % Add the given function in string form to the module.
-module_add_function_string(Module, FunctionName, 
-    FunctionArity, FunctionString) when is_map(Module) ->
-    {function, _, _, _, FunctionDef} = eval:get_AST_form(FunctionString),
-    Module#{{FunctionName, FunctionArity} => FunctionDef}.
+module_add_function_string(Module, Name, Arity, FString) ->
+    {function, _, _, _, FunctionDef} = eval:get_AST_form(FString),
+    Module#{{Name, Arity} => FunctionDef}.
 
 % Add the given function in AST form to the module.
-module_add_function_AST(Module, FunctionName, FunctionArity, 
-    {function, _, _, _, FunctionDef}) ->
-    Module#{{FunctionName, FunctionArity} => FunctionDef};
-module_add_function_AST(Module, FunctionName, 
-    FunctionArity, FunctionDef) ->
-    Module#{{FunctionName, FunctionArity} => FunctionDef}.
+module_add_function_AST(Module, Name, Arity, 
+        {function, _, _, _, FunctionDef}) ->
+    Module#{{Name, Arity} => FunctionDef}.
 
 % Remove the function with the given name and arity from the module.
-module_purge_function(Module, FunctionName, Arity) when is_map(Module) ->
-    maps:remove({FunctionName, Arity}, Module).
+module_purge_function(Module, Name, Arity) ->
+    maps:remove({Name, Arity}, Module).

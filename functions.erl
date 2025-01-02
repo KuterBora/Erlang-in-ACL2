@@ -5,7 +5,7 @@
 %  Evaluate Function Calls
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Determine the type of call in the expression and call the appopriate helper
+% Determine the type of call in the expression and call the appropriate helper
 eval_calls(Call, Args, Bindings, World) ->
     EvalArgs = eval_args(Args, Bindings, World, []),
     case EvalArgs of
@@ -36,22 +36,21 @@ eval_calls(Call, Args, Bindings, World) ->
     end.
 
 % Evaluate remote function calls
-eval_remote_call(Module_Name, Function_Name, Args, Bindings, World) 
-        when is_map_key(Module_Name, World) ->
-    Module = maps:get(Module_Name, World),
+eval_remote_call(ModuleName, FunctionName, Args, Bindings, World) 
+        when is_map_key(ModuleName, World) ->
+    Module = maps:get(ModuleName, World),
     Arity = length(Args),
     if
-        is_map_key({Function_Name, Arity}, Module) ->
-            Function_Def = maps:get({Function_Name, Arity}, Module),
-            Local_World = world:world_add_module(World, local, Module),
-            Function_Result = eval_function_body(
+        is_map_key({FunctionName, Arity}, Module) ->
+            Function_Def = maps:get({FunctionName, Arity}, Module),
+            LocalWorld = world:world_add_module(World, local, Module),
+            FunctionResult = eval_function_body(
                 Function_Def, 
                 Args,
                 Bindings,
-                World,
-                Local_World
+                LocalWorld
             ),
-            case Function_Result of
+            case FunctionResult of
                 {ok, {'fun', FunTag}, FunBindings} ->
                     FunBody = orddict:fetch(FunTag, FunBindings),    
                     NewBindings = 
@@ -66,7 +65,7 @@ eval_remote_call(Module_Name, Function_Name, Args, Bindings, World)
                 {yield, _Kont, _Out} ->
                     yield_todo;
                 _ ->
-                    Function_Result
+                    FunctionResult
             end;
         true ->
             {error, undef}
@@ -89,13 +88,13 @@ eval_args(Args, Bindings, World, Results) when Args /= [] ->
 
 % Checks if there is a matching function clause with valid guards, then 
 % evaluates the body.
-eval_function_body([], _, _, _, _) -> {error, function_clause};
-eval_function_body([HdClause | Rest], Args, Bindings, World, LocalWorld) ->
+eval_function_body([], _, _, _) -> {error, function_clause};
+eval_function_body([HdClause | Rest], Args, Bindings, World) ->
     {clause, _Line, Param, GuardsList, Body} = HdClause,
     LocalBindings = create_local_bindings(Param, Args, Bindings, [], World),
     case LocalBindings of
         false ->
-            eval_function_body(Rest, Args, Bindings, World, LocalWorld);
+            eval_function_body(Rest, Args, Bindings, World);
         _ ->
             case GuardsList of
                 [Guards] ->
@@ -106,18 +105,17 @@ eval_function_body([HdClause | Rest], Args, Bindings, World, LocalWorld) ->
                                 ),
                     case GuardsResult of
                         true ->
-                            eval:eval_exprs(Body, LocalBindings, LocalWorld);
+                            eval:eval_exprs(Body, LocalBindings, World);
                         _ ->
                             eval_function_body(
                                 Rest,
                                 Args,
                                 Bindings,
-                                World,
-                                LocalWorld
+                                World
                             )
                     end;
                 _ ->
-                    eval:eval_exprs(Body, LocalBindings, LocalWorld)
+                    eval:eval_exprs(Body, LocalBindings, World)
             end
     end.
 
