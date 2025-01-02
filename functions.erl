@@ -184,7 +184,7 @@ eval_local_call(FName, Args, Bindings, World) ->
                 [{float, _}] ->
                     {ok, {atom, true}, Bindings};
                 _ ->
-                    {ok, {atom, false, Bindings}}
+                    {ok, {atom, false}, Bindings}
             end;
         is_function when length(Args) == 1 ->
             case Args of

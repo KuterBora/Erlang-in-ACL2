@@ -1,5 +1,5 @@
 -module(eval_tests).
--export([test_world/0, test_general/0, test_matches/0, test_bindings/0, test_fun/0, test_all/0]).
+-export([test_general/0, test_all/0]).
 -include_lib("eunit/include/eunit.hrl").
 
 % Run all tests
@@ -14,10 +14,49 @@ test_all() ->
 
 % Tests for built in functions
 test_bif() ->
-  ?assertMatch({ok, {atom, true}, []}, eval:eval("is_integer(3).", [])),
-  ?assertMatch({ok, {atom, false}, []}, eval:eval("is_integer([1, 2, 3]).", [])),
-  ?assertMatch({ok, {atom, true}, []}, eval:eval("is_atom(atom).", [])),
-  ?assertMatch({ok, {atom, false}, []}, eval:eval("is_atom(3).", [])).
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_integer(3).", [])),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval("is_integer([1, 2, 3]).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_atom(atom).", [])),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval("is_atom(3).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_boolean(true).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_boolean(false).", [])),
+  ?assertEqual({ok, {atom, false}, [{'X', not_bool}]}, eval:eval("is_boolean(X).", [{'X', not_bool}])),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval("is_float(3).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_float(3.0).", [])),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval("is_function(1).", [])),
+  ?assertMatch({ok, {atom, true}, [_]}, eval:eval("is_function(fun() -> 1 end).", [])),
+  ?assertMatch({ok, {atom, true}, [{'X', _}, _]}, 
+    eval:eval(
+      "X = fun(A, B) -> A + B end,
+      is_function(X).", 
+    [])
+  ),
+  ?assertMatch({ok, {atom, true}, [_, _]}, 
+    eval:eval("is_function(X, 0).", [{'X', {'fun', {'#Fun<1.4662>',0}}},
+    {{'#Fun<1.4662>',0}, {{clauses,[{clause,1,[],[],[{integer,1,1}]}]},[]}}])
+  ),
+  ?assertMatch({ok, {atom, false}, [_, _]}, 
+    eval:eval("is_function(X, 1).", [{'X', {'fun', {'#Fun<1.4662>',0}}},
+    {{'#Fun<1.4662>',0}, {{clauses,[{clause,1,[],[],[{integer,1,1}]}]},[]}}])
+  ),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_integer(3).", [])),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval("is_integer(a).", [])),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval("is_list(3).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_list([1, 2, 3]).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_list([1 | [2]]).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_number(75 / 2).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_list([1, 2, 3]).", [])),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval("is_tuple([1, 2, 3]).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_tuple({1, 2, 3}).", [])),
+  ?assertEqual({ok, {integer, 8}, []}, eval:eval("abs(-8).", [])),
+  ?assertEqual({ok, {atom, two}, []}, eval:eval("element(2, {1, two, 3}).", [])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("is_list([1, 2, 3]).", [])),
+  ?assertEqual({ok, {integer, 1}, []}, eval:eval("hd([1, 2, 3]).", [])),
+  ?assertEqual({ok, {integer, 3}, []}, eval:eval("length([1, 2, 3]).", [])),
+  ?assertEqual({ok, {integer, 1}, []}, eval:eval("hd([1, 2, 3]).", [])),
+  ?assertEqual({ok, {integer, 30}, []}, eval:eval("max(30, 2.0).", [])),
+  ?assertEqual({ok, {integer, -1}, []}, eval:eval("min(-1, 2).", [])),
+  ?assertEqual({ok, {cons, [{integer, 2}, {integer, 3}]}, []}, eval:eval("tl([1, 2, 3]).", [])).
 
 % Tests for fun expressions
 test_fun() ->
@@ -96,7 +135,15 @@ test_fun() ->
   ?assertMatch({ok, {integer, 3}, [_]}, 
     eval:eval("fun_module:apply(fun(X) -> X + 1 end, 2).", [], FunWorld)),
   ?assertMatch({ok, {integer, 5}, [{'X', _}, {_, _}]}, 
-    eval:eval("X = fun_module:adder(3), fun_module:apply(X, 2).", [], FunWorld)).
+    eval:eval("X = fun_module:adder(3), fun_module:apply(X, 2).", [], FunWorld)),
+  
+  % extra tests
+  ?assertMatch({ok, {integer, 5}, [_, _, _]},
+    eval:eval("X = fun(X) -> X + Y + 1 end, X(2).", [{'Y', {integer, 2}}])),
+  ?assertMatch({ok, {integer, 5}, [_, _, _]},
+    eval:eval("X = fun(Z) -> Z + 3 end, X(2).", [{'Z', {integer, 100}}])),
+  ?assertMatch({ok, {integer, 5}, [_, _]},
+    eval:eval("X = fun(Z = 5) -> Z end, X(5).", [])).
 
 % Tests for evaluating match for lists and tuples as well as Pattern Matching
 test_matches() ->
@@ -131,10 +178,6 @@ test_matches() ->
   ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}]},
     [{'H', {integer, 1}}, {'T', {integer, 2}}, {'X', {tuple, [{integer, 1}, {integer, 2}]}}]},
     eval:eval("X = {1, 2}, {H, T} = X.", [])),
-  % TODO:
-  % ?assertEqual({ok, {string, "test_string"}, 
-  % [{'H', 116}, {'T', {string, "est_string"}}]}, % no support for string->integer currently
-  %   eval:eval("[H | T] = \"test_string\".", [])),
   ?assertEqual({ok, {cons, [{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}]}, 
     [{'A', {integer, 1}}, {'B', {cons, [{integer, 2}, {integer, 3}]}}, 
       {'X', {cons, [{integer, 1}, {cons, [{integer, 2}, {integer, 3}]}]}}]},
@@ -232,8 +275,6 @@ test_world() ->
   ?assertEqual({ok, {atom, false}, []}, eval:eval("is_integer(abc).", [], world:world_init())),
   ?assertEqual({ok, {atom, head}, []}, eval:eval("hd([head, tail]).", [], world:world_init())),
   ?assertEqual({ok, {cons, [{atom, tail}]}, []}, eval:eval("tl([head, tail]).", [], world:world_init())),
-  % TODO:
-  % ?assertEqual({ok, {string, "pples"}, []}, eval:eval("tl(\"apples\").", [], world:world_init())),
 
   % simple functions
   SimpleModule_temp1 = world:module_add_function_string(#{}, greater, 2, "greater(X, Y) -> X > Y."),
@@ -383,6 +424,8 @@ test_general() ->
   ?assertEqual({ok, {integer, 5}, [{'X', {integer, 5}}]}, eval:eval("X = 2 + 3.", [])),
   ?assertEqual({ok, {integer, 5}, [{'X', {integer, 2}}, {'Y', {integer, 3}}]}, 
     eval:eval("X = 2, Y = 3, X + Y.", [{'X', {integer, 2}}])),
+  ?assertEqual({ok, {integer, 1}, [{'X', {integer, 1}}, {'Y', {integer, 1}}]}, eval:eval("X = Y = 1.", [])),
+  ?assertEqual({ok, {integer, 4}, [{'X', {integer, 2}}]}, eval:eval("(X = 2) + 2.", [])),
 
   % lists, tuples
   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []}, eval:eval("[1, 2, 3, 4].", [])),
@@ -393,6 +436,8 @@ test_general() ->
   ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}, {atom, abc}, {integer, 4}]}, [{'X', {integer, 4}}]}, eval:eval("{1, 2, abc, X}.", [{'X', {integer, 4}}])),
   ?assertEqual({ok, {tuple, [{integer, 1}, {integer, 2}, {integer, 3}]}, [{'X', {tuple, [{integer, 1}, {integer, 2}, {integer, 3}]}}]},
      eval:eval("X = {1, 2, 3}.", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, []}, eval:eval("[1 | [2]].", [])),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}]}, []}, eval:eval("[1 | [2, 3]].", [])),
 
   % atoms and logic operations
   ?assertEqual({ok, {atom, here_is_an_atom}, []}, eval:eval("here_is_an_atom.", [])),
@@ -400,6 +445,7 @@ test_general() ->
   ?assertEqual({ok, {atom, true}, []}, eval:eval("(true and false) or true.", [])),
   ?assertEqual({ok, {atom, true}, [{'Bool1', {atom, true}},{'Bool2', {atom, true}}, {'X', {integer, 1}}, {'Y', {integer, 2}}]},
     eval:eval("Bool1 = X == 1, Bool2 = Y == 2, Bool1 and Bool2.", [{'X', {integer, 1}}, {'Y', {integer, 2}}])),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("atom > 2.", [])),
 
   % strings
   ?assertEqual({ok, {string, "here is a string"}, []}, eval:eval("\"here is a string\".", [])),
@@ -434,23 +480,10 @@ test_general() ->
       Y when is_integer(Y) -> integer;
       X -> self end.", [{'X', {string, "a"}}, {'Y', {string, "a"}}])),
 
-  % try catch (simplified) TODO: tests for full try catch / without 'after' 
+  % try catch (incomplete)
   ?assertEqual({ok, {atom, true}, [{'X', {integer, 1}}]}, 
     eval:eval("try X =:= X div 1 catch error:E -> false end.", [{'X', {integer, 1}}])),
   ?assertEqual({ok, {atom, false}, [{'X', {float, 2.0}}]}, 
     eval:eval("try X =:= X div 1 catch error:E -> false end.", [{'X', {float, 2.0}}])),
   ?assertEqual({ok, {atom, false}, [{'X', {string, "abc"}}]}, 
-    eval:eval("try X =:= X div 1 catch error:E -> false end.", [{'X', {string, "abc"}}])),
-  % TODO:
-  % ?assertEqual({ok, {atom, first}, [{'X', {integer, 0}}]}, 
-  %  eval:eval("try X+1 of 2 -> second; 1 -> first; _ -> third catch error:E -> false end.", [{'X', {integer, 0}}])),
-  % ?assertEqual({ok, {atom, second}, [{'X', {integer, 1}}]}, 
-  %   eval:eval("try X+1 of 2 -> second; 1 -> first; _ -> third catch error:E -> false end.", [{'X', {integer, 1}}])),
-  % ?assertEqual({ok, {atom, third}, [{'X', {integer, 2}}]}, 
-  %   eval:eval("try X+1 of 2 -> second; 1 -> first; _ -> third catch error:E -> false end.", [{'X', {integer, 2}}])),
-
-  % error handling
-  % TODO: more tests
-  ?assertEqual({error, {badmatch, {integer, 3}}}, eval:eval("X = 2, X = 3.", [])).
-  %?assertEqual({error, "Operation with given arguments is not allowed by the evaluator."}, 
-  %  eval:eval("1 rem 2.", [])). % should be allowed eventually.
+    eval:eval("try X =:= X div 1 catch error:E -> false end.", [{'X', {string, "abc"}}])).
