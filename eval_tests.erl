@@ -8,12 +8,16 @@ test_all() ->
   test_matches(),
   test_world(),
   test_bindings(),
-  test_fun().
+  test_fun(),
+  test_bif().
 
 
-% % Tests for built in functions
-% test_bif() ->
-%   ?assertMatch({ok, {atom, true}, []}, eval:eval("is_atom(atom).", [])).
+% Tests for built in functions
+test_bif() ->
+  ?assertMatch({ok, {atom, true}, []}, eval:eval("is_integer(3).", [])),
+  ?assertMatch({ok, {atom, false}, []}, eval:eval("is_integer([1, 2, 3]).", [])),
+  ?assertMatch({ok, {atom, true}, []}, eval:eval("is_atom(atom).", [])),
+  ?assertMatch({ok, {atom, false}, []}, eval:eval("is_atom(3).", [])).
 
 % Tests for fun expressions
 test_fun() ->

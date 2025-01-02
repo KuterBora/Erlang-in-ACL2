@@ -1,71 +1,77 @@
 -module(functions).
--export([eval_local_call/4, eval_call/5, eval_args/4,
-    eval_function_body/5, create_local_bindings/5]).
+-export([eval_calls/4, create_local_bindings/5]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evaluate Function Calls
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Evaluate local function calls
-eval_local_call(Fname, Args, Bindings, World) ->
-    case Fname of
-        is_atom ->
-            EvalArg = eval_args(Args, Bindings, World, []),
-            case EvalArg of
-                {[{Type, _}], ArgBindings} ->
-                    {ok, {atom, Type == atom}, ArgBindings};
-                {_Results, _ArgBindings} ->
-                    {error, undef};
+% Determine the type of call in the expression and call the appopriate helper
+eval_calls(Call, Args, Bindings, World) ->
+    EvalArgs = eval_args(Args, Bindings, World, []),
+    case EvalArgs of
+        {Results, ArgBindings} ->
+            case Call of
+                {atom, _Line, FName} ->
+                    eval_local_call(
+                        FName,
+                        Results,
+                        ArgBindings,
+                        World
+                    );
+                {remote, _Line, {atom, _MLn, MName}, {atom, _FLn, FName}} ->
+                    eval_remote_call(
+                        MName,
+                        FName, 
+                        Results,
+                        ArgBindings,
+                        World
+                    );
                 _ ->
-                    EvalArg
+                    funs:eval_fun_call(Call, Results, ArgBindings, World)
             end;
+        {yield, _Kont, _Out} ->
+            yield_todo;
         _ ->
-            eval_call(local, Fname, Args, Bindings, World)
+            EvalArgs
     end.
 
-% Evaluate function calls
-eval_call(Module_Name, Function_Name, Args, Bindings, World) 
+% Evaluate remote function calls
+eval_remote_call(Module_Name, Function_Name, Args, Bindings, World) 
         when is_map_key(Module_Name, World) ->
     Module = maps:get(Module_Name, World),
     Arity = length(Args),
     if
         is_map_key({Function_Name, Arity}, Module) ->
             Function_Def = maps:get({Function_Name, Arity}, Module),
-            Local_Module = maps:merge(world:local_module(), Module),
-            Local_World = world:world_add_module(World, local, Local_Module),
-            ArgValues = eval_args(Args, Bindings, World, []),
-            case ArgValues of
-                {Results, ArgBindings} ->
-                    Function_Result = eval_function_body(
-                        Function_Def, 
-                        Results,
-                        ArgBindings,
-                        World,
-                        Local_World
-                    ),
-                    case Function_Result of
-                        {ok, {'fun', FunTag}, FunBindings} ->
-                            FunBody = orddict:fetch(FunTag, FunBindings),    
-                            NewBindings = 
-                                orddict:store(
-                                    FunTag,
-                                    FunBody,
-                                    ArgBindings
-                                ),
-                            {ok, {'fun', FunTag}, NewBindings};
-                        {ok, EvalVal, _} -> 
-                            {ok, EvalVal, ArgBindings};
-                        {yield, _Kont, _Out} ->
-                            yield_todo;
-                        _ ->
-                            Function_Result
-                    end;
+            Local_World = world:world_add_module(World, local, Module),
+            Function_Result = eval_function_body(
+                Function_Def, 
+                Args,
+                Bindings,
+                World,
+                Local_World
+            ),
+            case Function_Result of
+                {ok, {'fun', FunTag}, FunBindings} ->
+                    FunBody = orddict:fetch(FunTag, FunBindings),    
+                    NewBindings = 
+                        orddict:store(
+                            FunTag,
+                            FunBody,
+                            Bindings
+                        ),
+                    {ok, {'fun', FunTag}, NewBindings};
+                {ok, EvalVal, _} -> 
+                    {ok, EvalVal, Bindings};
+                {yield, _Kont, _Out} ->
+                    yield_todo;
                 _ ->
-                    ArgValues
+                    Function_Result
             end;
         true ->
             {error, undef}
-    end.
+    end;
+eval_remote_call(_, _, _, _, _) -> {error, undef}.
 
 % Evaluate each argument in order and return the list of results
 % and the Bindings obtained.
@@ -151,4 +157,156 @@ create_local_bindings(Param, Args, Bindings, BindingsAcc, World)
                 Bindings,
                 NewBindings,
                 World)
+    end.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  Evaluate Calls within the same module and BIFs
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Evaluate local function calls
+eval_local_call(FName, Args, Bindings, World) ->
+    case FName of
+        is_atom when length(Args) == 1 ->
+            case Args of
+                [{atom, _}] ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end;
+        is_boolean when length(Args) == 1 ->
+            case Args of
+                [{atom, Val}] when Val == true orelse Val == false ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end;
+        is_float when length(Args) == 1 ->
+            case Args of
+                [{float, _}] ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false, Bindings}}
+            end;
+        is_function when length(Args) == 1 ->
+            case Args of
+                [{'fun', _}] ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end;
+        is_function when length(Args) == 2 ->
+            case Args of
+                [{'fun', {_, Arity}}, {integer, Arity}] 
+                    when is_integer(Arity) ->
+                    {ok, {atom, true}, Bindings};
+                [{'fun', {_, Arity}}, {integer, Arity}] ->
+                    {error, badarg};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end;
+        is_integer when length(Args) == 1 ->
+            case Args of
+                [{integer, _}] ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end;
+        is_list when length(Args) == 1 ->
+            case Args of
+                [{cons, _}] ->
+                    {ok, {atom, true}, Bindings};
+                [{nil, _}] ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end; 
+        is_number when length(Args) == 1 ->
+            case Args of
+                [{integer, _}] ->
+                   {ok, {atom, true}, Bindings};
+                [{float, _}] ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end; 
+        is_pid when length(Args) == 1 ->
+            case Args of
+                [{pid, _}] ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end;
+        is_tuple when length(Args) == 1 ->
+            case Args of
+                [{tuple, _}] ->
+                    {ok, {atom, true}, Bindings};
+                _ ->
+                    {ok, {atom, false}, Bindings}
+            end;
+        abs when length(Args) == 1 ->
+            case Args of
+                [{integer, Val}] ->
+                    {ok, {integer, abs(Val)}, Bindings};
+                [{float, Val}] ->
+                    {ok, {float, abs(Val)}, Bindings};
+                _ ->
+                    {error, badarg}
+            end;
+        element when length(Args) == 2 ->
+            case Args of
+                [{integer, N}, {tuple, Tuple}] when N > 0 ->
+                    {ok, element(N, list_to_tuple(Tuple)), Bindings};
+                _ ->
+                    {error, badarg}
+            end;
+        hd when length(Args) == 1 ->
+            case Args of 
+                [{cons, List}] ->
+                    {ok, hd(List), Bindings};
+                _ ->
+                    {error, badarg}
+            end;
+        length when length(Args) == 1 ->
+            case Args of
+                [{cons, List}] ->
+                    {ok, {integer, length(List)}, Bindings};
+                [{nil, _}] ->
+                    {ok, {integer, 0}, Bindings};
+                _ ->
+                    {error, badarg}
+            end;
+        max when length(Args) == 2 ->
+            case Args of
+                [{TypeA, A}, {TypeB, B}] ->
+                    if
+                        A >= B ->
+                           {ok, {TypeA, A}, Bindings};
+                        true ->
+                            {ok, {TypeB, B}, Bindings}
+                    end;
+                _ ->
+                    {error, badarg}
+            end; 
+        min when length(Args) == 2 ->
+            case Args of
+                [{TypeA, A}, {TypeB, B}] ->
+                    if
+                        A =< B ->
+                           {ok, {TypeA, A}, Bindings};
+                        true ->
+                            {ok, {TypeB, B}, Bindings}
+                    end;
+                _ ->
+                    {error, badarg}
+            end; 
+        tl when length(Args) == 1 ->
+            case Args of
+                [{cons, List}] ->
+                    {ok, {cons, tl(List)}, Bindings};
+                _ ->
+                    {error, badarg}
+            end;
+        _ ->
+            eval_remote_call('local', FName, Args, Bindings, World)
     end.

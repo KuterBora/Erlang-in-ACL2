@@ -1,5 +1,5 @@
 -module(funs).
--export([eval_fun/3, eval_fun_call/4, eval_fun_body/4]).
+-export([eval_fun/3, eval_fun_call/4]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evalulate Fun Expressions
@@ -37,45 +37,39 @@ eval_fun_call(CallExpr, Args, Bindings, World) ->
                     {Name, Arity},
                     CallBindings
                 ),
-            ArgValues = functions:eval_args(Args, CallBindings, World, []),
-            case ArgValues of
-                {Results, ArgBindings} ->
-                    if 
-                        Arity == length(Args) ->
-                            FunResult = eval_fun_body(
-                                Clauses, 
-                                Results,
-                                FunBindings,
-                                World
-                            ),
-                            case FunResult of
-                                {ok, {'fun', FunTag}, ResultBindings} ->
-                                    FunBody = 
-                                        orddict:fetch(
-                                            FunTag,
-                                            ResultBindings
-                                        ),    
-                                    NewBindings = 
-                                        orddict:store(
-                                            FunTag,
-                                            FunBody,
-                                            ArgBindings
-                                        ),
-                                    {ok, {'fun', FunTag}, NewBindings};
-                                {ok, EvalVal, _} -> 
-                                    {ok, EvalVal, ArgBindings};
-                                {yield, _Kont, _Out} ->
-                                    yield_todo;
-                                _ ->
-                                    FunResult
-                            end;
-                        true ->
-                            F = {'fun', {Name, Arity}},
-                            {error, {badarity, {F, ArgValues}}}
-                    end;
-                _ ->
-                    ArgValues
-            end;
+                if 
+                    Arity == length(Args) ->
+                        FunResult = eval_fun_body(
+                            Clauses, 
+                            Args,
+                            FunBindings,
+                            World
+                        ),
+                        case FunResult of
+                            {ok, {'fun', FunTag}, ResultBindings} ->
+                                FunBody = 
+                                    orddict:fetch(
+                                        FunTag,
+                                        ResultBindings
+                                    ),    
+                                NewBindings = 
+                                    orddict:store(
+                                        FunTag,
+                                        FunBody,
+                                        CallBindings
+                                    ),
+                                {ok, {'fun', FunTag}, NewBindings};
+                            {ok, EvalVal, _} -> 
+                                {ok, EvalVal, CallBindings};
+                            {yield, _Kont, _Out} ->
+                                yield_todo;
+                            _ ->
+                                FunResult
+                        end;
+                    true ->
+                        F = {'fun', {Name, Arity}},
+                        {error, {badarity, {F, Args}}}
+                end;
         {ok, F, _} ->
             {error, {badfun, F}};
         {yield, _Kont, _Out} ->

@@ -80,13 +80,8 @@ eval_expr(AST, Bindings, World) ->
                 CatchClauses,
                 Bindings,
                 World);
-        {call, _Line1, {atom, _Line2, FName}, Args} -> 
-            functions:eval_local_call(FName, Args, Bindings, World);
-        {call, _Line1, {remote, _Line2, {atom, _Line3, MName}, 
-                {atom, _Line4, FName} }, Args} -> 
-            functions:eval_call(MName, FName, Args, Bindings, World);
-        {call, _Line, CallExpr, Args} ->
-            funs:eval_fun_call(CallExpr, Args, Bindings, World);
+        {'call', _Line, Call, Args} ->
+            functions:eval_calls(Call, Args, Bindings, World);
         _ -> 
             {error, bad_AST}
     end.

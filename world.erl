@@ -3,7 +3,6 @@
 % helpers to load/purge worlds
 -export([
     world_init/0,
-    local_module/0, 
     world_add_module/3,
     world_purge_module/2
 ]).
@@ -22,34 +21,8 @@
 % world(): #{atom() => module()}
 % module(): #{{atom(), integer()} => [ASTs]}
 
-% Returns a module that only has the BIFs.
-local_module() ->
-    LocalModuleTemp1 = 
-        module_add_function_string(
-            #{},
-            is_integer,
-            1,
-            "is_integer(X) -> 
-                try 
-                    X =:= X div 1 
-                catch 
-                    error:E -> 
-                        false 
-                end."), 
-    LocalModuleTemp2 = 
-        module_add_function_string(
-            LocalModuleTemp1,
-            hd,
-            1,
-            "hd([Hd | Tl]) -> Hd."),
-    module_add_function_string(
-        LocalModuleTemp2,
-        tl,
-        1,
-        "tl([Hd | Tl]) -> Tl.").
-
-% Returns the world that only has the local_module().
-world_init() -> #{local => local_module()}.
+% Returns an empty world
+world_init() -> #{}.
 
 % Add a module to the given world.
 world_add_module(World, ModuleName, Module) ->
