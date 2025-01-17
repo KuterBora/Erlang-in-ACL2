@@ -119,7 +119,6 @@ test_fun() ->
        Y = fun() -> Z end,
        (Y())().", [])),
   
-  % simple functions
   FunModule_temp1 = world:module_add_function_string(#{}, square, 1, 
     "square(X) -> Y = fun(X) -> X * X end, Y(X)."),
   FunModule_temp2 = world:module_add_function_string(FunModule_temp1, adder, 1, "adder(X) -> fun(Y) -> X + Y end."),
