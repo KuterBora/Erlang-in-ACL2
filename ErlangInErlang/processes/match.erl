@@ -1,103 +1,90 @@
 -module(match).
 
--export([eval_match/4, eval_param_match/4]).
+-export([eval_match/5, eval_param_match/4]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evaluate Match
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Evaluate macthing LHS to RHS. Update Bindings if necessary.
-% Throw a bad_match error if match is not sucessful.
-eval_match(LHS, RHS, Bindings, World) ->
+% Throw a badmatch error if match is not sucessful.
+eval_match(LHS, RHS, Bindings, World, K) ->
     case {LHS, RHS} of
-        {{var, _Line, '_'}, _} -> 
-            {ok, RHS, Bindings};
-        {{var, _Line, Var}, _} ->
+        {{var, _, '_'}, _} -> 
+            cps:applyK(RHS, Bindings, World, K);
+        {{var, _, Var}, _} ->
             case orddict:is_key(Var, Bindings) of
                 true ->
                     case orddict:fetch(Var, Bindings) of
                         RHS -> 
-                            {ok, RHS, Bindings};
+                            cps:applyK(RHS, Bindings, World, K);
                         _ -> 
-                            {error, {badmatch, RHS}}
+                            cps:errorK({badmatch, RHS}, World, K)
                     end;
                 _ ->
-                    {ok, RHS, orddict:store(Var, RHS, Bindings)}
+                    cps:applyK(
+                        RHS,
+                        orddict:store(Var, RHS, Bindings),
+                        World,
+                        K
+                    )
             end;
-        {{cons, _Line, LHS_Hd, LHS_Tl}, {cons, RHS_List}} ->
-            MatchHead = eval_match(LHS_Hd, hd(RHS_List), Bindings, World),
-            case MatchHead of
-                {ok, _HVal, HdBindings} ->
-                    case LHS_Tl of
-                        {nil, _} when tl(RHS_List) == [] ->
-                            {ok, RHS, HdBindings};
-                        _ ->
-                            MatchTail = 
-                                eval_match(
-                                    LHS_Tl,
-                                    {cons, tl(RHS_List)},
-                                    HdBindings,
-                                    World
-                                ),
-                            case MatchTail of
-                                {ok, _TVal, TlBindings} ->
-                                    {ok, RHS, TlBindings};
-                                {yield, _Kont, _Out} ->
-                                    yield_todo;
-                                _ ->
-                                    MatchTail
-                            end
-                    end;
-                {yield, _Kont, _Out} ->
-                    yield_todo;
+        {{cons, _, LHSHd, LHSTl}, {cons, RHSList}} when RHSList /= [] ->
+            case LHSTl of
+                {nil, _} when tl(RHSList) == [] ->
+                    eval_match(
+                        LHSHd,
+                        hd(RHSList),
+                        Bindings,
+                        World,
+                        {match_cons_nil_k, K});
                 _ ->
-                    MatchHead
+                    eval_match(
+                        LHSHd,
+                        hd(RHSList),
+                        Bindings,
+                        World,
+                        {
+                            match_cons_k,
+                            LHSTl,
+                            {cons,
+                            tl(RHSList)},
+                            Bindings,
+                            K
+                        }
+                    )
             end;
-        {{tuple, Line, LTupleList}, {tuple, RTupleList}} ->
+        {{cons, _, _, _}, {cons, _}} ->
+            cps:errorK({badmatch, RHS}, World, K);
+        {{tuple, Line, LTupleList}, {tuple, RTupleList}} 
+            when length(LTupleList) == length(RTupleList) ->  
             case {LTupleList, RTupleList} of
                 {[], []} ->
-                    {ok, {tuple, {}}, Bindings};
+                    cps:applyK({tuple, []}, Bindings, World, K);
                 _ ->
-                    MatchHead = 
-                        eval_match(
-                            hd(LTupleList),
-                            hd(RTupleList),
+                    eval_match(
+                        hd(LTupleList),
+                        hd(RTupleList),
+                        Bindings,
+                        World,
+                        {
+                            match_tuple_k,
+                            {tuple, Line, tl(LTupleList)},
+                            {tuple, tl(RTupleList)},
                             Bindings,
-                            World
-                        ),
-                    case MatchHead of
-                        {ok, _HVal, HdBindings} ->
-                            MatchTail =
-                                eval_match(
-                                  {tuple, Line, tl(LTupleList)},
-                                  {tuple, tl(RTupleList)},
-                                  HdBindings,
-                                  World
-                                ),
-                            case MatchTail of
-                                {ok, _TVal, TlBindings} ->
-                                    {ok, {tuple, RTupleList}, TlBindings};
-                                {yield, _Kont, _Out} ->
-                                    yield_todo;
-                                _ ->
-                                    MatchTail
-                            end;
-                        {yield, _Kont, _Out} ->
-                            yield_todo;
-                        _ ->
-                            MatchHead
-                    end
+                            K
+                        }
+                    )
             end;
+        {{tuple, _, _}, {tuple, _}} ->
+            cps:errorK({badmatch, RHS}, World, K);
         _ ->
-            EvalLHS = eval:eval_expr(LHS, Bindings, World),
-            case EvalLHS of
-                {ok, RHS, NewBindings} -> 
-                    {ok, RHS, NewBindings};
-                {ok, _, _} -> 
-                    {error, {badmatch, RHS}};
-                _ ->
-                    EvalLHS
-            end
+            eval:eval_expr(
+                LHS,
+                Bindings,
+                World,
+                {match_lhs_k, RHS, K}
+            )
     end.
 
 
@@ -106,7 +93,7 @@ eval_match(LHS, RHS, Bindings, World) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Return the Bindings obtained by macthing LHS to RHS.
-% Throw a bad_match error if match is not sucessful.
+% Throw a badmatch error if match is not sucessful.
 eval_param_match(LHS, RHS, BindingsAcc, World) ->
     case {LHS, RHS} of
         {{var, _, '_'}, _} -> 

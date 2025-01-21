@@ -1,97 +1,93 @@
 -module(eval).
 % evaluators
--export([eval_exprs/3, eval_expr/3]).
+-export([eval_exprs/3, eval_exprs/4, eval_expr/4]).
+% lists, tuples. operations
+-export([eval_list/5, eval_tuple/5, eval_op/6, eval_op/5]).
 % helpers
--export([get_AST/1, get_AST_form/1, eval/2, eval/3]).
-
-% TODO:
-% replace Bindings and World with ProcState
-% general tests
-% add Out
-% message tests
-% yield
-% yield tests
-% scheduler, and runner
+-export([get_AST/1, get_AST_form/1, eval/1, eval/2, eval/3]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  The Evaluator
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Evaluates the given list of ASTs in order with the given Bindings and World.
-% Bindings created by a previous AST are used by the next.
-% Value and Bindings produced by the last AST are returned.
-eval_exprs(ASTs, Bindings, World) when ASTs /= [], tl(ASTs) == [] ->
-    eval_expr(hd(ASTs), Bindings, World); 
-eval_exprs(ASTs, Bindings, World) when ASTs /= [] ->
-    case eval_expr(hd(ASTs), Bindings, World) of
-        {ok, _Result, NextBindings} -> 
-            eval_exprs(tl(ASTs), NextBindings, World);
-        {yield, _Kont, _Out} ->
-            yield_todo;
-        {error, Exception} -> 
-            {error, Exception}
+eval_exprs(ASTs, Bindings, World, K) ->
+    case tl(ASTs) of
+        [] ->
+            eval_expr(hd(ASTs), Bindings, World, K);
+        _ ->
+            eval_expr(hd(ASTs), Bindings, World, {exprs_k, tl(ASTs), K})
     end.
 
+eval_exprs(ASTs, Bindings, World) when ASTs /= [] ->
+    eval_exprs(ASTs, Bindings, World, {initial_k}).
+
 % Evaluates the given AST with the given Bindings and World.
-eval_expr(AST, Bindings, World) ->
+eval_expr(AST, Bindings, World, K) ->
     case AST of
-        {atom, _Line, Value} -> 
-            {ok, {atom, Value}, Bindings};
-        {nil, _Line} -> 
-            {ok, {nil, []}, Bindings};
-        {integer, _Line, Value} -> 
-            {ok, {integer, Value}, Bindings};
-        {float, _Line, Value} -> 
-            {ok, {float, Value}, Bindings};
-        {string, _Line, Value} -> 
-            {ok, {string, Value}, Bindings};
-        {cons, _Line, Car, Cdr} ->
-            eval_list(Car, Cdr, Bindings, World);
-        {tuple, _Line, TupleList} -> 
-            eval_tuple(TupleList, Bindings, World);
-        {var, _Line, Var} -> 
+        {atom, _, Value} -> 
+            cps:applyK({atom, Value}, Bindings, World, K);
+        {nil, _} -> 
+            cps:applyK({nil, []}, Bindings, World, K);
+        {integer, _, Value} -> 
+            cps:applyK({integer, Value}, Bindings, World, K);
+        {string, _, Value} -> 
+            cps:applyK({string, Value}, Bindings, World, K);
+        {cons, _, Car, Cdr} ->
+            eval_expr(
+                Car,
+                Bindings,
+                World,
+                {cons_cdr_k, Cdr, Bindings, K}
+            );
+        {tuple, _, []} -> 
+            cps:applyK({tuple, []}, Bindings, World, K);
+        {tuple, Line, TupleList} ->
+            eval_expr(
+                hd(TupleList),
+                Bindings,
+                World,
+                {tuple_cdr_k, {tuple, Line, tl(TupleList)}, Bindings, K}
+            );
+        {var, _, Var} -> 
             case orddict:find(Var, Bindings) of
-                {ok, Value} -> {ok, Value, Bindings};
-                _ -> {error, unbound}
+                {ok, Result} -> 
+                    cps:applyK(Result, Bindings, World, K);
+                _ -> 
+                    cps:errorK(unbound, World, K)
             end;
         {'fun', Line, {clauses, Clauses}} -> 
-            funs:eval_fun(Clauses, Line, Bindings);
-        {match, _Line, Expr1, Expr2} ->
-            EvalRHS = eval_expr(Expr2, Bindings, World),
-            case EvalRHS of
-                {ok, Value, NewBindings} ->
-                    match:eval_match(Expr1, Value, NewBindings, World);
-                {yield, _Kont, _Out} ->
-                    yield_todo;
-                _ ->
-                    EvalRHS
-            end;
-        {op, _Line, Op, Expr} ->
-            eval_op(Op, Expr, Bindings, World);
-        {op, _Line, Op, Expr1, Expr2} -> 
-            eval_op(Op, Expr1, Expr2 , Bindings, World);
-        {'if', _Line, Clasues} -> 
-            cases:eval_if(Clasues, Bindings, World);
-        {'case', _Line, Arg, Clauses} ->
-            EvalArg = eval_expr(Arg, Bindings, World),
-            case EvalArg of
-                {ok, Value, NewBindings} ->
-                    cases:eval_case(Value, Clauses, NewBindings, World);
-                {yield, _Kont, _Out} ->
-                    yield_todo;
-                _ ->
-                    EvalArg
-            end;
-        {'try', _Line, Exprs, Patterns, CatchClauses, _} ->
-            cases:eval_try(
-                Exprs,
-                Patterns,
-                CatchClauses,
+            funs:eval_fun(Clauses, Line, Bindings, World, K);
+        {match, _, Expr1, Expr2} ->
+            % TODO: LHS must be a pattern
+            eval_expr(
+                Expr2,
                 Bindings,
-                World);
-        {'call', _Line, Call, Args} ->
-            functions:eval_calls(Call, Args, Bindings, World);
-        _ -> 
+                World,
+                {match_k, Expr1, K}
+            );
+        {op, _, Op, Expr} ->
+            eval_expr(
+                Expr,
+                Bindings,
+                World,
+                {op1_k, Op, K});
+        {op, _, Op, Expr1, Expr2} -> 
+            eval_expr(
+                Expr1, 
+                Bindings, 
+                World,
+                {op2_expr1_k, Op, Expr2, Bindings, K}
+            );
+        {'if', _, Clasues} -> 
+            cases:eval_if(Clasues, Bindings, World, K);
+        {'case', _, Arg, Clauses} ->
+            eval_expr(
+                Arg,
+                Bindings, 
+                World,
+                {case_value_k, Clauses, K});
+        _ ->
             {error, bad_AST}
     end.
 
@@ -100,190 +96,92 @@ eval_expr(AST, Bindings, World) ->
 %  Evaluate Lists/Tuples
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Evaluate Car and Cdr, merge the Bindings and Out
-eval_list(Car, Cdr, Bindings, World) ->
-    EvalCar = eval_expr(Car, Bindings, World),
-    case EvalCar of
-        {ok, CarResult, CarBindings} ->
-            EvalCdr = eval_expr(Cdr, Bindings, World),
-            case EvalCdr of
-                {ok, CdrResult, CdrBindings} ->
-                    NewBindings = 
-                        orddict:merge(
-                            fun(_, V, _) -> V end,
-                            CarBindings,
-                            CdrBindings
-                        ),    
-                    case CdrResult of
-                        {cons, Tail} ->
-                            {ok, {cons, [CarResult | Tail]}, NewBindings};
-                        {nil, []} ->
-                            {ok, {cons, [CarResult]}, NewBindings};
-                        _ ->
-                            {error, badarg}
-                    end;
-                {yield, _Kont, _Out} ->
-                    yield_todo;
-                _ -> 
-                    EvalCdr
-            end;
-        {yield, _Kont, _Out} ->
-            yield_todo;
-        _ -> 
-            EvalCar
-    end.
-
-% Evaluate each element of the Tuple, merge the Bindings and Out
-eval_tuple([], Bindings, _World) ->
-    {ok, {tuple, []}, Bindings};
-eval_tuple([Hd | Tl], Bindings, World) ->
-    EvalHead = eval_expr(Hd, Bindings, World),
-    case EvalHead of
-        {ok, HeadResult, HeadBindings} ->
-            EvalTail = eval_tuple(Tl, Bindings, World),
-            case EvalTail of
-                {ok, {tuple, TailResult}, TailBindings} ->
-                    Result = {tuple, [HeadResult | TailResult]},
-                    NewBindings = 
-                        orddict:merge(
-                            fun(_, V, _) -> V end,
-                            HeadBindings,
-                            TailBindings
-                        ),
-                    {ok, Result, NewBindings};
-                {yield, _Kont, _Out} ->
-                    yield_todo;
-                {ok, _, _} ->
-                    {error, badarg};
-                _ ->
-                    EvalTail
-            end;
-        {yield, _Kont, _Out} ->
-            yield_todo;
+eval_list(CarResult, CdrResult, Bindings, World, K) ->
+    case CdrResult of
+        {cons, ConsList} ->
+            cps:applyK({cons, [CarResult | ConsList]}, Bindings, World, K);
+        {nil, []} ->
+            cps:applyK({cons, [CarResult]}, Bindings, World, K);
         _ ->
-            EvalHead
+            cps:errorK(badarg, World, K)
     end.
 
+eval_tuple(CarResult, {tuple, TupleList}, Bindings, World, K) ->
+    cps:applyK({tuple, [CarResult | TupleList]}, Bindings, World, K).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evaluate Operations
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Evalute Expr then apply Op to its result
-eval_op(Op, Expr, Bindings, World) ->
-    Operand = eval_expr(Expr, Bindings, World),
-    case Operand of
-        {ok, {Type, Value}, NewBindings} -> 
-            case Op of
-                '-' when Type == integer orelse Type == float ->
-                    {ok, {Type, -Value}, NewBindings};
-                '+' when Type == integer orelse Type == float ->
-                    {ok, {Type, +Value}, NewBindings};
-                'not' when Type == atom,
-                        (Value == true orelse Value == false) ->
-                    {ok, {Type, not Value, NewBindings}};
-                _ ->
-                    {error, badarg}
-            end;
-        {yield, _Kont, _Out} ->
-            yield_todo;    
+eval_op(Op, {Type, Value}, Bindings, World, K) ->
+    case Op of
+        '-' when Type == integer orelse Type == float ->
+            cps:applyK({Type, -Value}, Bindings, World, K);
+        '+' when Type == integer orelse Type == float ->
+            cps:applyK({Type, +Value}, Bindings, World, K);
+        'not' when Type == atom, (Value == true orelse Value == false) ->
+            cps:applyK({Type, not Value}, Bindings, World, K);
         _ ->
-            Operand
+            cps:errorK(badarg, World, K)
     end.
 
-% Evalute Expr1 and Expr2 then apply Op
-eval_op(Op, Expr1, Expr2, Bindings, World) ->
-    Operand1 = eval_expr(Expr1, Bindings, World),
-    case Operand1 of
-        {ok, {Type1, Result1}, Bindings1} ->
-            Operand2 = eval_expr(Expr2, Bindings, World),
-            case Operand2 of
-                {ok, {Type2, Result2}, Bindings2} ->
-                    NewBindings = 
-                        orddict:merge(
-                            fun(_, V, _) -> V end,
-                            Bindings1,
-                            Bindings2
-                        ),
-                    case Op of
-                        '+' when Type1 == integer, Type2 == integer ->
-                            {ok, {integer, Result1 + Result2}, NewBindings};
-                        '+' when Type1 == float orelse Type2 == float ->
-                            {ok, {float, Result1 + Result2}, NewBindings};
-                        '-' when Type1 == integer, Type2 == integer ->
-                            {ok, {integer, Result1 - Result2}, NewBindings};
-                        '-' when Type1 == float orelse Type2 == float ->
-                            {ok, {float, Result1 - Result2}, NewBindings};
-                        '*' when Type1 == integer, Type2 == integer ->
-                            {ok, {integer, Result1 * Result2}, NewBindings};
-                        '*' when Type1 == float orelse Type2 == float ->
-                            {ok, {float, Result1 * Result2}, NewBindings};
-                        '/' when (Type1 == integer orelse Type1 == float),
-                                (Type2 == integer orelse Type2 == float),
-                                Result2 == 0 ->
-                            {error, badarith};
-                        '/' when (Type1 == integer orelse Type1 == float),
-                                (Type2 == integer orelse Type2 == float) ->
-                            {ok, {float, Result1 / Result2}, NewBindings};
-                        'div' when Type1 == integer, Type2 == integer,
-                                Result2 == 0 ->
-                            {error, badarith};
-                        'div' when Type1 == integer, Type2 == integer ->
-                            {ok, {integer, Result1 div Result2}, NewBindings};
-                        '==' -> 
-                            {ok, {atom, Result1 == Result2}, NewBindings};
-                        '/=' -> 
-                            {ok, {atom, Result1 /= Result2}, NewBindings};
-                        '=<' -> 
-                            {ok, {atom, Result1 < Result2}, NewBindings};
-                        '<' -> 
-                            {ok, {atom, Result1 < Result2}, NewBindings};
-                        '>=' -> 
-                            {ok, {atom, Result1 < Result2}, NewBindings};
-                        '>' -> 
-                            {ok, {atom, Result1 > Result2}, NewBindings};
-                        '=:=' -> 
-                            {ok, {atom, Result1 =:= Result2}, NewBindings};
-                        '=/=' -> 
-                            {ok, {atom, Result1 =/= Result2}, NewBindings};
-                        'and' when Type1 == atom, Type2 == atom,
-                                (Result1 == true orelse Result1 == false),
-                                (Result2 == true orelse Result2 == false) ->
-                            {ok, {atom, Result1 and Result2}, NewBindings};
-                        'or' when Type1 == atom, Type2 == atom,
-                                (Result1 == true orelse Result1 == false),
-                                (Result2 == true orelse Result2 == false) ->
-                            {ok, {atom, Result1 or Result2}, NewBindings};
-                        'xor' when Type1 == atom, Type2 == atom,
-                                (Result1 == true orelse Result1 == false),
-                                (Result2 == true orelse Result2 == false) ->
-                            {ok, {atom, Result1 xor Result2}, NewBindings};
-                        '++' when Type1 == nil, Type2 == nil ->
-                            {ok, {nil, []}, NewBindings};
-                        '++' when Type1 == string orelse Type2 == string,
-                                Type1 == nil orelse Type1 == string,
-                                Type2 == nil orelse Type2 == string -> 
-                            {ok, {string, Result1 ++ Result2}, NewBindings};
-                        '++' when Type1 == string orelse Type1 == cons 
-                                orelse Type1 == nil, Type2 == string 
-                                orelse Type2 == cons orelse Type2 == nil ->
-                            {ok, {cons, Result1 ++ Result2}, NewBindings};
-                        '!' when Type1 == pid ->
-                            {ok, Result2, NewBindings};                     
-                        _ ->
-                            {error, badarg}
-                    end;
-                {yield, _Kont, _Out} ->
-                    yield_todo;
-                _ ->
-                    Operand2
-            end;
-        {yield, _Kont, _Out} ->
-            yield_todo;
+% Evaluates operations.
+eval_op(Op, {Type1, Result1}, {Type2, Result2}, Bindings, World, K) ->
+    case Op of
+        '+' when Type1 == integer, Type2 == integer ->
+            cps:applyK({integer, Result1 + Result2}, Bindings, World, K);
+        '-' when Type1 == integer, Type2 == integer ->
+            cps:applyK({integer, Result1 - Result2}, Bindings, World, K);
+        '*' when Type1 == integer, Type2 == integer ->
+            cps:applyK({integer, Result1 * Result2}, Bindings, World, K);
+        'div' when Type1 == integer, Type2 == integer,
+                Result2 == 0 ->
+            cps:errorK(badarith, World, K);
+        'div' when Type1 == integer, Type2 == integer ->
+            cps:applyK({integer, Result1 div Result2}, Bindings, World, K);
+        '==' -> 
+            cps:applyK({atom, Result1 == Result2}, Bindings, World, K);
+        '/=' -> 
+            cps:applyK({atom, Result1 /= Result2}, Bindings, World, K);
+        '=<' -> 
+            cps:applyK({atom, Result1 =< Result2}, Bindings, World, K);
+        '<' -> 
+            cps:applyK({atom, Result1 < Result2}, Bindings, World, K);
+        '>=' -> 
+            cps:applyK({atom, Result1 >= Result2}, Bindings, World, K);
+        '>' -> 
+            cps:applyK({atom, Result1 > Result2}, Bindings, World, K);
+        '=:=' -> 
+            cps:applyK({atom, Result1 =:= Result2}, Bindings, World, K);
+        '=/=' -> 
+            cps:applyK({atom, Result1 =/= Result2}, Bindings, World, K);
+        'and' when Type1 == atom, Type2 == atom,
+                (Result1 == true orelse Result1 == false),
+                (Result2 == true orelse Result2 == false) ->
+            cps:applyK({atom, Result1 and Result2}, Bindings, World, K);
+        'or' when Type1 == atom, Type2 == atom,
+                (Result1 == true orelse Result1 == false),
+                (Result2 == true orelse Result2 == false) ->
+            cps:applyK({atom, Result1 or Result2}, Bindings, World, K);
+        'xor' when Type1 == atom, Type2 == atom,
+                (Result1 == true orelse Result1 == false),
+                (Result2 == true orelse Result2 == false) ->
+            cps:applyK({atom, Result1 xor Result2}, Bindings, World, K);
+        '++' when Type1 == nil, Type2 == nil ->
+            cps:applyK({nil, []}, Bindings, World, K);
+        '++' when Type1 == string orelse Type2 == string,
+                Type1 == nil orelse Type1 == string,
+                Type2 == nil orelse Type2 == string -> 
+            cps:applyK({string, Result1 ++ Result2}, Bindings, World, K);
+        '++' when Type1 == string orelse Type1 == cons 
+                orelse Type1 == nil, Type2 == string 
+                orelse Type2 == cons orelse Type2 == nil ->
+            cps:applyK({cons, Result1 ++ Result2}, Bindings, World, K);              
         _ ->
-            Operand1
+            % TODO: seperate unexisting operation from badarg errors
+            cps:errorK(badarg, World, K)
     end.
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Helpers
@@ -300,6 +198,13 @@ get_AST_form(Str) ->
     {ok, Tokens, _} = erl_scan:string(Str),
     {ok, AST} = erl_parse:parse_form(Tokens),
     AST.
+
+% Parse the given erlang expression in string form, then evaluate it.
+% Bindings are set to []
+% The World parameter is filled with world:world_init()
+eval(Str) ->
+    AST = get_AST(Str),
+    eval_exprs(AST, [], world:world_init()).
 
 % Parse the given erlang expression in string form, then evaluate it.
 % The World parameter is filled with world:world_init()

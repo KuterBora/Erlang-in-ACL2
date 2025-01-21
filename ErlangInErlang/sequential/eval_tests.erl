@@ -451,7 +451,7 @@ test_general() ->
   ?assertEqual({ok, {string, "here is a string"}, []}, eval:eval("\"here is a string\".", [])),
   ?assertEqual({ok, {string, "concat strings"}, []}, eval:eval("\"concat \" ++ \"strings\".", [])),
   
-  % if, case of
+  % if
   ?assertEqual({ok, {atom, true}, []}, eval:eval("if true -> true end.", [])),
   ?assertEqual({ok, {integer, 35}, [{'X', {integer, 3}}]}, 
     eval:eval("if X == 1 -> 4; X == 3, X > 2 -> 35; true -> 2 end.", [{'X', {integer, 3}}])),
