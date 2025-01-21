@@ -1,5 +1,5 @@
 -module(funs).
--export([eval_fun/5]).
+-export([eval_fun/7]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evalulate Fun Expressions
@@ -7,7 +7,7 @@
 
 % Evaluate a fun statement by generating a unique name and mapping the name to
 % to the fun's clauses in the Bindings.
-eval_fun(Clauses, Line, Bindings, World, K) ->
+eval_fun(Clauses, Line, Bindings, Out, ProcState, World, K) ->
     FunName = 
         list_to_atom(
             "#Fun<" ++ 
@@ -24,12 +24,19 @@ eval_fun(Clauses, Line, Bindings, World, K) ->
             {{clauses, Clauses}, Bindings},
             Bindings
         ),
-    cps:applyK({'fun', {FunName, FunArity}}, NewBindings, World, K).
+    cps:applyK(
+        {'fun', {FunName, FunArity}},
+        NewBindings,
+        Out,
+        ProcState,
+        World,
+        K
+    ).
 
 % % Evaluate a call to a fun. Throw badfun error if the called expression
 % % does not evaluate to a fun.
-% eval_fun_call(CallExpr, Args, Bindings, World) ->
-%     FunExpr = eval:eval_expr(CallExpr, Bindings, World),
+% eval_fun_call(CallExpr, Args, Bindings, Out, ProcState, World) ->
+%     FunExpr = eval:eval_expr(CallExpr, Bindings, Out, ProcState, World),
 %     case FunExpr of
 %         {ok, {'fun', {Name, Arity}}, CallBindings} ->
 %             {{clauses, Clauses}, FunBindings} = 
@@ -43,7 +50,7 @@ eval_fun(Clauses, Line, Bindings, World, K) ->
 %                             Clauses, 
 %                             Args,
 %                             FunBindings,
-%                             World
+%                             Out, ProcState, World
 %                         ),
 %                         case FunResult of
 %                             {ok, {'fun', FunTag}, ResultBindings} ->
@@ -80,7 +87,7 @@ eval_fun(Clauses, Line, Bindings, World, K) ->
 
 % % Create the proper bindings and evaluate the fun's body.
 % eval_fun_body([], _, _, _) -> {error, function_clause};
-% eval_fun_body([HdClause | Rest], Args, FunBindings, World) ->
+% eval_fun_body([HdClause | Rest], Args, FunBindings, Out, ProcState, World) ->
 %     {clause, _Line, Param, GuardsList, Body} = HdClause,
 %     LocalBindings = 
 %         functions:create_local_bindings(
@@ -88,11 +95,11 @@ eval_fun(Clauses, Line, Bindings, World, K) ->
 %             Args,
 %             FunBindings,
 %             [],
-%             World
+%             Out, ProcState, World
 %         ),
 %     case LocalBindings of
 %         false ->
-%             eval_fun_body(Rest, Args, FunBindings, World);
+%             eval_fun_body(Rest, Args, FunBindings, Out, ProcState, World);
 %         _ ->
 %             BodyBindings =
 %                         orddict:merge(
@@ -109,16 +116,16 @@ eval_fun(Clauses, Line, Bindings, World, K) ->
 %                                 ),
 %                     case GuardsResult of
 %                         true ->
-%                             eval:eval_exprs(Body, BodyBindings, World);
+%                             eval:eval_exprs(Body, BodyBindings, Out, ProcState, World);
 %                         _ ->
 %                             eval_fun_body(
 %                                 Rest,
 %                                 Args,
 %                                 FunBindings,
-%                                 World
+%                                 Out, ProcState, World
 %                             )
 %                     end;
 %                 _ ->
-%                     eval:eval_exprs(Body, BodyBindings, World)
+%                     eval:eval_exprs(Body, BodyBindings, Out, ProcState, World)
 %             end
 %     end.

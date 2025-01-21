@@ -1,12 +1,12 @@
 -module(cps).
--export([applyK/4, errorK/3]).
+-export([applyK/6, errorK/5]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CPS Implementation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Apply the given continutation K to Result with the given Bindings
-applyK(Result, Bindings, World, K) ->
+applyK(Result, Bindings, Out, ProcState, World, K) ->
     case K of
         {initial_k} ->
             {ok, Result, Bindings};
@@ -16,6 +16,8 @@ applyK(Result, Bindings, World, K) ->
                     eval:eval_exprs(
                         ASTs,
                         PrevBindings,
+                        Out,
+                        ProcState,
                         World,
                         ExprsK
                     )
@@ -27,6 +29,8 @@ applyK(Result, Bindings, World, K) ->
                     eval:eval_expr(
                         Cdr,
                         Bindings0,
+                        Out,
+                        ProcState,
                         World,
                         {cons_merge_k, CarResult, CarBindings, ConsK}
                     )
@@ -47,6 +51,8 @@ applyK(Result, Bindings, World, K) ->
                         CarResult,
                         CdrResult,
                         NewBindigs,
+                        Out,
+                        ProcState,
                         World,
                         ConsK
                     )
@@ -58,6 +64,8 @@ applyK(Result, Bindings, World, K) ->
                     eval:eval_expr(
                         TupleCdr,
                         Bindings0,
+                        Out,
+                        ProcState,
                         World,
                         {tuple_merge_k, CarResult, CarBindings, TupleK}
                     )
@@ -78,6 +86,8 @@ applyK(Result, Bindings, World, K) ->
                         CarResult,
                         CdrResult,
                         NewBindigs,
+                        Out,
+                        ProcState,
                         World,
                         TupleK
                     )
@@ -90,6 +100,8 @@ applyK(Result, Bindings, World, K) ->
                         Expr,
                         RHS,
                         RHSBindings,
+                        Out,
+                        ProcState,
                         World,
                         MatchK
                     )
@@ -102,13 +114,22 @@ applyK(Result, Bindings, World, K) ->
                         LHSTl,
                         RHSTl,
                         Bindings0,
+                        Out,
+                        ProcState,
                         World,
                         {cons_merge_k, HdResult, HdBindings, MatchK}
                     )
                 end
             )(Result, Bindings);
         {match_cons_nil_k, MatchK} ->
-            applyK({cons, [Result]}, Bindings, World, MatchK);
+            applyK(
+                {cons, [Result]},
+                Bindings,
+                Out,
+                ProcState,
+                World,
+                MatchK
+            );
         {match_tuple_k, LHSTl, RHSTl, Bindings0, MatchK} ->
             (
                 fun(HdResult, HdBindings) ->
@@ -116,6 +137,8 @@ applyK(Result, Bindings, World, K) ->
                         LHSTl,
                         RHSTl,
                         Bindings0,
+                        Out,
+                        ProcState,
                         World,
                         {tuple_merge_k, HdResult, HdBindings, MatchK}
                     )
@@ -126,16 +149,37 @@ applyK(Result, Bindings, World, K) ->
                 fun(LHS, NewBindigs) ->
                     case LHS of
                         RHS ->
-                            applyK(LHS, NewBindigs, World, MatchK);
+                            applyK(
+                                LHS,
+                                NewBindigs,
+                                Out,
+                                ProcState,
+                                World,
+                                MatchK
+                            );
                         _ ->
-                            errorK({badmatch, RHS}, World, MatchK)
+                            errorK(
+                                {badmatch, RHS},
+                                Out,
+                                ProcState,
+                                World,
+                                MatchK
+                            )
                     end
                 end
             )(Result, Bindings);
         {op1_k, Op, OpK} ->
             (
                 fun(Operand, OpBindings) ->
-                    eval:eval_op(Op, Operand, OpBindings, World, OpK)
+                    eval:eval_op(
+                        Op,
+                        Operand,
+                        OpBindings,
+                        Out,
+                        ProcState,
+                        World,
+                        OpK
+                    )
                 end
             )(Result, Bindings);
         {op2_expr1_k, Op, Expr2, Bindings0, OpK} ->
@@ -144,6 +188,8 @@ applyK(Result, Bindings, World, K) ->
                     eval:eval_expr(
                         Expr2, 
                         Bindings0,
+                        Out,
+                        ProcState,
                         World,
                         {op2_expr2_k, Op, Result1, Bindings1, OpK}
                     )
@@ -165,6 +211,8 @@ applyK(Result, Bindings, World, K) ->
                         Result1,
                         Result2,
                         NewBindigs, 
+                        Out,
+                        ProcState,
                         World,
                         OpK
                     )
@@ -178,6 +226,8 @@ applyK(Result, Bindings, World, K) ->
                             cases:eval_guards(
                                 Guards,
                                 Bindings0,
+                                Out,
+                                ProcState,
                                 World,
                                 GuardK
                             );
@@ -185,6 +235,8 @@ applyK(Result, Bindings, World, K) ->
                             applyK(
                                 {atom, false},
                                 Bindings0,
+                                Out,
+                                ProcState,
                                 World,
                                 GuardK   
                             )
@@ -199,6 +251,8 @@ applyK(Result, Bindings, World, K) ->
                             eval:eval_exprs(
                                 Body,
                                 Bindings0,
+                                Out,
+                                ProcState,
                                 World,
                                 IfK
                             );
@@ -206,6 +260,8 @@ applyK(Result, Bindings, World, K) ->
                             cases:eval_if(
                                 TlClauses,
                                 Bindings0,
+                                Out,
+                                ProcState,
                                 World,
                                 IfK
                             )
@@ -219,53 +275,61 @@ applyK(Result, Bindings, World, K) ->
                       Value,
                       Clauses,
                       NewBindigs,
+                      Out,
+                      ProcState,
                       World,
                       CaseK  
                     )
                 end
             )(Result, Bindings);
-        {case_match_k, Value, GuardList, Body, Bindings0, TlClauses, CaseK} ->
+        {case_match_k, Value, GList, Body, Bindings0, TlCls, CaseK} ->
             (
-                fun(_, MatchBindings) ->
+                fun(_, MBindings) ->
                     cases:eval_guards(
-                        case GuardList of
+                        case GList of
                             [] -> 
-                                GuardList;
+                                GList;
                             [Guards] -> 
                                 Guards;
                             _ ->
                                 {error, illegal_guard}
                         end,
-                        MatchBindings,
+                        MBindings,
+                        Out,
+                        ProcState,
                         World,
                         {
                             case_guards_k,
                             Value,
                             Body,
-                            MatchBindings,
+                            MBindings,
                             Bindings0,
-                            TlClauses,
+                            TlCls,
                             CaseK
-                        }    
+                        }
                     )
                 end    
             )(Result, Bindings);
-        {case_guards_k, Value, Body, MBindings, Bindings0, TlClauses, CaseK} ->
+        {case_guards_k, Value, Body, MBindings, Bindings0, TlCls, CaseK} ->
             (
-                fun(GuardsResult, _) ->
-                    case GuardsResult of
+                fun(GResult, _) ->
+                    case GResult of
                         {atom, true} ->
                             eval:eval_exprs(
                                 Body,
                                 MBindings,
+                                Out,
+                                ProcState,
                                 World,
                                 CaseK    
                             );
                         _ ->
                             cases:eval_case(
                                 Value,
-                                TlClauses,
+                                TlCls,
                                 Bindings0,
+                                Out,
+                                ProcState,
                                 World,
                                 CaseK    
                             )
@@ -281,6 +345,8 @@ applyK(Result, Bindings, World, K) ->
                                 FName,
                                 lists:reverse(Args),
                                 ArgBindings,
+                                Out,
+                                ProcState,
                                 World,
                                 CallK
                             );
@@ -290,7 +356,7 @@ applyK(Result, Bindings, World, K) ->
                             %     FName, 
                             %     Args,
                             %     ArgBindings,
-                            %     World,
+                            %     Out, ProcState, World,
                             %     CallK
                             % );
                             todo;
@@ -313,12 +379,16 @@ applyK(Result, Bindings, World, K) ->
                             cps:applyK(
                                 [Arg| Results],
                                 NewBindings,
+                                Out,
+                                ProcState,
                                 World,
                                 ArgK);
                         _ ->
                             eval:eval_expr(
                                 hd(Args),
                                 Bindings0,
+                                Out,
+                                ProcState,
                                 World,
                                 {
                                     arg_next_k,
@@ -333,43 +403,43 @@ applyK(Result, Bindings, World, K) ->
                 end    
             )(Result, Bindings);
         _ ->
-            {error, seg_fault}
+            {seg_fault, bad_kont}
     end.
 
-errorK(Exception, World, K) ->
+errorK(Exception, Out, ProcState, World, K) ->
     case K of
         {initial_k} ->
             {error, Exception};
         {exprs_k, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {cons_cdr_k, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {cons_merge_k, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {tuple_cdr_k, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {tuple_merge_k, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {match_k, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {match_cons_k, _, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {match_cons_nil_k, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {match_tuple_k, _, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {match_lhs_k, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {op1_k, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {op2_expr1_k, _, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {op2_expr2_k, _, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {guard_k, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {case_value_k, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {case_match_k, Value, _, _, Bindings0, TlClauses, ErrK}  ->
             case Exception of
                 {badmatch, _} ->
@@ -377,19 +447,22 @@ errorK(Exception, World, K) ->
                         Value,
                         TlClauses,
                         Bindings0,
+                        Out,
+                        ProcState,
                         World,
                         ErrK    
                     );
                 _ ->
                     % TODO: throw an illegal guard error maybe?
+                    % or should it be a seg fault
                     {error, illegal_guard}
             end;
         {case_guards_k, _, _, _, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {call_k, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         {arg_next_k, _, _, _, _, ErrK} ->
-            errorK(Exception, World, ErrK);
+            errorK(Exception, Out, ProcState, World, ErrK);
         _ ->
-            {error, seg_fault}
+            {seg_fault, bad_kont}
     end.
