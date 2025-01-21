@@ -87,6 +87,8 @@ eval_expr(AST, Bindings, World, K) ->
                 Bindings, 
                 World,
                 {case_value_k, Clauses, K});
+        {'call', _, Call, Args} ->
+            functions:eval_calls(Call, Args, Bindings, World, K);
         _ ->
             {error, bad_AST}
     end.
@@ -116,9 +118,9 @@ eval_tuple(CarResult, {tuple, TupleList}, Bindings, World, K) ->
 % Evalute Expr then apply Op to its result
 eval_op(Op, {Type, Value}, Bindings, World, K) ->
     case Op of
-        '-' when Type == integer orelse Type == float ->
+        '-' when Type == integer ->
             cps:applyK({Type, -Value}, Bindings, World, K);
-        '+' when Type == integer orelse Type == float ->
+        '+' when Type == integer ->
             cps:applyK({Type, +Value}, Bindings, World, K);
         'not' when Type == atom, (Value == true orelse Value == false) ->
             cps:applyK({Type, not Value}, Bindings, World, K);

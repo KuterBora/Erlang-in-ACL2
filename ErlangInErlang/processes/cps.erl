@@ -250,7 +250,6 @@ applyK(Result, Bindings, World, K) ->
                     )
                 end    
             )(Result, Bindings);
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         {case_guards_k, Value, Body, MBindings, Bindings0, TlClauses, CaseK} ->
             (
                 fun(GuardsResult, _) ->
@@ -269,6 +268,66 @@ applyK(Result, Bindings, World, K) ->
                                 Bindings0,
                                 World,
                                 CaseK    
+                            )
+                    end
+                end    
+            )(Result, Bindings);
+        {call_k, Call, _Bindings0, CallK} ->
+            (
+                fun(Args, ArgBindings) ->
+                    case Call of
+                        {atom, _, FName} ->
+                            functions:eval_local_call(
+                                FName,
+                                lists:reverse(Args),
+                                ArgBindings,
+                                World,
+                                CallK
+                            );
+                        {remote, _, {atom, _, _MName}, {atom, _, _FName}} ->
+                            % functions:eval_remote_call(
+                            %     MName,
+                            %     FName, 
+                            %     Args,
+                            %     ArgBindings,
+                            %     World,
+                            %     CallK
+                            % );
+                            todo;
+                        _ ->
+                            todo_fun
+                    end
+                end    
+            )(Result, Bindings);
+        {arg_next_k, Results, Bindings0, BindingsAcc, Args, ArgK} ->
+            (
+                fun(Arg, ArgBindings) ->
+                    NewBindings =
+                        orddict:merge(
+                            fun(_, V, _) -> V end,
+                            BindingsAcc,
+                            ArgBindings
+                        ),
+                    case Args of
+                        [] ->
+                            cps:applyK(
+                                [Arg| Results],
+                                NewBindings,
+                                World,
+                                ArgK);
+                        _ ->
+                            eval:eval_expr(
+                                hd(Args),
+                                Bindings0,
+                                World,
+                                {
+                                    arg_next_k,
+                                    [Arg | Results],
+                                    Bindings0,
+                                    NewBindings,
+                                    tl(Args),
+                                    ArgK
+                                }
                             )
                     end
                 end    
@@ -326,6 +385,10 @@ errorK(Exception, World, K) ->
                     {error, illegal_guard}
             end;
         {case_guards_k, _, _, _, _, _, ErrK} ->
+            errorK(Exception, World, ErrK);
+        {call_k, _, _, ErrK} ->
+            errorK(Exception, World, ErrK);
+        {arg_next_k, _, _, _, _, ErrK} ->
             errorK(Exception, World, ErrK);
         _ ->
             {error, seg_fault}
