@@ -124,6 +124,88 @@ eval_match(LHS, RHS, Bindings, Out, ProcState, World, K) ->
 
 % Return the Bindings obtained by macthing LHS to RHS.
 % Throw a badmatch error if match is not sucessful.
+% eval_shadow_match(LHS, RHS, BindingsAcc, Out, ProcState, World, K) ->
+%     case {LHS, RHS} of
+%         {{var, _, '_'}, _} -> 
+%             cps:applyK(
+%                 RHS,
+%                 BindingsAcc,
+%                 Out,
+%                 ProcState,
+%                 World,
+%                 K
+%             ); 
+%         {{var, _, Var}, _} -> 
+%             cps:applyK(
+%                 RHS,
+%                 orddict:store(Var, RHS, BindingsAcc),
+%                 Out,
+%                 ProcState,
+%                 World,
+%                 K
+%             );
+
+%         % {{cons, _, LHS_Hd, LHS_Tl}, {cons, RHS_List}} ->
+%         %     MatchHead = 
+%         %         eval_param_match(
+%         %             LHS_Hd,
+%         %             hd(RHS_List),
+%         %             BindingsAcc,
+%         %             Out, ProcState, World
+%         %         ),
+%         %     case MatchHead of
+%         %         {error, _} ->
+%         %             MatchHead;
+%         %         _ ->
+%         %             case LHS_Tl of
+%         %                 {nil, _} when tl(RHS_List) == [] ->
+%         %                     MatchHead;
+%         %                 _ ->
+%         %                     eval_param_match(
+%         %                         LHS_Tl,
+%         %                         {cons, tl(RHS_List)},
+%         %                         MatchHead,
+%         %                         Out, ProcState, World
+%         %                     )
+%         %             end
+%         %     end;
+%         % {{tuple, L_Line, LTupleList}, {tuple, RTupleList}} ->
+%         %     case {LTupleList, RTupleList} of
+%         %         {[], []} -> 
+%         %             BindingsAcc;
+%         %         _ ->
+%         %             MatchHead = 
+%         %                 eval_param_match(
+%         %                     hd(LTupleList),
+%         %                     hd(RTupleList), 
+%         %                     BindingsAcc,
+%         %                     Out, ProcState, World
+%         %                 ),
+%         %             case MatchHead of
+%         %                 {error, _} -> 
+%         %                     MatchHead;
+%         %                 _ ->
+%         %                     eval_param_match(
+%         %                         {tuple, L_Line, tl(LTupleList)}, 
+%         %                         {tuple, tl(RTupleList)},
+%         %                         MatchHead,
+%         %                         Out, ProcState, World
+%         %                     )
+%         %             end
+%         %     end;
+%         _ ->
+%             eval:eval_expr(
+%                 LHS,
+%                 [],
+%                 Out,
+%                 ProcState,
+%                 World,
+%                 {shadow_match_lhs_k, RHS, BindingsAcc, K}
+%             )
+%     end.
+
+% Return the Bindings obtained by macthing LHS to RHS.
+% Throw a badmatch error if match is not sucessful.
 % eval_param_match(LHS, RHS, BindingsAcc, Out, ProcState, World) ->
 %     case {LHS, RHS} of
 %         {{var, _, '_'}, _} -> 

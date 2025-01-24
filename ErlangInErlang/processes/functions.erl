@@ -1,5 +1,6 @@
 -module(functions).
--export([eval_calls/7, eval_local_call/7]).
+-export([eval_calls/7, eval_local_call/7, eval_remote_call/8]).
+-export([create_local_bindings/8, eval_function_body/7]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  Evaluate Function Calls
@@ -16,46 +17,6 @@ eval_calls(Call, Args, Bindings, Out, ProcState, World, K) ->
         {call_k, Call, Bindings, K}
     ).
 
-% Evaluate remote function calls
-% eval_remote_call(ModuleName, FunctionName, Args, Bindings, OutBox, ProcState, Out, ProcState, World) 
-%         when is_map_key(ModuleName, Out, ProcState, World) ->
-%     Module = maps:get(ModuleName, Out, ProcState, World),
-%     Arity = length(Args),
-%     if
-%         is_map_key({FunctionName, Arity}, Module) ->
-%             Function_Def = maps:get({FunctionName, Arity}, Module),
-%             LocalProcState = ProcState#{module => ModuleName}, 
-%             FunctionResult = eval_function_body(
-%                 Function_Def, 
-%                 Args,
-%                 Bindings,
-%                 OutBox,
-%                 LocalProcState,
-%                 Out, ProcState, World
-%             ),
-%             case FunctionResult of
-%                 {ok, {'fun', FunTag}, FunBindings, NewOutBox} ->
-%                     FunBody = orddict:fetch(FunTag, FunBindings),    
-%                     NewBindings = 
-%                         orddict:store(
-%                             FunTag,
-%                             FunBody,
-%                             Bindings
-%                         ),
-%                     {ok, {'fun', FunTag}, NewBindings, NewOutBox};
-%                 {ok, EvalVal, _, NewOutBox} -> 
-%                     {ok, EvalVal, Bindings, NewOutBox};
-%                 {yield, Receive, Kont, Out} ->
-%                     % need to save procstate
-%                     {yield, Receive, Kont, Out};
-%                 _ ->
-%                     FunctionResult
-%             end;
-%         true ->
-%             {error, undef, OutBox}
-%     end;
-% eval_remote_call(_, _, _, _, OutBox, _, _) -> {error, undef, OutBox}.
-
 % Evaluate each argument in order and return the list of results
 % and the Bindings obtained.
 eval_args(Args, Bindings, Out, ProcState, World, K) when Args == [] ->
@@ -70,83 +31,72 @@ eval_args(Args, Bindings, Out, ProcState, World, K) ->
         {arg_next_k, [], Bindings, Bindings, tl(Args), K}
     ).
 
-% Checks if there is a matching function clause with valid guards, then 
-% evaluates the body.
-% eval_function_body([], _, _, OutBox, _, _) -> {error, function_clause, OutBox};
-% eval_function_body([HdClause | Rest], Args, Bindings, OutBox, ProcState, Out, ProcState, World) ->
-%     {clause, _Line, Param, GuardsList, Body} = HdClause,
-%     % Remark: lhs cannot have receive or send, so no need to worry about OutBox
-%     LocalBindings = create_local_bindings(Param, Args, Bindings, [], ProcState, Out, ProcState, World),
-%     case LocalBindings of
-%         false ->
-%             eval_function_body(Rest, Args, Bindings, OutBox, ProcState, Out, ProcState, World);
-%         _ ->
-%             case GuardsList of
-%                 [Guards] ->
-%                     GuardsResult = cases:eval_guards(
-%                                     Guards,
-%                                     LocalBindings,
-%                                     procs:empty_box(),
-%                                     ProcState,
-%                                     world:world_init()
-%                                 ),
-%                     case GuardsResult of
-%                         true ->
-%                             eval:eval_exprs(Body, LocalBindings, OutBox, ProcState, Out, ProcState, World);
-%                         _ ->
-%                             eval_function_body(
-%                                 Rest,
-%                                 Args,
-%                                 Bindings,
-%                                 OutBox,
-%                                 ProcState,
-%                                 Out, ProcState, World
-%                             )
-%                     end;
-%                 _ ->
-%                     eval:eval_exprs(Body, LocalBindings, OutBox, ProcState, Out, ProcState, World)
-%             end
-%     end.
 
 % Given a list of paramteres and arguments, match each parameter to the
 % corresponidng argumnt and return the new bindings created by the match.
-% create_local_bindings([], [], _, BindingsAcc, _, _) -> BindingsAcc;
-% create_local_bindings(Param, Args, Bindings, BindingsAcc, ProcState, Out, ProcState, World)
-%         when length(Param) == length(Args) ->
-%     TryMatch = 
-%         match:eval_param_match(
-%             hd(Param),
-%             hd(Args),
-%             [],
-%             ProcState,
-%             Out, ProcState, World
-%         ),
-%     MatchedBindings = 
-%         case hd(Args) of
-%             {'fun', FunTag} ->
-%                 FunBody = orddict:fetch(FunTag, Bindings),
-%                 orddict:store(FunTag, FunBody, TryMatch);
-%             _ ->
-%                 TryMatch
-%         end,
-%     case MatchedBindings of
-%         {error, {badmatch, _}, _} ->
-%             false;
-%         _ ->
-%             NewBindings =
-%                 orddict:merge(
-%                     fun(_, V, _) -> V end,
-%                     BindingsAcc,
-%                     MatchedBindings
-%                 ),
-%             create_local_bindings(
-%                 tl(Param),
-%                 tl(Args),
-%                 Bindings,
-%                 NewBindings,
-%                 ProcState,
-%                 Out, ProcState, World)
-%     end.
+% Remark: Bind0 is used to aquire fun bodies.
+% TODO: parameters have to be patterns. No calls or funs.
+create_local_bindings([], [], _, BindAcc, Out, ProcState, World, K) -> 
+    cps:applyK(
+        {atom, bindings},
+        BindAcc,
+        Out,
+        ProcState,
+        World,
+        K
+    );
+create_local_bindings(Param, Args, Bind0, BindAcc, Out, ProcState, World, K) 
+        when length(Param) == length(Args) ->
+    match:eval_match(
+        hd(Param),
+        hd(Args),
+        BindAcc,
+        Out,
+        ProcState,    
+        World,
+        {create_lb_k, tl(Param), tl(Args), Bind0, K}        
+    ).
+
+% Evaluate remote function calls
+eval_remote_call(ModName, FuncName, Args, Bindings, Out, ProcState, World, K)
+        when is_map_key(ModName, World) ->
+    Module = maps:get(ModName, World),
+    Arity = length(Args),
+    case is_map_key({FuncName, Arity}, Module) of
+        true ->
+            FuncDef = maps:get({FuncName, Arity}, Module),
+            FuncProcState = ProcState#{module => ModName}, 
+            eval_function_body(
+                FuncDef, 
+                Args,
+                Bindings,
+                Out,
+                FuncProcState,
+                World,
+                {remote_call_k, Bindings, ProcState, K}
+            );
+        _ ->
+            cps:errorK(undef, Out, World, ProcState, K)
+    end;
+eval_remote_call(_, _, _, _, Out, ProcState, World, K) -> 
+    cps:errorK(undef, Out, World, ProcState, K).
+
+
+% Checks if there is a matching function clause with valid guards, then 
+% evaluates the body.
+eval_function_body([], _, _, Out, ProcState, World, K) ->
+    cps:errorK(function_clause, Out, ProcState, World, K);
+eval_function_body([HdCl | TlCls], Args, Bind0, Out, ProcState, World, K) ->
+     {clause, _, Param, GList, Body} = HdCl,
+     create_local_bindings(
+        Param,
+        Args,
+        Bind0,
+        [],
+        Out,
+        ProcState,
+        World,
+        {func_body_k, Body, GList, TlCls, Args, Bind0, K}).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -487,6 +437,14 @@ eval_local_call(FName, Args, Bindings, Out, ProcState, World, K) ->
                     cps:errorK(badarg, Out, ProcState, World, K)
             end;
         _ ->
-            % eval_remote_call(maps:get(module, ProcState), FName, Args, Bindings, OutBox, ProcState, Out, ProcState, World)
-            todo
+            eval_remote_call(
+                maps:get(module, ProcState),
+                FName,
+                Args,
+                Bindings,
+                Out,
+                ProcState,
+                World,
+                K
+            )
     end.

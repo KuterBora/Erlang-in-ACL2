@@ -7,7 +7,11 @@ test_all() ->
   simple_tests1(),
   simple_tests2(),
   match_tests(),
-  test_bif().
+  test_bif(),
+  test_local_bindings(),
+  test_worlds(),
+  test_bindings(),
+  test_fun().
 
 simple_tests1() ->
   % integers and arithmetic
@@ -179,93 +183,6 @@ test_bif() ->
   ?assertEqual({ok, {integer, -1}, []}, eval:eval("min(-1, 2).", [])),
   ?assertEqual({ok, {cons, [{integer, 2}, {integer, 3}]}, []}, eval:eval("tl([1, 2, 3]).", [])).
 
-% Tests for fun expressions
-% test_fun() ->
-%   % simple fun, no arguments
-%   ?assertMatch({ok, {'fun', Name}, [{Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
-%     eval:eval("fun() -> 1 end.", [])),
-
-%   % bind to a variable
-%   ?assertMatch({ok, {'fun', Name}, [{'X', {'fun', Name}}, 
-%     {Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
-%     eval:eval("X = fun() -> 1 end.", [])),
-
-%   % call to simple fun
-%   ?assertMatch({ok, {integer, 1}, [{'X', {'fun', Name}}, 
-%     {Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
-%     eval:eval("X = fun() -> 1 end, X().", [])),
-
-%   % call right away (fun())()
-%   ?assertMatch({ok, {integer, 1}, [{{_, 0}, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
-%     eval:eval("(fun() -> 1 end)().", [])),
-
-%   % single argument
-%   ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}},
-%     {Name, {{clauses,[{clause,1,[{var,1,'X'}],[], [{op,1,'+',{var,1,'X'},{integer,1,1}}]}]}, []}}]},
-%     eval:eval("X = fun(X) -> X + 1 end, X(2).", [])),
-
-%   % many arguments
-%   ?assertMatch({ok, {integer, 6}, [ {'X', {'fun', Name}},
-%     {Name, {{clauses,[{clause,1, [{var,1,'X'},{var,1,'Y'},{var,1,'Z'}], [],
-%     [{op,1,'+', {op,1,'+',{var,1,'X'},{var,1,'Y'}}, {var,1,'Z'}}]}]}, []}}]},
-%     eval:eval("X = fun(X, Y, Z) -> X + Y + Z end, X(1, 2, 3).", [])),
-
-%   % pattern matching
-%   ?assertMatch({ok, {integer, 1}, [{'X', {'fun', Name}},
-%     {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
-%     {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
-%     {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
-%     eval:eval("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(1).", [])),
-%   ?assertMatch({ok, {integer, 2}, [{'X', {'fun', Name}},
-%     {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
-%     {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
-%     {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
-%     eval:eval("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(2).", [])),
-%   ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}},
-%     {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
-%     {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
-%     {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
-%     eval:eval("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(3).", [])),  
-%   ?assertMatch({ok, {integer, 1}, [{'X', {cons, [{'fun', Name}]}}, {'Y', {'fun', Name}}, 
-%     {Name, {_, []}}]},
-%     eval:eval("X = [fun() -> 1 end], [Y] = X, Y().", [])),
-
-%   % bindings received during creation being used in the fun
-%   ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}}, {'Y', {integer, 1}}, {Name, _}]},
-%     eval:eval("Y = 1, X = fun(X) -> X + Y end, X(2).", [])),
-%   ?assertMatch({ok, {integer, 15}, [{'Y', {'fun', _}}, {'Z', {'fun', _}},
-%     {{_, 0}, _}, {{_, 0}, _}]},
-%     eval:eval(
-%       "Z = fun() -> Y = 3, Y * 5 end, 
-%        Y = fun() -> Z end,
-%        (Y())().", [])),
-  
-%   % simple functions
-%   FunModule_temp1 = world:module_add_function_string(#{}, square, 1, 
-%     "square(X) -> Y = fun(X) -> X * X end, Y(X)."),
-%   FunModule_temp2 = world:module_add_function_string(FunModule_temp1, adder, 1, "adder(X) -> fun(Y) -> X + Y end."),
-%   FunModule = world:module_add_function_string(FunModule_temp2, apply, 2, "apply(X, Y) -> X(Y)."),
-%   FunWorld = world:world_add_module(world:world_init(), fun_module, FunModule),
-
-%   ?assertMatch({ok, {integer, 100}, []}, 
-%     eval:eval("fun_module:square(10).", [], FunWorld)),
-%   ?assertMatch({ok, {integer, 5}, [{'X', _}, {_,  _}]}, 
-%     eval:eval("X = fun_module:adder(3), X(2).", [], FunWorld)),
-%   ?assertMatch({ok, {integer, 5}, [{'X', _}, {_,  _}]}, 
-%     eval:eval("X = fun_module:adder(3), fun_module:apply(X, 2).", [], FunWorld)),
-%   ?assertMatch({ok, {integer, 3}, [_]}, 
-%     eval:eval("fun_module:apply(fun(X) -> X + 1 end, 2).", [], FunWorld)),
-%   ?assertMatch({ok, {integer, 5}, [{'X', _}, {_, _}]}, 
-%     eval:eval("X = fun_module:adder(3), fun_module:apply(X, 2).", [], FunWorld)),
-  
-%   % extra tests
-%   ?assertMatch({ok, {integer, 5}, [_, _, _]},
-%     eval:eval("X = fun(X) -> X + Y + 1 end, X(2).", [{'Y', {integer, 2}}])),
-%   ?assertMatch({ok, {integer, 5}, [_, _, _]},
-%     eval:eval("X = fun(Z) -> Z + 3 end, X(2).", [{'Z', {integer, 100}}])),
-%   ?assertMatch({ok, {integer, 5}, [_, _]},
-%     eval:eval("X = fun(Z = 5) -> Z end, X(5).", [])).
-
 % Tests for evaluating match for lists and tuples as well as Pattern Matching
 match_tests() ->
   ?assertEqual({ok, {cons, [{integer, 7}, {integer, 8}, {integer, 9}, {atom, abc}]},
@@ -387,135 +304,231 @@ match_tests() ->
     eval:eval("[{A, [B, C]}, [D | [E]], {_, {F}, _}, 9, 10] 
       = [{1, [2, 3]}, [4, 5], {6, {7}, 8}, 9, 10].", [{'B', {integer, 2}}])).
   
+test_local_bindings() ->
+  ?assertEqual({ok, {atom, bindings}, []}, functions:create_local_bindings([], [], [], [], 
+    procs:empty_box(), procs:init_state(), world:world_init(), {initial_k})),
+  ?assertEqual({ok, {atom, bindings}, [{'X', {integer, 3}}]}, functions:create_local_bindings([{var, 1, 'X'}], [{integer, 3}],
+    [], [], procs:empty_box(), procs:init_state(), world:world_init(), {initial_k})),
+  ?assertEqual({ok, {atom, bindings}, [{'X', {integer, 3}}]}, functions:create_local_bindings(
+    [{cons, 1, {var, 1, 'X'}, {nil, 1}}], [{cons, [{integer, 3}]}],
+    [], [], procs:empty_box(), procs:init_state(), world:world_init(), {initial_k})).
+
 % Tests for evaluating function calls/guards
-% test_world() ->
-%   % world_init
-%   ?assertEqual({ok, {atom, true}, [{'X', {integer, 3}}]}, eval:eval("is_integer(X).", [{'X', {integer, 3}}])),
-%   ?assertEqual({ok, {atom, true}, [{'X', {integer, 5}}]}, 
-%     eval:eval("is_integer(X).", [{'X', {integer, 5}}], world:world_init())),
-%   ?assertEqual({ok, {atom, false}, []}, eval:eval("is_integer(abc).", [], world:world_init())),
-%   ?assertEqual({ok, {atom, head}, []}, eval:eval("hd([head, tail]).", [], world:world_init())),
-%   ?assertEqual({ok, {cons, [{atom, tail}]}, []}, eval:eval("tl([head, tail]).", [], world:world_init())),
+test_worlds() ->
+  % world_init
+  ?assertEqual({ok, {atom, true}, [{'X', {integer, 3}}]}, eval:eval("is_integer(X).", [{'X', {integer, 3}}])),
+  ?assertEqual({ok, {atom, true}, [{'X', {integer, 5}}]}, 
+    eval:eval("is_integer(X).", [{'X', {integer, 5}}], world:world_init())),
+  ?assertEqual({ok, {atom, false}, []}, eval:eval("is_integer(abc).", [], world:world_init())),
+  ?assertEqual({ok, {atom, head}, []}, eval:eval("hd([head, tail]).", [], world:world_init())),
+  ?assertEqual({ok, {cons, [{atom, tail}]}, []}, eval:eval("tl([head, tail]).", [], world:world_init())),
 
-%   % simple functions
-%   SimpleModule_temp1 = world:module_add_function_string(#{}, greater, 2, "greater(X, Y) -> X > Y."),
-%   SimpleModule_temp2 = world:module_add_function_string(SimpleModule_temp1, sum, 2, "sum(X, Y) -> X + Y."),
-%   SimpleModule_temp3 = world:module_add_function_string(SimpleModule_temp2, sum, 3, "sum(X, Y, Z) -> X + Y + Z."),
-%   SimpleModule = world:module_add_function_string(SimpleModule_temp3, concat, 2, "concat(X, Y) -> X ++ Y."),
-%   SimpleWorld = world:world_add_module(world:world_init(), simple_module, SimpleModule),
+  % simple functions
+  SimpleModule_temp1 = world:module_add_function_string(#{}, greater, 2, "greater(X, Y) -> X > Y."),
+  SimpleModule_temp2 = world:module_add_function_string(SimpleModule_temp1, sum, 2, "sum(X, Y) -> X + Y."),
+  SimpleModule_temp3 = world:module_add_function_string(SimpleModule_temp2, sum, 3, "sum(X, Y, Z) -> X + Y + Z."),
+  SimpleModule = world:module_add_function_string(SimpleModule_temp3, concat, 2, "concat(X, Y) -> X ++ Y."),
+  SimpleWorld = world:world_add_module(world:world_init(), simple_module, SimpleModule),
 
-%   ?assertEqual({ok, {atom, true}, []}, eval:eval("simple_module:greater(10, 5).", [], SimpleWorld)),
-%   ?assertEqual({ok, {integer, 9}, []}, eval:eval("simple_module:sum(5, 4).", [], SimpleWorld)),
-%   ?assertEqual({ok, {integer, 15}, []}, eval:eval("simple_module:sum(5, 4, 6).", [], SimpleWorld)),
-%   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []},
-%      eval:eval("simple_module:concat([1, 2], [3, 4]).", [], SimpleWorld)),
-%   ?assertEqual({ok, {integer, 10}, [{'X', {integer, 3}}, {'Y', {integer, 7}}]}, 
-%     eval:eval("simple_module:sum(X, Y).", [{'X', {integer, 3}}, {'Y', {integer, 7}}], SimpleWorld)),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("simple_module:greater(11, 10).", [], SimpleWorld)),
+  ?assertEqual({ok, {integer, 9}, []}, eval:eval("simple_module:sum(5, 4).", [], SimpleWorld)),
+  ?assertEqual({ok, {integer, 15}, []}, eval:eval("simple_module:sum(5, 4, 6).", [], SimpleWorld)),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []},
+     eval:eval("simple_module:concat([1, 2], [3, 4]).", [], SimpleWorld)),
+  ?assertEqual({ok, {integer, 10}, [{'X', {integer, 3}}, {'Y', {integer, 7}}]}, 
+    eval:eval("simple_module:sum(X, Y).", [{'X', {integer, 3}}, {'Y', {integer, 7}}], SimpleWorld)),
 
-%   % functions with lists
-%   ListModule = world:module_add_function_string(#{}, concat, 2, "concat(X, Y) -> X ++ Y."),
-%   ListWorld = world:world_add_module(SimpleWorld, list_module, ListModule),
+  % functions with lists
+  ListModule = world:module_add_function_string(#{}, concat, 2, "concat(X, Y) -> X ++ Y."),
+  ListWorld = world:world_add_module(SimpleWorld, list_module, ListModule),
 
-%   ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, []}, eval:eval("list_module:concat([a, b], [c]).", [], ListWorld)),
+  ?assertEqual({ok, {cons, [{atom, a}, {atom, b}, {atom, c}]}, []}, eval:eval("list_module:concat([a, b], [c]).", [], ListWorld)),
   
-%   % functions with guards
-%   GuardModule = world:module_add_function_string(#{}, zero , 1,
-%     "zero(X) when X < 0 -> lesser;
-%      zero(X) when X == 0 -> zero;
-%      zero(X) when X > 0 -> greater."),
-%   GuardWorld = world:world_add_module(ListWorld, guard_module, GuardModule),
+  % functions with guards
+  GuardModule = world:module_add_function_string(#{}, zero , 1,
+    "zero(X) when X < 0 -> lesser;
+     zero(X) when X == 0 -> zero;
+     zero(X) when X > 0 -> greater."),
+  GuardWorld = world:world_add_module(ListWorld, guard_module, GuardModule),
 
-%   ?assertEqual({ok, {atom, lesser}, []}, eval:eval("guard_module:zero(-5).", [], GuardWorld)),
-%   ?assertEqual({ok, {atom, zero}, []}, eval:eval("guard_module:zero(0).", [], GuardWorld)),
-%   ?assertEqual({ok, {atom, greater}, []}, eval:eval("guard_module:zero(6).", [], GuardWorld)),
+  ?assertEqual({ok, {atom, lesser}, []}, eval:eval("guard_module:zero(-5).", [], GuardWorld)),
+  ?assertEqual({ok, {atom, zero}, []}, eval:eval("guard_module:zero(0).", [], GuardWorld)),
+  ?assertEqual({ok, {atom, greater}, []}, eval:eval("guard_module:zero(6).", [], GuardWorld)),
 
-%   % recursive functions
-%   RecursiveModule = world:module_add_function_string(#{}, guarded_fac, 1,
-%     "guarded_fac(N) when N == 0 -> 1;\nguarded_fac(N) when is_integer(N), 0 < N -> N * guarded_fac(N-1).\n"),
-%   RecursiveWorld = world:world_add_module(GuardWorld, recursive_module, RecursiveModule),
-%   ?assertEqual({ok, {integer, 1}, []}, eval:eval("recursive_module:guarded_fac(0).", [], RecursiveWorld)),
-%   ?assertEqual({ok, {integer, 6}, []}, eval:eval("recursive_module:guarded_fac(3).", [], RecursiveWorld)),
-%   ?assertEqual({ok, {integer, 5040}, []}, eval:eval("recursive_module:guarded_fac(7).", [], RecursiveWorld)),
-%   ?assertEqual({error, function_clause}, 
-%     eval:eval("recursive_module:guarded_fac(-2).", [], RecursiveWorld)),
+  % recursive functions
+  RecursiveModule = world:module_add_function_string(#{}, guarded_fac, 1,
+    "guarded_fac(N) when N == 0 -> 1;\nguarded_fac(N) when is_integer(N), 0 < N -> N * guarded_fac(N-1).\n"),
+  RecursiveWorld = world:world_add_module(GuardWorld, recursive_module, RecursiveModule),
+  ?assertEqual({ok, {integer, 1}, []}, eval:eval("recursive_module:guarded_fac(0).", [], RecursiveWorld)),
+  ?assertEqual({ok, {integer, 6}, []}, eval:eval("recursive_module:guarded_fac(3).", [], RecursiveWorld)),
+  ?assertEqual({ok, {integer, 5040}, []}, eval:eval("recursive_module:guarded_fac(7).", [], RecursiveWorld)),
+  ?assertEqual({error, function_clause}, 
+    eval:eval("recursive_module:guarded_fac(-2).", [], RecursiveWorld)),
 
-%   % purging a module
-%   PurgedWorld = world:world_purge_module(RecursiveWorld, recursive_module),
+  % purging a module
+  PurgedWorld = world:world_purge_module(RecursiveWorld, recursive_module),
   
-%   % Factorial at Last
-%   FactorialModule = world:module_add_function_string(RecursiveModule, fac, 1,
-%     "fac(0) -> 1;\n fac(N) when is_integer(N), 0 < N -> N * fac(N-1).\n"),
-%   FactorialWorld = world:world_add_module(PurgedWorld, factorial_module, FactorialModule),
+  % Factorial at Last
+  FactorialModule = world:module_add_function_string(RecursiveModule, fac, 1,
+    "fac(0) -> 1;\n fac(N) when is_integer(N), 0 < N -> N * fac(N-1).\n"),
+  FactorialWorld = world:world_add_module(PurgedWorld, factorial_module, FactorialModule),
 
-%   ?assertEqual({ok, {integer, 1}, []}, eval:eval("factorial_module:fac(0).", [], FactorialWorld)),
-%   ?assertEqual({ok, {integer, 6}, []}, eval:eval("factorial_module:fac(3).", [], FactorialWorld)),
-%   ?assertEqual({ok, {integer, 5040}, []}, eval:eval("factorial_module:fac(7).", [], FactorialWorld)),
-%   ?assertEqual({error, function_clause}, 
-%     eval:eval("factorial_module:fac(-2).", [], FactorialWorld)),
+  ?assertEqual({ok, {integer, 1}, []}, eval:eval("factorial_module:fac(0).", [], FactorialWorld)),
+  ?assertEqual({ok, {integer, 6}, []}, eval:eval("factorial_module:fac(3).", [], FactorialWorld)),
+  ?assertEqual({ok, {integer, 5040}, []}, eval:eval("factorial_module:fac(7).", [], FactorialWorld)),
+  ?assertEqual({error, function_clause}, 
+    eval:eval("factorial_module:fac(-2).", [], FactorialWorld)),
   
-%   % more tests on functions
-%   Test_Module_1 = world:module_add_function_string(#{}, unwrap, 1, "unwrap({A}) -> A."),
-%   Test_Module_2 = world:module_add_function_string(Test_Module_1, unwrap_and_add, 2, "unwrap_and_add({A}, {B}) -> A + B."),
-%   Test_Module_3 = world:module_add_function_string(Test_Module_2, recurse, 1, 
-%     "recurse(List) ->
-%       if 
-%         List /= [] -> 
-%           Head = hd(List),
-%           Tail = tl(List),
-%           unwrap(Head) + recurse(Tail);
-%         true ->
-%           0
-%       end."),
-%   Test_World = world:world_add_module(world:world_init(), test_module, Test_Module_3),
+  % more tests on functions
+  Test_Module_1 = world:module_add_function_string(#{}, unwrap, 1, "unwrap({A}) -> A."),
+  Test_Module_2 = world:module_add_function_string(Test_Module_1, unwrap_and_add, 2, "unwrap_and_add({A}, {B}) -> A + B."),
+  Test_Module_3 = world:module_add_function_string(Test_Module_2, recurse, 1, 
+    "recurse(List) ->
+      if 
+        List /= [] -> 
+          Head = hd(List),
+          Tail = tl(List),
+          unwrap(Head) + recurse(Tail);
+        true ->
+          0
+      end."),
+  Test_World = world:world_add_module(world:world_init(), test_module, Test_Module_3),
 
-%   ?assertEqual({ok, {integer, 1}, []}, eval:eval("test_module:unwrap({1}).", [], Test_World)),
-%   ?assertEqual({ok, {integer, 5}, []}, eval:eval("test_module:unwrap({5}).", [], Test_World)),
-%   ?assertEqual({ok, {integer, 12}, []}, eval:eval("test_module:unwrap_and_add({5}, {7}).", [], Test_World)),
-%   ?assertEqual({ok, {integer, 0}, []}, eval:eval("test_module:recurse([]).", [], Test_World)),
-%   ?assertEqual({ok, {integer, 11}, []}, eval:eval("test_module:recurse([{5}, {6}]).", [], Test_World)),
-%   ?assertEqual({ok, {integer, 19}, []}, eval:eval("test_module:recurse([{5}, {6}, {8}]).", [], Test_World)).
+  ?assertEqual({ok, {integer, 1}, []}, eval:eval("test_module:unwrap({1}).", [], Test_World)),
+  ?assertEqual({ok, {integer, 5}, []}, eval:eval("test_module:unwrap({5}).", [], Test_World)),
+  ?assertEqual({ok, {integer, 12}, []}, eval:eval("test_module:unwrap_and_add({5}, {7}).", [], Test_World)),
+  ?assertEqual({ok, {integer, 0}, []}, eval:eval("test_module:recurse([]).", [], Test_World)),
+  ?assertEqual({ok, {integer, 11}, []}, eval:eval("test_module:recurse([{5}, {6}]).", [], Test_World)),
+  ?assertEqual({ok, {integer, 19}, []}, eval:eval("test_module:recurse([{5}, {6}, {8}]).", [], Test_World)).
 
-% % test the scope of bindings
-% test_bindings() ->
-%   % basic binding usage/creation
-%   ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}]}, eval:eval("X.", [{'X', {integer, 3}}])),
-%   ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}]}, eval:eval("X = 3.", [{'X', {integer, 3}}])),
-%   ?assertEqual({error, {badmatch, {integer, 2}}}, eval:eval("X = 2.", [{'X', {integer, 3}}])),
-%   ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}, {'Y', {integer, 3}}]}, 
-%     eval:eval("X = Y.", [{'X', {integer, 3}}, {'Y', {integer, 3}}])),
-%   ?assertEqual({ok, {atom, true}, [{'X', {integer, 8}}]}, eval:eval("X = 8, 4 + 5, true.", [])),
+% test the scope of bindings
+test_bindings() ->
+  % basic binding usage/creation
+  ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}]}, eval:eval("X.", [{'X', {integer, 3}}])),
+  ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}]}, eval:eval("X = 3.", [{'X', {integer, 3}}])),
+  ?assertEqual({error, {badmatch, {integer, 2}}}, eval:eval("X = 2.", [{'X', {integer, 3}}])),
+  ?assertEqual({ok, {integer, 3}, [{'X', {integer, 3}}, {'Y', {integer, 3}}]}, 
+    eval:eval("X = Y.", [{'X', {integer, 3}}, {'Y', {integer, 3}}])),
+  ?assertEqual({ok, {atom, true}, [{'X', {integer, 8}}]}, eval:eval("X = 8, 4 + 5, true.", [])),
 
-%   % functions that use/create bindings
-%   Module_temp = world:module_add_function_string(#{}, greater, 2, "greater(X, Y) -> X > Y."),
-%   Module = world:module_add_function_string(Module_temp, tautology, 2, 
-%     "tautology(X, Y) when is_integer(X), is_integer(Y) -> 
-%       A = X,
-%       B = Y,
-%       X + Y;
-%     tautology([Hdx | Tlx], [Hdy | Tly]) ->
-%       X = [Hdx | Tlx],
-%       Y = [Hdy | Tly],
-%       X ++ Y;
-%     tautology(_, _) ->
-%       empty."
-%   ),
-%   World = world:world_add_module(world:world_init(), module, Module),
+  % functions that use/create bindings
+  Module_temp = world:module_add_function_string(#{}, greater, 2, "greater(X, Y) -> X > Y."),
+  Module = world:module_add_function_string(Module_temp, tautology, 2, 
+    "tautology(X, Y) when is_integer(X), is_integer(Y) -> 
+      A = X,
+      B = Y,
+      X + Y;
+    tautology([Hdx | Tlx], [Hdy | Tly]) ->
+      X = [Hdx | Tlx],
+      Y = [Hdy | Tly],
+      X ++ Y;
+    tautology(_, _) ->
+      empty."
+  ),
+  World = world:world_add_module(world:world_init(), module, Module),
 
-%   ?assertEqual({ok, {atom, true}, []}, eval:eval("module:greater(10, 5).", [], World)),
-%   ?assertEqual({ok, {atom, true}, [{'A', {integer, 8}}]}, eval:eval("module:greater(A, 7).", [{'A', {integer, 8}}], World)),
-%   ?assertEqual({ok, {atom, false}, [{'X', {integer, 1}}, {'Y', {integer, 2}}]}, 
-%     eval:eval("module:greater(X, Y).", [{'X', {integer, 1}}, {'Y', {integer, 2}}], World)),
+  ?assertEqual({ok, {atom, true}, []}, eval:eval("module:greater(10, 5).", [], World)),
+  ?assertEqual({ok, {atom, true}, [{'A', {integer, 8}}]}, eval:eval("module:greater(A, 7).", [{'A', {integer, 8}}], World)),
+  ?assertEqual({ok, {atom, false}, [{'X', {integer, 1}}, {'Y', {integer, 2}}]}, 
+    eval:eval("module:greater(X, Y).", [{'X', {integer, 1}}, {'Y', {integer, 2}}], World)),
 
-%   ?assertEqual({ok, {integer, 4}, []}, eval:eval("module:tautology(2, 2).", [], World)),
-%   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []}, 
-%     eval:eval("module:tautology([1, 2], [3, 4]).", [], World)),
-%   ?assertEqual({ok, {integer, 4}, [{'X', {integer, 2}}, {'Y', {integer, 2}}]}, 
-%     eval:eval("module:tautology(X, Y).", [{'X', {integer, 2}}, {'Y', {integer, 2}}], World)),
-%   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]},
-%     [{'X', {cons, [{integer, 1}, {integer, 2}]}}, {'Y', {cons, [{integer, 3}, {integer, 4}]}}]}, 
-%    eval:eval("module:tautology(X, Y).", 
-%     [{'X', {cons, [{integer, 1}, {integer, 2}]}}, {'Y', {cons, [{integer, 3}, {integer, 4}]}}], World)),
-%   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]},
-%     [{'Hdx', {integer, 1}}, {'Hdy', {integer, 3}}, {'Tlx', {cons, [{integer, 2}]}}, {'Tly', {cons, [{integer, 4}]}}]}, 
-%    eval:eval("module:tautology([Hdx | Tlx], [Hdy | Tly]).", 
-%     [{'Hdx', {integer, 1}}, {'Hdy', {integer, 3}}, {'Tlx', {cons, [{integer, 2}]}}, {'Tly', {cons, [{integer, 4}]}}], World)).
+  ?assertEqual({ok, {integer, 4}, []}, eval:eval("module:tautology(2, 2).", [], World)),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]}, []}, 
+    eval:eval("module:tautology([1, 2], [3, 4]).", [], World)),
+  ?assertEqual({ok, {integer, 4}, [{'X', {integer, 2}}, {'Y', {integer, 2}}]}, 
+    eval:eval("module:tautology(X, Y).", [{'X', {integer, 2}}, {'Y', {integer, 2}}], World)),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]},
+    [{'X', {cons, [{integer, 1}, {integer, 2}]}}, {'Y', {cons, [{integer, 3}, {integer, 4}]}}]}, 
+   eval:eval("module:tautology(X, Y).", 
+    [{'X', {cons, [{integer, 1}, {integer, 2}]}}, {'Y', {cons, [{integer, 3}, {integer, 4}]}}], World)),
+  ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}, {integer, 4}]},
+    [{'Hdx', {integer, 1}}, {'Hdy', {integer, 3}}, {'Tlx', {cons, [{integer, 2}]}}, {'Tly', {cons, [{integer, 4}]}}]}, 
+   eval:eval("module:tautology([Hdx | Tlx], [Hdy | Tly]).", 
+    [{'Hdx', {integer, 1}}, {'Hdy', {integer, 3}}, {'Tlx', {cons, [{integer, 2}]}}, {'Tly', {cons, [{integer, 4}]}}], World)).
+
+% Tests for fun expressions
+test_fun() ->
+  % simple fun, no arguments
+  ?assertMatch({ok, {'fun', Name}, [{Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
+    eval:eval("fun() -> 1 end.", [])),
+
+  % bind to a variable
+  ?assertMatch({ok, {'fun', Name}, [{'X', {'fun', Name}}, 
+    {Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
+    eval:eval("X = fun() -> 1 end.", [])),
+
+  % call to simple fun
+  ?assertMatch({ok, {integer, 1}, [{'X', {'fun', Name}}, 
+    {Name, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
+    eval:eval("X = fun() -> 1 end, X().", [])),
+
+  % call right away (fun())()
+  ?assertMatch({ok, {integer, 1}, [{{_, 0}, {{clauses, [{clause,1,[],[],[{integer,1,1}]}]}, []}}]},
+    eval:eval("(fun() -> 1 end)().", [])),
+
+  % single argument
+  ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1,[{var,1,'X'}],[], [{op,1,'+',{var,1,'X'},{integer,1,1}}]}]}, []}}]},
+    eval:eval("X = fun(X) -> X + 1 end, X(2).", [])),
+
+  % many arguments
+  ?assertMatch({ok, {integer, 6}, [ {'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1, [{var,1,'X'},{var,1,'Y'},{var,1,'Z'}], [],
+    [{op,1,'+', {op,1,'+',{var,1,'X'},{var,1,'Y'}}, {var,1,'Z'}}]}]}, []}}]},
+    eval:eval("X = fun(X, Y, Z) -> X + Y + Z end, X(1, 2, 3).", [])),
+
+  % pattern matching
+  ?assertMatch({ok, {integer, 1}, [{'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
+    {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
+    {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
+    eval:eval("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(1).", [])),
+  ?assertMatch({ok, {integer, 2}, [{'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
+    {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
+    {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
+    eval:eval("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(2).", [])),
+  ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}},
+    {Name, {{clauses,[{clause,1,[{integer,1,1}],[],[{integer,1,1}]},
+    {clause,1,[{integer,1,2}],[],[{integer,1,2}]},
+    {clause,1,[{var,1,'_'}],[],[{integer,1,3}]}]}, []}}]},
+    eval:eval("X = fun(1) -> 1; (2) -> 2; (_) -> 3 end, X(3).", [])),  
+  ?assertMatch({ok, {integer, 1}, [{'X', {cons, [{'fun', Name}]}}, {'Y', {'fun', Name}}, 
+    {Name, {_, []}}]},
+    eval:eval("X = [fun() -> 1 end], [Y] = X, Y().", [])),
+
+  % bindings received during creation being used in the fun
+  ?assertMatch({ok, {integer, 3}, [{'X', {'fun', Name}}, {'Y', {integer, 1}}, {Name, _}]},
+    eval:eval("Y = 1, X = fun(X) -> X + Y end, X(2).", [])),
+  ?assertMatch({ok, {integer, 15}, [{'Y', {'fun', _}}, {'Z', {'fun', _}},
+    {{_, 0}, _}, {{_, 0}, _}]},
+    eval:eval(
+      "Z = fun() -> Y = 3, Y * 5 end, 
+       Y = fun() -> Z end,
+       (Y())().", [])),
+  
+  % simple functions
+  FunModule_temp1 = world:module_add_function_string(#{}, square, 1, 
+    "square(X) -> Y = fun(X) -> X * X end, Y(X)."),
+  FunModule_temp2 = world:module_add_function_string(FunModule_temp1, adder, 1, "adder(X) -> fun(Y) -> X + Y end."),
+  FunModule = world:module_add_function_string(FunModule_temp2, apply, 2, "apply(X, Y) -> X(Y)."),
+  FunWorld = world:world_add_module(world:world_init(), fun_module, FunModule),
+
+  ?assertMatch({ok, {integer, 100}, []}, 
+    eval:eval("fun_module:square(10).", [], FunWorld)),
+  ?assertMatch({ok, {integer, 5}, [{'X', _}, {_,  _}]}, 
+    eval:eval("X = fun_module:adder(3), X(2).", [], FunWorld)),
+  ?assertMatch({ok, {integer, 5}, [{'X', _}, {_,  _}]}, 
+    eval:eval("X = fun_module:adder(3), fun_module:apply(X, 2).", [], FunWorld)),
+  ?assertMatch({ok, {integer, 3}, [_]}, 
+    eval:eval("fun_module:apply(fun(X) -> X + 1 end, 2).", [], FunWorld)),
+  ?assertMatch({ok, {integer, 5}, [{'X', _}, {_, _}]}, 
+    eval:eval("X = fun_module:adder(3), fun_module:apply(X, 2).", [], FunWorld)),
+  
+  % extra tests
+  ?assertMatch({ok, {integer, 5}, [_, _, _]},
+    eval:eval("X = fun(X) -> X + Y + 1 end, X(2).", [{'Y', {integer, 2}}])),
+  ?assertMatch({ok, {integer, 5}, [_, _, _]},
+    eval:eval("X = fun(Z) -> Z + 3 end, X(2).", [{'Z', {integer, 100}}])),
+  ?assertMatch({ok, {integer, 5}, [_, _]},
+    eval:eval("X = fun(Z = 5) -> Z end, X(5).", [])).

@@ -423,8 +423,7 @@ eval_op(Op, {T1, R1}, {T2, R2}, Bindings, Out, ProcState, World, K) ->
                 K
             );              
         _ ->
-            % TODO: seperate unexisting operation from badarg errors
-            cps:errorK(badarg, Out, ProcState, World, K)
+            cps:errorK(badast, Out, ProcState, World, K)
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

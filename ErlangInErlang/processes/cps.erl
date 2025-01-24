@@ -290,9 +290,7 @@ applyK(Result, Bindings, Out, ProcState, World, K) ->
                             [] -> 
                                 GList;
                             [Guards] -> 
-                                Guards;
-                            _ ->
-                                {error, illegal_guard}
+                                Guards
                         end,
                         MBindings,
                         Out,
@@ -336,7 +334,7 @@ applyK(Result, Bindings, Out, ProcState, World, K) ->
                     end
                 end    
             )(Result, Bindings);
-        {call_k, Call, _Bindings0, CallK} ->
+        {call_k, Call, Bindings0, CallK} ->
             (
                 fun(Args, ArgBindings) ->
                     case Call of
@@ -350,18 +348,26 @@ applyK(Result, Bindings, Out, ProcState, World, K) ->
                                 World,
                                 CallK
                             );
-                        {remote, _, {atom, _, _MName}, {atom, _, _FName}} ->
-                            % functions:eval_remote_call(
-                            %     MName,
-                            %     FName, 
-                            %     Args,
-                            %     ArgBindings,
-                            %     Out, ProcState, World,
-                            %     CallK
-                            % );
-                            todo;
+                        {remote, _, {atom, _, MName}, {atom, _, FName}} ->
+                            functions:eval_remote_call(
+                                MName,
+                                FName, 
+                                lists:reverse(Args),
+                                ArgBindings,
+                                Out, ProcState, World,
+                                CallK
+                            );
                         _ ->
-                            todo_fun
+                            funs:eval_fun_call(
+                                Call,
+                                lists:reverse(Args),
+                                Bindings0,
+                                ArgBindings,
+                                Out,
+                                ProcState,
+                                World,
+                                CallK
+                            )
                     end
                 end    
             )(Result, Bindings);
@@ -402,7 +408,245 @@ applyK(Result, Bindings, Out, ProcState, World, K) ->
                     end
                 end    
             )(Result, Bindings);
+        {create_lb_k, Param, Args, Bind0, LBK} ->
+            (
+                fun(MatchVal, MBindings) ->
+                    case MatchVal of
+                        {'fun', FunTag} ->
+                            FunBody = orddict:fetch(FunTag, Bind0),
+                            NewBindings = orddict:store(FunTag, FunBody, MBindings),
+                            functions:create_local_bindings(
+                                Param,
+                                Args,    
+                                Bind0,
+                                NewBindings,
+                                Out,
+                                ProcState,
+                                World,
+                                LBK
+                            );
+                        _ ->
+                            functions:create_local_bindings(
+                                Param,
+                                Args,    
+                                Bind0,
+                                MBindings,
+                                Out,
+                                ProcState,
+                                World,
+                                LBK
+                            )
+                    end
+                end
+            )(Result, Bindings);
+        {remote_call_k, Bindings0, ProcState0, CallK} ->
+            (
+                fun(FuncResult, FuncBindings) ->
+                    case FuncResult of
+                        {'fun', FunTag} ->
+                            FunBody = orddict:fetch(FunTag, FuncBindings),
+                            NewBindings = 
+                                orddict:store(
+                                    FunTag,
+                                    FunBody,
+                                    Bindings0
+                                ),
+                            applyK(
+                                FuncResult,
+                                NewBindings,
+                                Out,
+                                ProcState0,
+                                World,
+                                CallK
+                            );
+                        _ ->
+                           applyK(
+                                FuncResult,
+                                Bindings0,
+                                Out,
+                                ProcState0,
+                                World,
+                                CallK
+                            )
+                    end
+                end    
+            )(Result, Bindings);
+        {func_body_k, Body, GList, TlCls, Args, Bind0, FuncK} ->
+            (
+                fun(_, LocalBindings) ->
+                    cases:eval_guards(
+                        case GList of
+                            [] -> 
+                                GList;
+                            [Guards] -> 
+                                Guards
+                        end,
+                        LocalBindings,
+                        Out,
+                        ProcState,
+                        World,
+                        {
+                            func_guards_k,
+                            Body,
+                            LocalBindings,
+                            TlCls,
+                            Args,
+                            Bind0,
+                            FuncK
+                        }
+                    )
+                end    
+            )(Result, Bindings);
+        {func_guards_k, Body, LBind, TlCls, Args, Bind0, FuncK} ->
+            (
+                fun(GResult, _) ->
+                    case GResult of
+                        {atom, true} ->
+                            eval:eval_exprs(
+                                Body,
+                                LBind,
+                                Out,
+                                ProcState,
+                                World,
+                                FuncK    
+                            );
+                        _ ->
+                            functions:eval_function_body(
+                                TlCls,
+                                Args,
+                                Bind0,
+                                Out,
+                                ProcState,
+                                World,
+                                FuncK    
+                            )
+                    end
+                end    
+            )(Result, Bindings);
+        {fun_call_k, Args, ArgBind, FunK} ->
+            (
+                fun(CallResult, CallBind) ->
+                    case CallResult of
+                        {'fun', {Name, Arity}} ->
+                            {{clauses, Clauses}, FunBind} =
+                                orddict:fetch({Name, Arity}, CallBind),
+                            if 
+                                Arity == length(Args) ->
+                                    ReturnBind =
+                                        orddict:merge(
+                                            fun(_, V, _) -> V end,
+                                            ArgBind,
+                                            CallBind
+                                        ),
+                                    funs:eval_fun_body(
+                                        Clauses, 
+                                        Args,
+                                        FunBind,
+                                        Out,
+                                        ProcState,
+                                        World,
+                                        {fun_call_return_k, ReturnBind, FunK}
+                                    );
+                                true ->
+                                    errorK(
+                                        {badarity, {{'fun', {Name, Arity}}, Args}},
+                                        Out,
+                                        ProcState,
+                                        World,
+                                        FunK                                
+                                    )
+                            end;
+                        _ ->
+                            errorK(badfun, Out, ProcState, World, FunK)
+                    end
+                end
+            )(Result, Bindings);
+        {fun_call_return_k, ReturnBind, FunK} ->
+            (
+                fun(FunResult, FunBind) ->
+                    case FunResult of
+                        {'fun', FunTag} ->
+                            FunBody = orddict:fetch(FunTag, FunBind),    
+                            applyK(
+                                {'fun', FunTag},
+                                orddict:store(FunTag, FunBody, ReturnBind),
+                                Out,
+                                ProcState,
+                                World,
+                                FunK
+                            );
+                        _ -> 
+                            applyK(
+                                FunResult,
+                                ReturnBind,
+                                Out,
+                                ProcState,
+                                World,
+                                FunK
+                            )
+                    end
+                end
+            )(Result, Bindings);
+        {fun_body_k, Body, GList, TlCls, Args, FunBind, FunK} ->
+            (
+                fun(_, LocalBind) ->
+                    BodyBind =
+                        orddict:merge(
+                            fun(_, V, _) -> V end,
+                            LocalBind,
+                            FunBind
+                        ),
+                    cases:eval_guards(
+                        case GList of
+                            [] -> 
+                                GList;
+                            [Guards] -> 
+                                Guards
+                        end,
+                        BodyBind,
+                        Out,
+                        ProcState,
+                        World,
+                        {
+                            fun_guards_k,
+                            Body,
+                            BodyBind,
+                            TlCls,
+                            Args,
+                            FunBind,
+                            FunK
+                        }
+                    )
+                end    
+            )(Result, Bindings);
+        {fun_guards_k, Body, LocalBind, TlCls, Args, FunBind, FunK} ->
+            (
+                fun(GResult, _) ->
+                    case GResult of
+                        {atom, true} ->
+                            eval:eval_exprs(
+                                Body,
+                                LocalBind,
+                                Out,
+                                ProcState,
+                                World,
+                                FunK    
+                            );
+                        _ ->
+                            funs:eval_fun_body(
+                                TlCls,
+                                Args,
+                                FunBind,
+                                Out,
+                                ProcState,
+                                World,
+                                FunK    
+                            )
+                    end
+                end    
+            )(Result, Bindings);
         _ ->
+            io:format("\nSeg Fault: ~p", [K]),
             {seg_fault, bad_kont}
     end.
 
@@ -440,8 +684,8 @@ errorK(Exception, Out, ProcState, World, K) ->
             errorK(Exception, Out, ProcState, World, ErrK);
         {case_value_k, _, ErrK} ->
             errorK(Exception, Out, ProcState, World, ErrK);
-        {case_match_k, Value, _, _, Bindings0, TlClauses, ErrK}  ->
-            case Exception of
+        {case_match_k, Value, _, _, Bindings0, TlClauses, CaseK}  ->
+            case Exception of % TODO: make this more rigorous
                 {badmatch, _} ->
                     cases:eval_case(
                         Value,
@@ -450,12 +694,10 @@ errorK(Exception, Out, ProcState, World, K) ->
                         Out,
                         ProcState,
                         World,
-                        ErrK    
+                        CaseK    
                     );
                 _ ->
-                    % TODO: throw an illegal guard error maybe?
-                    % or should it be a seg fault
-                    {error, illegal_guard}
+                   errorK(Exception, Out, ProcState, World, CaseK) 
             end;
         {case_guards_k, _, _, _, _, _, ErrK} ->
             errorK(Exception, Out, ProcState, World, ErrK);
@@ -463,6 +705,48 @@ errorK(Exception, Out, ProcState, World, K) ->
             errorK(Exception, Out, ProcState, World, ErrK);
         {arg_next_k, _, _, _, _, ErrK} ->
             errorK(Exception, Out, ProcState, World, ErrK);
+        {create_lb_k, _, _, _, ErrK} ->
+            errorK(Exception, Out, ProcState, World, ErrK);
+        {remote_call_k, _, ProcState0, ErrK} ->
+            errorK(Exception, Out, ProcState0, World, ErrK);
+        {func_body_k, _, _, TlCls, Args, Bind0, FuncK} ->
+            case Exception of % TODO: make this more rigorous
+                {badmatch, _} ->
+                    functions:eval_function_body(
+                        TlCls,
+                        Args,
+                        Bind0,
+                        Out,
+                        ProcState,
+                        World,
+                        FuncK    
+                    );
+                _ ->
+                    errorK(Exception, Out, ProcState, World, FuncK)
+            end;
+        {func_guards_k, _, _, _, _, _, ErrK} ->
+            errorK(Exception, Out, ProcState, World, ErrK);
+        {fun_call_k, _, _, ErrK} ->
+            errorK(Exception, Out, ProcState, World, ErrK);
+        {fun_call_return_k, _, ErrK} ->
+            errorK(Exception, Out, ProcState, World, ErrK);
+        {fun_body_k, _, _, TlCls, Args, FunBind, FunK} ->
+            case Exception of % TODO: make this more rigorous
+                {badmatch, _} ->
+                    funs:eval_fun_body(
+                        TlCls,
+                        Args,
+                        FunBind,
+                        Out,
+                        ProcState,
+                        World,
+                        FunK    
+                    );
+                _ ->
+                    errorK(Exception, Out, ProcState, World, FunK)
+            end;
+        {fun_guards_k, _, _, _, _, _, FunK} ->
+            errorK(Exception, Out, ProcState, World, FunK);
         _ ->
             {seg_fault, bad_kont}
     end.
