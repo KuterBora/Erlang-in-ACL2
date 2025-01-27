@@ -421,7 +421,16 @@ eval_local_call(FName, Args, Bindings, Out, ProcState, World, K) ->
                     end;
                 _ ->
                     cps:errorK(badarg, Out, ProcState, World, K)
-            end; 
+            end;
+        self when length(Args) == 0 ->
+            cps:applyK(
+                maps:get(pid, ProcState),
+                Bindings,
+                Out,
+                ProcState,
+                World,
+                K
+            );
         tl when length(Args) == 1 ->
             case Args of
                 [{cons, List}] ->
@@ -433,6 +442,19 @@ eval_local_call(FName, Args, Bindings, Out, ProcState, World, K) ->
                         World,
                         K
                     );
+                _ ->
+                    cps:errorK(badarg, Out, ProcState, World, K)
+            end;
+        spawn when length(Args) == 3 ->
+            case Args of
+                [{atom, _Module}, {atom, _Name}, {cons, _ArgList}] ->
+                    % TODO:
+                    % - create new pid
+                    % create new AST that calls module:name with arglist
+                    % - create new Procstate
+                    % put {spwan, AST, ProcState} in Spwaned
+                    % cps:applyK(NewPid, Bindings, NewOut, ProcState, World, K);
+                    cps:errorK(todo, Out, ProcState, World, K);
                 _ ->
                     cps:errorK(badarg, Out, ProcState, World, K)
             end;

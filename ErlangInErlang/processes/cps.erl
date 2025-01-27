@@ -1,5 +1,6 @@
 -module(cps).
--export([applyK/6, errorK/5]).
+                
+-export([applyK/6, errorK/5, yieldK/5]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CPS Implementation
@@ -9,7 +10,7 @@
 applyK(Result, Bindings, Out, ProcState, World, K) ->
     case K of
         {initial_k} ->
-            {ok, Result, Bindings};
+            {ok, Result, Bindings, Out};
         {exprs_k, ASTs, ExprsK} ->
             (
                 fun(_PrevResult, PrevBindings) ->
@@ -653,7 +654,7 @@ applyK(Result, Bindings, Out, ProcState, World, K) ->
 errorK(Exception, Out, ProcState, World, K) ->
     case K of
         {initial_k} ->
-            {error, Exception};
+            {error, Exception, Out};
         {exprs_k, _, ErrK} ->
             errorK(Exception, Out, ProcState, World, ErrK);
         {cons_cdr_k, _, _, ErrK} ->
@@ -686,7 +687,9 @@ errorK(Exception, Out, ProcState, World, K) ->
             errorK(Exception, Out, ProcState, World, ErrK);
         {case_match_k, Value, _, _, Bindings0, TlClauses, CaseK}  ->
             case Exception of % TODO: make this more rigorous
-                {badmatch, _} ->
+                Error when Error == seg_fault orelse Error == bad_AST->
+                   errorK(Exception, Out, ProcState, World, CaseK);
+                _ ->
                     cases:eval_case(
                         Value,
                         TlClauses,
@@ -695,12 +698,24 @@ errorK(Exception, Out, ProcState, World, K) ->
                         ProcState,
                         World,
                         CaseK    
-                    );
-                _ ->
-                   errorK(Exception, Out, ProcState, World, CaseK) 
+                    )
             end;
-        {case_guards_k, _, _, _, _, _, ErrK} ->
-            errorK(Exception, Out, ProcState, World, ErrK);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        {case_guards_k, Value, _, _, Bindings0, TlCls, CaseK} ->
+            case Exception of % TODO: make this more rigorous
+                Error when Error == seg_fault orelse Error == bad_AST->
+                   errorK(Exception, Out, ProcState, World, CaseK);
+                _ ->
+                    cases:eval_case(
+                        Value,
+                        TlCls,
+                        Bindings0,
+                        Out,
+                        ProcState,
+                        World,
+                        CaseK    
+                    )
+            end;
         {call_k, _, _, ErrK} ->
             errorK(Exception, Out, ProcState, World, ErrK);
         {arg_next_k, _, _, _, _, ErrK} ->
@@ -711,7 +726,9 @@ errorK(Exception, Out, ProcState, World, K) ->
             errorK(Exception, Out, ProcState0, World, ErrK);
         {func_body_k, _, _, TlCls, Args, Bind0, FuncK} ->
             case Exception of % TODO: make this more rigorous
-                {badmatch, _} ->
+                Error when Error == seg_fault orelse Error == bad_AST->
+                   errorK(Exception, Out, ProcState, World, FuncK);
+                _ ->
                     functions:eval_function_body(
                         TlCls,
                         Args,
@@ -720,9 +737,7 @@ errorK(Exception, Out, ProcState, World, K) ->
                         ProcState,
                         World,
                         FuncK    
-                    );
-                _ ->
-                    errorK(Exception, Out, ProcState, World, FuncK)
+                    )
             end;
         {func_guards_k, _, _, _, _, _, ErrK} ->
             errorK(Exception, Out, ProcState, World, ErrK);
@@ -732,7 +747,9 @@ errorK(Exception, Out, ProcState, World, K) ->
             errorK(Exception, Out, ProcState, World, ErrK);
         {fun_body_k, _, _, TlCls, Args, FunBind, FunK} ->
             case Exception of % TODO: make this more rigorous
-                {badmatch, _} ->
+                BadError when BadError == seg_fault orelse BadError == bad_AST->
+                   errorK(Exception, Out, ProcState, World, FunK);
+                _ ->
                     funs:eval_fun_body(
                         TlCls,
                         Args,
@@ -741,12 +758,13 @@ errorK(Exception, Out, ProcState, World, K) ->
                         ProcState,
                         World,
                         FunK    
-                    );
-                _ ->
-                    errorK(Exception, Out, ProcState, World, FunK)
+                    )
             end;
         {fun_guards_k, _, _, _, _, _, FunK} ->
             errorK(Exception, Out, ProcState, World, FunK);
         _ ->
             {seg_fault, bad_kont}
     end.
+
+yieldK(Bindings, Out, ProcState, World, K) ->
+    {yield, Bindings, Out, ProcState, World, K}.

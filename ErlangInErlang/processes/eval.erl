@@ -184,6 +184,14 @@ eval_expr(AST, Bindings, Out, ProcState, World, K) ->
                 World,
                 K
             );
+        {'receive', _, Clauses} ->
+            cps:yieldK(
+                Bindings,
+                Out,
+                ProcState,
+                World,
+                {case_value_k, Clauses, K}                
+            );
         _ ->
             {seg_fault, bad_AST}
     end.
@@ -421,7 +429,11 @@ eval_op(Op, {T1, R1}, {T2, R2}, Bindings, Out, ProcState, World, K) ->
                 ProcState,
                 World,
                 K
-            );              
+            );
+        '!' when T1 == pid ->
+            {Sent, Spawned} = Out,
+            NewOut = {Sent ++ [{{T1, R1}, {T2, R2}}], Spawned},
+            cps:applyK({T2, R2}, Bindings, NewOut, ProcState, World, K);          
         _ ->
             cps:errorK(badast, Out, ProcState, World, K)
     end.
