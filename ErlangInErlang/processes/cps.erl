@@ -1,6 +1,6 @@
 -module(cps).
                 
--export([applyK/6, errorK/5, yieldK/5]).
+-export([applyK/6, errorK/5, yieldK/4]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CPS Implementation
@@ -700,7 +700,6 @@ errorK(Exception, Out, ProcState, World, K) ->
                         CaseK    
                     )
             end;
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         {case_guards_k, Value, _, _, Bindings0, TlCls, CaseK} ->
             case Exception of % TODO: make this more rigorous
                 Error when Error == seg_fault orelse Error == bad_AST->
@@ -766,5 +765,5 @@ errorK(Exception, Out, ProcState, World, K) ->
             {seg_fault, bad_kont}
     end.
 
-yieldK(Bindings, Out, ProcState, World, K) ->
-    {yield, Bindings, Out, ProcState, World, K}.
+yieldK(Bindings, Out, ProcState, K) ->
+    {yield, Bindings, Out, ProcState, K}.

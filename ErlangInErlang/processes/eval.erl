@@ -11,6 +11,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Evaluates the given list of ASTs in order with the given Bindings and World.
+% Returns:
+% {ok, Result, Bindings, Out} | {yield, Bindings, Out, ProcState, K}
 eval_exprs(ASTs, Bindings, Out, ProcState, World, K) ->
     case tl(ASTs) of
         [] ->
@@ -189,7 +191,6 @@ eval_expr(AST, Bindings, Out, ProcState, World, K) ->
                 Bindings,
                 Out,
                 ProcState,
-                World,
                 {case_value_k, Clauses, K}                
             );
         _ ->
@@ -222,7 +223,14 @@ eval_list(CarResult, CdrResult, Bindings, Out, ProcState, World, K) ->
                 K
             );
         _ ->
-            cps:errorK(badarg, Out, ProcState, World, K)
+            cps:applyK(
+                {cons, [CarResult | CdrResult]},
+                Bindings,
+                Out,
+                ProcState,
+                World,
+                K
+            )
     end.
 
 eval_tuple(CarResult, {tuple, TList}, Bindings, Out, ProcState, World, K) ->

@@ -128,6 +128,9 @@ simple_tests2() ->
   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}]}, []}, test_seq("[1 | [2]].", [])),
   ?assertEqual({ok, {cons, [{integer, 1}, {integer, 2}, {integer, 3}]}, []}, test_seq("[1 | [2, 3]].", [])),
 
+  % pairs
+  ?assertEqual({ok, {cons, [{integer, 1} | {integer, 2}]}, []}, test_seq("[1 | 2].", [])),
+
   % atoms and logic operations
   ?assertEqual({ok, {atom, here_is_an_atom}, []}, test_seq("here_is_an_atom.", [])),
   ?assertEqual({ok, {atom, true}, []}, test_seq("atom1 == atom1.", [])),

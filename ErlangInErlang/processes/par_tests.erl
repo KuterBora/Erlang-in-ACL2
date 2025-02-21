@@ -67,31 +67,31 @@ test_receive() ->
 					end\n
 			end.
 		",
-	{yield, [{'X', {integer, 2}}], _, PS, World, K1} = eval:eval(Proc),
+	{yield, [{'X', {integer, 2}}], _, PS, K1} = eval:eval(Proc),
 	
 	% message is 5
 	?assertEqual({ok, {integer, 1}, [{'X', {integer, 2}}, {'Y', {integer, 5}}], {[], []}},
-		cps:applyK({integer, 5}, [{'X', {integer, 2}}], {[], []}, PS, World, K1)),
+		cps:applyK({integer, 5}, [{'X', {integer, 2}}], {[], []}, PS, world:world_init(), K1)),
 	
 	% message is atom
 	?assertEqual({ok, {integer, 2}, [{'X', {integer, 2}}, {'Y', {atom, atom}}], {[], []}},
-		cps:applyK({atom, atom}, [{'X', {integer, 2}}], {[], []}, PS, World, K1)),
+		cps:applyK({atom, atom}, [{'X', {integer, 2}}], {[], []}, PS, world:world_init(), K1)),
 
 	% message is "string"
-	{yield, [{'X', {integer, 2}}], _, PS, World, K2} = 
-		cps:applyK({string, 5}, [{'X', {integer, 2}}], {[], []}, PS, World, K1),
+	{yield, [{'X', {integer, 2}}], _, PS, K2} = 
+		cps:applyK({string, 5}, [{'X', {integer, 2}}], {[], []}, PS, world:world_init(), K1),
 	
 	% second message is 5
 	?assertEqual({ok, {integer, 3}, [{'X', {integer, 2}}, {'Y', {integer, 5}}], {[], []}},
-		cps:applyK({integer, 5}, [{'X', {integer, 2}}], {[], []}, PS, World, K2)),
+		cps:applyK({integer, 5}, [{'X', {integer, 2}}], {[], []}, PS, world:world_init(), K2)),
 
 	% second message is [a, b]
 	?assertEqual({ok, {integer, 4}, [{'Messages', {cons, [{atom, a}, {atom, b}]}}, {'X', {integer, 2}}], {[], []}},
-		cps:applyK({cons, [{atom, a}, {atom, b}]}, [{'X', {integer, 2}}], {[], []}, PS, World, K2)),
+		cps:applyK({cons, [{atom, a}, {atom, b}]}, [{'X', {integer, 2}}], {[], []}, PS, world:world_init(), K2)),
 	
 	% second message is bad_message
 	?assertEqual({error, {case_clause, {atom, bad_message}}, {[], []}},
-		cps:applyK({atom, bad_message}, [{'X', {integer, 2}}], {[], []}, PS, World, K2)).
+		cps:applyK({atom, bad_message}, [{'X', {integer, 2}}], {[], []}, PS, world:world_init(), K2)).
 
 % test_scheduler()
 % test_spawn()
