@@ -6,7 +6,8 @@
 test_all() ->
   seq_tests:test_all(),
   test_send(),
-  test_receive().
+  test_receive(),
+  test_scheduler().
 
 test_send() ->
   % send message
@@ -93,6 +94,35 @@ test_receive() ->
 	?assertEqual({error, {case_clause, {atom, bad_message}}, {[], []}},
 		cps:applyK({atom, bad_message}, [{'X', {integer, 2}}], {[], []}, PS, world:world_init(), K2)).
 
-% test_scheduler()
+test_scheduler() ->
+  SimpleTest = 
+    [
+      {exec, {init, #{module => '#none', pid => {pid, 0}}, eval:get_AST("1.")}, []},
+      {exec, {init, #{module => '#none', pid => {pid, 1}}, eval:get_AST("2 + 3 + 4.")}, []},
+      {exec, {init, #{module => '#none', pid => {pid, 2}}, eval:get_AST("X = 3, X.")}, []}
+    ],
+  SimplResult = 
+    [
+      {term, {ok, {integer, 1}, [], {[], []}}},
+      {term, {ok, {integer, 9}, [], {[], []}}},
+      {term, {ok, {integer, 3}, [{'X', {integer, 3}}], {[], []}}}
+    ],
+  ?assertEqual({ok, SimplResult}, procs:eval_procs(SimpleTest)),
+
+  ReceiveTest = 
+    [
+      {exec, {init, #{module => '#none', pid => {pid, 0}}, [{op,1,'!',{pid,1,1},{integer,1,2}}]}, []},
+      {exec, {init, #{module => '#none', pid => {pid, 1}}, eval:get_AST("receive X -> success end.")}, []}
+    ],
+  ReceiveResult = 
+    [
+      {term, {ok, {integer, 2}, [], {[], []}}},
+      {term, {ok, {atom, success}, [{'X', {integer, 2}}], {[], []}}}
+    ],
+  ?assertEqual({ok, ReceiveResult}, procs:eval_procs(ReceiveTest)).
+  
+  % test deadlock
+  % test functions
+
 % test_spawn()
 % test_reduce()

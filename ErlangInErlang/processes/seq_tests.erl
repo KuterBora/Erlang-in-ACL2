@@ -216,7 +216,7 @@ test_bif() ->
   ?assertEqual({ok, {integer, 1}, []}, test_seq("hd([1, 2, 3]).", [])),
   ?assertEqual({ok, {integer, 30}, []}, test_seq("max(30, 2).", [])),
   ?assertEqual({ok, {integer, -1}, []}, test_seq("min(-1, 2).", [])),
-  ?assertEqual({ok, {pid, '<0.0.0>'}, []}, test_seq("self().", [])),
+  ?assertEqual({ok, {pid, 0}, []}, test_seq("self().", [])),
   ?assertEqual({ok, {cons, [{integer, 2}, {integer, 3}]}, []}, test_seq("tl([1, 2, 3]).", [])).
 
 % Tests for evaluating match for lists and tuples as well as Pattern Matching

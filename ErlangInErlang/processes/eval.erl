@@ -4,7 +4,7 @@
 % lists, tuples. operations
 -export([eval_list/7, eval_tuple/7, eval_op/8, eval_op/7]).
 % helpers
--export([get_AST/1, get_AST_form/1, eval/1, eval/2, eval/3]).
+-export([get_AST/1, get_AST_form/1, eval/1, eval/2, eval/3, eval/4]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %  The Evaluator
@@ -186,6 +186,14 @@ eval_expr(AST, Bindings, Out, ProcState, World, K) ->
                 World,
                 K
             );
+        {pid, _, Pid} ->
+            cps:applyK(
+                {pid, Pid},
+                Bindings,
+                Out,
+                ProcState,
+                World, 
+                K);
         {'receive', _, Clauses} ->
             cps:yieldK(
                 Bindings,
@@ -444,6 +452,7 @@ eval_op(Op, {T1, R1}, {T2, R2}, Bindings, Out, ProcState, World, K) ->
             cps:applyK({T2, R2}, Bindings, NewOut, ProcState, World, K);          
         _ ->
             cps:errorK(badast, Out, ProcState, World, K)
+            % todo: this is incorrect error handling
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -479,3 +488,7 @@ eval(Str, Bindings) ->
 eval(Str, Bindings, World) ->
     AST = get_AST(Str),
     eval_exprs(AST, Bindings, procs:init_state(), World).
+
+eval(Str, Bindings, ProcState, World) ->
+    AST = get_AST(Str),
+    eval_exprs(AST, Bindings, ProcState, World).
