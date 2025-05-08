@@ -1,0 +1,1 @@
+%% todo: generate the corresponding acl2 fty type given an erlang AST.
