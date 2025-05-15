@@ -179,6 +179,10 @@
           (expr-p x))
   :expand ((expr-p x)))
 
+(defrule expr-is-subtype-of-node
+    (implies (expr-p x) (node-p x))
+    :expand (expr-p x))
+
 ;; pattern-is-expr
 (encapsulate nil
   (defrule pattern-is-subtype-of-node
@@ -542,6 +546,7 @@
     :elt-type expr-p
     :true-listp t
     :pred expr-list-p)
+
 
 (fty::deffixtype clause
   :pred   clause-p

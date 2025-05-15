@@ -12,6 +12,7 @@
     (:integer ((val integerp)))
 		(:atom ((val symbolp)))
 		(:string ((val stringp)))
+    (:nil ())
 		(:cons ((lst erl-value-list-p)))
 		(:tuple ((tuple erl-value-list-p)))
     (:error ((err symbolp)))
