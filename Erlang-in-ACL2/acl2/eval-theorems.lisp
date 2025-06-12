@@ -1,15 +1,10 @@
 (in-package "ACL2")
 (include-book "centaur/fty/top" :DIR :SYSTEM)
 (include-book "std/util/top" :DIR :SYSTEM)
-(include-book "kestrel/fty/defsubtype" :DIR :SYSTEM)
 (set-induction-depth-limit 1)
 
-; require erl-ast, erl-value, erl-kont
+;; Theorems to help admit the evaluator
 
-
-;; Theorems to help admit eval-expr
-
-;; The following rules allow erl terms to be applied without erl-value-fix
 (defrule node-kind-is-car-of-node
   (implies (node-p x)
            (equal (car x) (node-kind x)))
@@ -29,11 +24,13 @@
            (erl-value-p x))
   :expand ((expr-p x) (erl-value-p x) (node-kind x) (node-p x)))
 
-
-;; Prpoerties of Expr-p
-
 (defrule expr-binary-op-ensures
     (implies (and (expr-p x) (equal (node-kind x) :binary-op))
              (and (expr-p (node-binary-op->left x))
                   (expr-p (node-binary-op->right x))))
     :expand (expr-p x))
+
+(defrule expr-implies-node
+  (implies (expr-p x)
+           (node-p x))
+  :expand (expr-p x))

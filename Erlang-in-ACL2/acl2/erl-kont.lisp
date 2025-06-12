@@ -9,18 +9,24 @@
 (fty::deftagsum erl-k
     (:init ())
     (:exprs ((next expr-list-p) (k erl-k-p)))
+    ;; cons
     (:cons-cdr ((cdr-expr expr-p) (bindings0 bind-p) (k erl-k-p)))
     (:cons-merge ((car-result erl-value-p) (car-bindings bind-p) (k erl-k-p)))
+    ;; tuple
     (:tuple-cdr ((cdr-expr expr-p) (bindings0 bind-p) (k erl-k-p)))
     (:tuple-merge ((car-result erl-value-p) (car-bindings bind-p) (k erl-k-p)))
+    ;; match
     (:match ((expr expr-p) (k erl-k-p)))
     (:match-cons ((lhs-tl expr-p) (rhs-tl erl-value-p) (bindings0 bind-p) (k erl-k-p)))
     (:match-cons-nil ((k erl-k-p)))
     (:match-tuple ((lhs-tl expr-p) (rhs-tl erl-value-p) (bindings0 bind-p) (k erl-k-p)))
     (:match-lhs ((rhs erl-value-p) (k erl-k-p)))
+    ;; unary op
     (:unary-op ((op symbolp) (k erl-k-p)))
+    ;; binary op
     (:binary-op-expr1 ((op symbolp) (expr2 expr-p) (bindings0 bind-p) (k erl-k-p)))
     (:binary-op-expr2 ((op symbolp) (result erl-value-p) (bindings1 bind-p) (k erl-k-p)))
+    ;; clauses
     (:guard ((guards erl-guard-list-p) (bindings0 bind-p) (k erl-k-p)))
     (:if ((body expr-list-p) (bindings0 bind-p) (tl-clauses clause-list-p) (k erl-k-p)))
     (:case-value ((clauses clause-list-p) (k erl-k-p)))

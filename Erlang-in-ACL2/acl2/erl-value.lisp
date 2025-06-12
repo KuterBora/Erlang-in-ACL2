@@ -5,6 +5,7 @@
 (set-induction-depth-limit 1)
 
 (set-well-founded-relation l<)
+
 ;; Return value of the evaluator
 ;; TODO: fun, pid
 (fty::deftypes erl-value
@@ -16,6 +17,7 @@
 		(:cons ((lst erl-value-list-p)))
 		(:tuple ((tuple erl-value-list-p)))
     (:error ((err symbolp)))
+    (:fault ((err symbolp)))
     :measure (list (acl2-count x) 1))
   (fty::deflist erl-value-list
 	  :elt-type erl-value-p
@@ -28,6 +30,5 @@
   :val-type erl-value
   :true-listp t)
 
-;; TODO: error types?
 
 (set-well-founded-relation o<)
