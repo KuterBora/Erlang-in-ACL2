@@ -2,8 +2,6 @@
 (include-book "centaur/fty/top" :DIR :SYSTEM)
 (include-book "std/util/top" :DIR :SYSTEM)
 (set-induction-depth-limit 1)
-;; require erl-ast.lisp
-;; require erl-value.lisp
 
 (set-well-founded-relation l<)
 (fty::deftagsum erl-k

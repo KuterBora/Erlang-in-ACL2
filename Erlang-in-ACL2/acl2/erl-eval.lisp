@@ -3,16 +3,13 @@
 (include-book "std/util/top" :DIR :SYSTEM)
 (set-induction-depth-limit 1)
 
-; require erl-ast, erl-value, erl-kont
 (ld "erl-ast.lisp")
 (ld "erl-value.lisp")
 (ld "erl-kont.lisp")
 (ld "eval-theorems.lisp")
 (ld "erl-op.lisp")
 
-;; TODO: maybe have a seperate evaluator for pattern and guard to make proofs easier?
-
-;; Erlang Evaluator
+;; ------------------------------- Erlang Evaluator ----------------------------------------------
 
 (defines eval-expr
   :flag-local nil
@@ -25,9 +22,9 @@
          (fuel (nfix fuel))
          ((if (<= fuel 0)) '(:fault out-of-fuel)))
         (node-case x 
-          (:integer (apply-k x k (1- fuel)))
-          (:atom (apply-k x k (1- fuel)))
-          (:string (apply-k x k (1- fuel)))
+          (:integer (apply-k (make-erl-value-integer :val x.val) k (1- fuel)))
+          (:atom    (apply-k (make-erl-value-atom :val x.val) k (1- fuel)))
+          (:string  (apply-k (make-erl-value-string :val x.val) k (1- fuel)))
           (:binary-op
             (eval-expr x.left 
                        (make-erl-k-binary-op-expr1 :op x.op 
@@ -62,41 +59,148 @@
               (otherwise '(:fault bad-op))))
           (otherwise '(:fault bad-kont))))))
 
+
+;;-------------------------------------- Theorems --------------------------------------------------
+
+(defun more-fuel-hint (clause)
+  (cond 
+    ((acl2::occur-lst '(flag-is 'eval) clause)
+	   '(:expand ((eval-expr x k 0)
+		            (eval-expr x k 1)
+		            (eval-expr x k fuel)
+		            (eval-expr x k (1+ fuel))
+                (eval-expr x k (+ fuel z)))))
+	  ((acl2::occur-lst '(flag-is 'apply) clause)
+	  '(:expand ((apply-k val k 1)
+		           (apply-k val k 0)
+		           (apply-k val k fuel)
+		           (apply-k val k (1+ fuel))
+               (apply-k val k (+ fuel z)))))
+	  (t nil)))
+
+(defthm-eval-expr-flag adding-more-fuel-is-good
+  (defthm adding-more-fuel-is-good-for-eval
+    (implies (and (expr-p x)
+		              (erl-k-p k) 
+		              (natp fuel)
+                  (natp z)
+		              (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
+	           (equal (eval-expr x k fuel)
+		                (eval-expr x k (+ fuel z))))
+    :flag eval)
+
+  (defthm adding-more-fuel-is-good-for-apply
+    (implies (and (erl-value-p val)
+	                (erl-k-p k)
+	                (natp fuel)
+                  (natp z)
+	                (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
+             (equal (apply-k val k fuel) (apply-k val k (+ fuel z))))
+    :flag apply)
+    :hints((more-fuel-hint clause)))
+
+(defrule more-fuel-is-good-for-apply-lemma
+  (implies
+      (and (erl-value-p val)
+	         (erl-k-p k)
+	         (natp fuel1)
+           (natp fuel2)
+           (natp z)
+           (equal fuel2 (+ fuel1 z))
+	         (not (equal (erl-value-kind (apply-k val k fuel1)) :fault)))
+       (equal (apply-k val k fuel2) (apply-k val k fuel1))))
+
+(in-theory (disable adding-more-fuel-is-good-for-apply))
+(in-theory (disable more-fuel-is-good-for-apply-lemma))
+
+(defrule more-fuel-is-good-for-apply
+  (implies
+      (and (erl-value-p val)
+        (erl-k-p k)
+        (natp fuel1)
+        (natp fuel2)
+        (> fuel2 fuel1)
+        (not (equal (erl-value-kind (apply-k val k fuel1)) :fault)))
+      (equal (apply-k val k fuel2) (apply-k val k fuel1)))
+  :use ((:instance more-fuel-is-good-for-apply-lemma
+          (val val)
+          (k k)
+          (fuel1 fuel1)
+          (fuel2 fuel2)
+          (z (- fuel2 fuel1)))))
+
+(defrule more-fuel-is-good-for-eval-lemma
+  (implies
+      (and (expr-p x)
+           (erl-k-p k)
+           (natp fuel1)
+           (natp fuel2)
+           (natp z)
+           (equal fuel2 (+ fuel1 z))
+	         (not (equal (erl-value-kind (eval-expr x k fuel1)) :fault)))
+       (equal (eval-expr x k fuel2) (eval-expr x k fuel1))))
+
+(in-theory (disable adding-more-fuel-is-good-for-eval))
+(in-theory (disable more-fuel-is-good-for-eval-lemma))
+
+
+(defrule more-fuel-is-good-for-eval
+  (implies
+      (and (expr-p x)
+           (erl-k-p k)
+           (natp fuel1)
+           (natp fuel2)
+           (> fuel2 fuel1)
+           (not (equal (erl-value-kind (eval-expr x k fuel1)) :fault)))
+      (equal (eval-expr x k fuel2) (eval-expr x k fuel1)))
+  :use ((:instance more-fuel-is-good-for-eval-lemma
+          (x x)
+          (k k)
+          (fuel1 fuel1)
+          (fuel2 fuel2)
+          (z (- fuel2 fuel1)))))           
+
 ;; ============================================================================================
 ;; Done till this point
 ;; ============================================================================================
 
-;; Eventually I want to prove a theorem like this, but first I think I need the theorems below
-(defrule eval-erl-addition
+;; probably need some fuel assertions, relating them to different k
+
+
+(defrule lemma-init-k-returns-as-is-when-term
   (implies (and (expr-p x) 
+                (or (equal (node-kind x) :integer)
+                    (equal (node-kind x) :string)
+                    (equal (node-kind x) :atom)
+                    (equal (node-kind x) :fault))
                 (erl-k-p k) 
                 (natp fuel)
-                (equal (node-kind x) :binary-op)
-                (equal '+ (node-binary-op->op x))
-                (equal left (node-binary-op->left x))
-                (equal right (node-binary-op->right x))
-                ;; add more restrictions here that state the fuel is enough
-                )
+                (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
            (equal (eval-expr x k fuel)
-                  (apply-k (erl-add (eval-expr left :init fuel)
-                                    (eval-expr right :init fuel))
-                           k
-                           fuel))))
+                  (apply-k (eval-expr x :init fuel) k fuel)))
+  :expand ((eval-expr x k fuel) 
+           (eval-expr x :init fuel)
+           (apply-k (erl-value-string (node-string->val x)) '(:init) (+ -1 fuel))
+           (apply-k (erl-value-string (node-string->val x)) k 0)
+           (apply-k (erl-value-atom (node-atom->val x)) '(:init) (+ -1 fuel))
+           (apply-k (erl-value-atom (node-atom->val x)) k 0)
+           (apply-k (erl-value-integer (node-integer->val x)) '(:init) (+ -1 fuel))
+           (apply-k (erl-value-integer (node-integer->val x)) k 0)))
 
-;; Show adding more fuel will not change the result if the initial fuel did not produce fault
-;; I attempted proving this with flag-theorems but I got stuck
-(defrule more-fuel-is-good
-  (implies (and (expr-p x) 
-                (erl-k-p k) 
-                (natp fuel1)
-                (natp fuel2)
-                (> fuel2 fuel1)
-                (not (equal (erl-value-kind (eval-expr x k fuel1)) :fault)))
-           (equal (eval-expr x k fuel1)
-                  (eval-expr x k fuel2))))
 
-;; Show that (eval-expr x k f) == (apply-k (eval-expr x :init f) k f), if f is enough fuel
-(defrule eval-with-k-is-eqiuvalent-to-apply-k-with-eval-init 
+
+(defrule lemma-init-k-returns-as-is-binop-step-1
+  (implies (and (erl-value-p val) 
+                (erl-k-p k)
+                (equal k (make-erl-k-binary-op-expr2 :op op :result result :k k_next))
+                (natp fuel)
+                (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
+           (equal (apply-k val k fuel)
+                  (apply-k (apply-k val (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel) k_next fuel)))
+  :expand ())
+
+
+(defrule init-k-returns-as-is
   (implies (and (expr-p x) 
                 (erl-k-p k) 
                 (natp fuel)
@@ -110,7 +214,9 @@
 
 '(:integer 1)
 '(:unary-op - (:integer 1))
+
 '(:binary-op + (:integer 1) (:integer 2))
+
 '(:binary-op + (:binary-op * (:integer 3) (:integer 4)) (:integer 2))
 '(:if  (((cases) (guards (:atom true)) (body :atom true))
         ((cases) (guards (:atom true)) (body :atom false))))
@@ -121,13 +227,12 @@
 (eval-expr '(:integer 1) '(:init) 100)
 (eval-expr '(:atom abc) '(:init) 100)
 (eval-expr '(:string "abc") '(:init) 100)
+
 (eval-expr '(:binary-op + (:integer 1) (:integer 2)) '(:init) 100)
+
 (eval-expr '(:binary-op + (:binary-op * (:integer 3) (:integer 4)) (:integer 2))
            '(:init)
            100)
 
 (eval-expr '(:binary-op div (:integer 10) (:integer 2)) '(:init) 100)
 (eval-expr '(:binary-op div (:integer 3) (:integer 2)) '(:init) 100)
-
-
-
