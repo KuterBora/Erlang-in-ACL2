@@ -72,3 +72,17 @@
              (val (floor (abs left-val) (abs right-val))))
           (make-erl-value-integer :val (* sign val)))
         '(:error badarg))))
+
+
+;; Apply Erlang binary operation
+(define apply-erl-binop ((op symbolp) (left erl-value-p) (right erl-value-p))
+  :returns (v erl-value-p)
+  (b* ((op (symbol-fix op))
+       (left (erl-value-fix left))
+       (right (erl-value-fix right)))
+      (case op
+            (+ (erl-add left right))
+            (- (erl-sub left right))
+            (* (erl-mul left right))
+            (div (erl-div left right))
+            (otherwise '(:fault bad-op)))))

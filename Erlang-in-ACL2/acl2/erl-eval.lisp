@@ -32,7 +32,7 @@
                                                    :k k)
                        (1- fuel)))
           (:fault '(:fault bad-ast))
-          (otherwise (apply-k '(:error not-implemented) k (1- fuel))))))
+          (otherwise '(:fault not-implemented)))))
   
   (define apply-k ((val erl-value-p) (k erl-k-p) (fuel natp))
     :flag apply
@@ -41,7 +41,8 @@
     (b* ((val (erl-value-fix val))
          (k (erl-k-fix k))
          (fuel (ifix fuel))
-         ((if (<= fuel 0)) '(:fault out-of-fuel)))
+         ((if (<= fuel 0)) '(:fault out-of-fuel))
+         ((if (equal (erl-value-kind val) :fault)) val))
         (erl-k-case k
           (:init val)
           (:binary-op-expr1
@@ -50,15 +51,8 @@
                                                    :result val 
                                                    :k k.k)
                        (1- fuel)))
-          (:binary-op-expr2
-            (case k.op
-              (+ (apply-k (erl-add k.result val) k.k (1- fuel)))
-              (- (apply-k (erl-sub k.result val) k.k (1- fuel)))
-              (* (apply-k (erl-mul k.result val) k.k (1- fuel)))
-              (div (apply-k (erl-div k.result val) k.k (1- fuel)))
-              (otherwise '(:fault bad-op))))
+          (:binary-op-expr2 (apply-k (apply-erl-binop k.op k.result val) k.k (1- fuel)))
           (otherwise '(:fault bad-kont))))))
-
 
 ;;-------------------------------------- Theorems --------------------------------------------------
 
@@ -88,7 +82,6 @@
 	           (equal (eval-expr x k fuel)
 		                (eval-expr x k (+ fuel z))))
     :flag eval)
-
   (defthm adding-more-fuel-is-good-for-apply
     (implies (and (erl-value-p val)
 	                (erl-k-p k)
@@ -143,7 +136,6 @@
 (in-theory (disable adding-more-fuel-is-good-for-eval))
 (in-theory (disable more-fuel-is-good-for-eval-lemma))
 
-
 (defrule more-fuel-is-good-for-eval
   (implies
       (and (expr-p x)
@@ -160,19 +152,13 @@
           (fuel2 fuel2)
           (z (- fuel2 fuel1)))))           
 
-;; ============================================================================================
-;; Done till this point
-;; ============================================================================================
-
-;; probably need some fuel assertions, relating them to different k
-
-
 (defrule lemma-init-k-returns-as-is-when-term
   (implies (and (expr-p x) 
                 (or (equal (node-kind x) :integer)
                     (equal (node-kind x) :string)
                     (equal (node-kind x) :atom)
-                    (equal (node-kind x) :fault))
+                    (equal (node-kind x) :fault)
+                    (equal (node-kind x) :error))
                 (erl-k-p k) 
                 (natp fuel)
                 (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
@@ -187,52 +173,172 @@
            (apply-k (erl-value-integer (node-integer->val x)) '(:init) (+ -1 fuel))
            (apply-k (erl-value-integer (node-integer->val x)) k 0)))
 
-
-
-(defrule lemma-init-k-returns-as-is-binop-step-1
+(defrule lemma-init-k-returns-as-is-binop-step-1.1
   (implies (and (erl-value-p val) 
                 (erl-k-p k)
-                (equal k (make-erl-k-binary-op-expr2 :op op :result result :k k_next))
+                (equal (erl-k-kind k) :binary-op-expr2)
                 (natp fuel)
                 (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
-           (equal (apply-k val k fuel)
-                  (apply-k (apply-k val (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel) k_next fuel)))
-  :expand ())
+           (let ((op (erl-k-binary-op-expr2->op k))
+                 (result (erl-k-binary-op-expr2->result k))
+                 (k_next (erl-k-binary-op-expr2->k k)))
+                (equal (apply-k val k fuel)
+                       (apply-k (apply-k val (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel) k_next fuel))))
+  :expand ((apply-k val k fuel)
+           (apply-k val (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel)
+           (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) (ERL-K-BINARY-OP-EXPR2->K K) (+ -1 FUEL))
+           (APPLY-K VAL (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) NIL '(:INIT)) FUEL)
+           (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) '(:INIT) (+ -1 FUEL))))
 
+;; ============================================================================================
+;; Done till this point
+;; ============================================================================================
 
-(defrule init-k-returns-as-is
-  (implies (and (expr-p x) 
-                (erl-k-p k) 
+; 1/10'''
+; Subgoal *1/4.42'
+(in-theory (disable more-fuel-is-good-for-apply))
+
+(defrule fuel-good
+  (implies (and (erl-value-p val)
+                (erl-k-p k)
+                (natp (+ z fuel))
+                (integerp z)
+                (< z 0)
                 (natp fuel)
-                (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
-           (equal (eval-expr x k fuel)
-                  (apply-k (eval-expr x :init fuel) k fuel))))
+                (not (equal (erl-value-kind (apply-k val k (+ z fuel))) :fault)))
+           (equal (apply-k val k (+ z fuel)) (apply-k val k fuel)))
+  :use ((:instance more-fuel-is-good-for-apply
+          (val val)
+          (k k)
+          (fuel1 (+ z fuel))
+          (fuel2 fuel))))
 
 
-;; TODO: turn the following into test cases
-;; AST Examples
+(defrule stupid-x
+  (implies (and ())
+           ()))
 
-'(:integer 1)
-'(:unary-op - (:integer 1))
+(defun step1-hint (clause)
+  (cond 
+    ((acl2::occur-lst '(flag-is 'eval) clause)
+	   '(:expand ((eval-expr x k fuel)
+                (EVAL-EXPR X K 0)
+                    )))
+	  ((acl2::occur-lst '(flag-is 'apply) clause)
+	  '(:expand ((APPLY-K VAL K FUEL)
+               (APPLY-K VAL K 0)
+               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) (ERL-K-BINARY-OP-EXPR2->K K) (+ -1 FUEL))
+               (APPLY-K VAL (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) NIL '(:INIT)) FUEL)
+               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) '(:INIT) (+ -1 FUEL))
+               (APPLY-K VAL (ERL-K-BINARY-OP-EXPR1 (ERL-K-BINARY-OP-EXPR1->OP K) (ERL-K-BINARY-OP-EXPR1->EXPR2 K) NIL '(:INIT)) FUEL)
+               (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) (+ -1 FUEL))
+               (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) (+ -1 FUEL))
+               (APPLY-K '(:FAULT OUT-OF-FUEL) (ERL-K-BINARY-OP-EXPR1->K K) 2)
+               (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) :INIT 1)
+               (APPLY-K '(:FAULT OUT-OF-FUEL) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) 1)
+               (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) :INIT (+ -1 FUEL))
+               (APPLY-K '(:FAULT OUT-OF-FUEL) (ERL-K-BINARY-OP-EXPR1->K K) (+ -1 FUEL)) 
+              ;; integer
+               (APPLY-K (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) (+ -2 FUEL))
+               (APPLY-K (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) '(:INIT) 0)
+               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR1->OP K) VAL (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K)))) '(:INIT) (+ -3 FUEL)) 
+               (APPLY-K (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) FUEL)
+              ;;atom
+               (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) (+ -2 FUEL))
+               (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) '(:INIT) 0)
+               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR1->OP K) VAL (ERL-VALUE-ATOM (NODE-ATOM->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K)))) '(:INIT) (+ -3 FUEL)) 
+               (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) FUEL)
 
-'(:binary-op + (:integer 1) (:integer 2))
+              ;;string
+               (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) (+ -2 FUEL))
+               (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) '(:INIT) 0)
+               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR1->OP K) VAL (ERL-VALUE-STRING (NODE-STRING->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K)))) '(:INIT) (+ -3 FUEL)) 
+               (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) FUEL)
 
-'(:binary-op + (:binary-op * (:integer 3) (:integer 4)) (:integer 2))
-'(:if  (((cases) (guards (:atom true)) (body :atom true))
-        ((cases) (guards (:atom true)) (body :atom false))))
+              ;; new
+              (APPLY-K VAL K FUEL)
+              (APPLY-K VAL :INIT FUEL)
+              (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) (ERL-K-BINARY-OP-EXPR2->K K) FUEL)
+              (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) 0)
+              (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) 0)
+
+              )))
+	  (t nil)))
+
+(defthm-eval-expr-flag init-k-returns-as-is-binop
+  (defthm init-k-returns-as-is-binop-1-eval
+    (implies (and (expr-p x) 
+                  (erl-k-p k)
+                  (equal (erl-k-kind k) :binary-op-expr2)
+                  (natp fuel)
+                  (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
+           (let ((op (erl-k-binary-op-expr2->op k))
+                 (result (erl-k-binary-op-expr2->result k))
+                 (k_next (erl-k-binary-op-expr2->k k)))
+                (equal (eval-expr x k fuel)
+                       (apply-k (eval-expr x (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel) k_next fuel))))
+    :flag eval)
+  (defthm init-k-returns-as-is-binop-2-eval
+    (implies (and (expr-p x) 
+                  (erl-k-p k)
+                  (equal (erl-k-kind k) :binary-op-expr1)
+                  (natp fuel)
+                  (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
+           (let ((op (erl-k-binary-op-expr1->op k))
+                 (expr2 (erl-k-binary-op-expr1->expr2 k))
+                 (k_next (erl-k-binary-op-expr1->k k)))
+                (equal (eval-expr x k fuel)
+                       (apply-k (eval-expr x (make-erl-k-binary-op-expr1 :op op :expr2 expr2 :k :init) fuel) k_next fuel))))
+    :flag eval)
+
+  (defthm init-k-returns-as-is-binop-1-apply
+    (implies (and (erl-value-p val) 
+                (erl-k-p k)
+                (equal (erl-k-kind k) :binary-op-expr2)
+                (natp fuel)
+                (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
+           (let ((op (erl-k-binary-op-expr2->op k))
+                 (result (erl-k-binary-op-expr2->result k))
+                 (k_next (erl-k-binary-op-expr2->k k)))
+                (equal (apply-k val k fuel)
+                       (apply-k (apply-k val (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel) k_next fuel))))
+    :flag apply)
+  (defthm init-k-returns-as-is-binop-1-apply
+    (implies (and (erl-value-p val) 
+                (erl-k-p k)
+                (equal (erl-k-kind k) :binary-op-expr1)
+                (natp fuel)
+                (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
+           (let ((op (erl-k-binary-op-expr1->op k))
+                 (expr2 (erl-k-binary-op-expr1->expr2 k))
+                 (k_next (erl-k-binary-op-expr1->k k)))
+                (equal (apply-k val k fuel)
+                       (apply-k (apply-k val (make-erl-k-binary-op-expr1 :op op :expr2 expr2 :k :init) fuel) k_next fuel))))
+    :flag apply)
+  
+  (defthm init-k-returns-as-is-apply
+    (implies (and (erl-value-p val) 
+                  (erl-k-p k)
+                  (natp fuel)
+                  (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
+             (equal (apply-k val k fuel)
+                    (apply-k (apply-k val :init fuel) k fuel)))
+    :flag apply)
+  (defthm init-k-returns-as-is-eval
+    (implies (and (expr-p x) 
+                  (erl-k-p k)
+                  (natp fuel)
+                  (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
+             (equal (eval-expr x k fuel)
+                    (apply-k (eval-expr x :init fuel) k fuel)))
+    :flag eval)
+  
+  :hints((step1-hint clause)))
 
 
 
-;; Evaluation examples
-(eval-expr '(:integer 1) '(:init) 100)
-(eval-expr '(:atom abc) '(:init) 100)
-(eval-expr '(:string "abc") '(:init) 100)
 
-(eval-expr '(:binary-op + (:integer 1) (:integer 2)) '(:init) 100)
 
-(eval-expr '(:binary-op + (:binary-op * (:integer 3) (:integer 4)) (:integer 2))
-           '(:init)
-           100)
 
-(eval-expr '(:binary-op div (:integer 10) (:integer 2)) '(:init) 100)
-(eval-expr '(:binary-op div (:integer 3) (:integer 2)) '(:init) 100)
+
+
