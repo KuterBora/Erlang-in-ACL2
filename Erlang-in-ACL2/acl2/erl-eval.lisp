@@ -159,7 +159,7 @@
                     (equal (node-kind x) :atom)
                     (equal (node-kind x) :fault)
                     (equal (node-kind x) :error))
-                (erl-k-p k) 
+                (erl-k-p k)
                 (natp fuel)
                 (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
            (equal (eval-expr x k fuel)
@@ -173,7 +173,11 @@
            (apply-k (erl-value-integer (node-integer->val x)) '(:init) (+ -1 fuel))
            (apply-k (erl-value-integer (node-integer->val x)) k 0)))
 
-(defrule lemma-init-k-returns-as-is-binop-step-1.1
+;; ============================================================================================
+;; Done till this point
+;; ============================================================================================
+
+(defrule lemma-init-k-returns-as-is-binop-expr2
   (implies (and (erl-value-p val) 
                 (erl-k-p k)
                 (equal (erl-k-kind k) :binary-op-expr2)
@@ -190,15 +194,253 @@
            (APPLY-K VAL (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) NIL '(:INIT)) FUEL)
            (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) '(:INIT) (+ -1 FUEL))))
 
-;; ============================================================================================
-;; Done till this point
+;; may need this in main goal (expr1)
+(in-theory (disable lemma-init-k-returns-as-is-when-term))
+
+
+; (defrule lemma-init-k-returns-as-is-binop-expr2-implies
+;   (implies (and (erl-value-p val) 
+;                 (erl-k-p k)
+;                 (equal (erl-k-kind k) :binary-op-expr2)
+;                 (natp fuel)
+;                 (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
+;            (let ((op (erl-k-binary-op-expr2->op k))
+;                  (result (erl-k-binary-op-expr2->result k))
+;                  (k_next (erl-k-binary-op-expr2->k k)))
+;                 (equal (apply-k val k fuel)
+;                        (apply-k (apply-k val (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel) k_next fuel)))))
+
+
+(defrule crock-1
+  (implies (and (erl-k-p k) (equal (erl-k-kind k) :binary-op-expr1))
+           (and (equal (erl-value-kind (APPLY-K x k 1)) :fault)
+                (equal (erl-value-kind (APPLY-K x k 0)) :fault)))
+  :expand ((apply-k x k 1) (apply-k x k 0))
+  :enable eval-expr)
+
+
+;; need this only for crock 2
+(in-theory (disable lemma-init-k-returns-as-is-binop-expr2)) 
+
+(defrule crock-2
+  (implies (and (expr-p x)
+                (equal (node-kind x) :binary-op)
+                (equal (node-kind (node-binary-op->right x)) :integer)
+                (equal (node-kind (node-binary-op->left x)) :integer)
+                (erl-k-p k_next)
+                (natp (+ -3 fuel))
+                (NOT (EQUAL
+                  (ERL-VALUE-KIND
+                  (APPLY-K
+                      (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->RIGHT X)))
+                      (ERL-K-BINARY-OP-EXPR2
+                          (NODE-BINARY-OP->OP X)
+                          (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+                          NIL K_next)
+                      (+ -3 FUEL)))
+                  :FAULT)))
+          (EQUAL 
+              (APPLY-K
+                      (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->RIGHT X)))
+                      (ERL-K-BINARY-OP-EXPR2
+                          (NODE-BINARY-OP->OP X)
+                          (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+                          NIL K_next)
+                      (+ -3 FUEL))
+              
+              (APPLY-K
+                  (APPLY-K
+                      (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->RIGHT X)))
+                      (ERL-K-BINARY-OP-EXPR2
+                          (NODE-BINARY-OP->OP X)
+                          (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+                          NIL '(:INIT))
+                      (+ -3 FUEL))
+                  K_next (+ -3 FUEL))
+                ))
+    :use ((:instance lemma-init-k-returns-as-is-binop-expr2
+          (val (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->RIGHT X))))
+          (k (ERL-K-BINARY-OP-EXPR2
+                          (NODE-BINARY-OP->OP X)
+                          (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+                          NIL K_next))
+          (fuel (+ -3 fuel)))))
+
+
+(defrule lemma-init-k-is-equiv-for-binary-op-expr1
+    (implies (and (expr-p x)
+                  (equal (node-kind x) :binary-op)
+                  (erl-k-p k)
+                  (natp fuel))
+           (let ((op (node-binary-op->op x))
+                 (left (node-binary-op->left x))
+                 (right (node-binary-op->right x)))
+                (implies (not (equal (erl-value-kind (eval-expr left (make-erl-k-binary-op-expr1 :op op :expr2 right :k k) fuel)) :fault))
+                         (equal (eval-expr left (make-erl-k-binary-op-expr1 :op op :expr2 right :k k) fuel)
+                                (apply-k (eval-expr left (make-erl-k-binary-op-expr1 :op op :expr2 right :k :init) fuel) k fuel)))))
+  :expand ((eval-expr left (make-erl-k-binary-op-expr1 :op op :expr2 right :k k) fuel)
+           (eval-expr left (make-erl-k-binary-op-expr1 :op op :expr2 right :k :init) fuel)
+            (EVAL-EXPR (NODE-BINARY-OP->LEFT X)
+                    (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                          (NODE-BINARY-OP->RIGHT X)
+                                          NIL K)
+                    FUEL)
+            (EVAL-EXPR (NODE-BINARY-OP->LEFT X)
+                              (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                                      (NODE-BINARY-OP->RIGHT X)
+                                                      NIL '(:INIT))
+                              FUEL)
+            (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (NODE-BINARY-OP->LEFT X)))
+              (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                      (NODE-BINARY-OP->RIGHT X)
+                                      NIL K)
+              (+ -1 FUEL))
+            (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (NODE-BINARY-OP->LEFT X)))
+               (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                      (NODE-BINARY-OP->RIGHT X)
+                                      NIL '(:INIT))
+               (+ -1 FUEL))
+            (APPLY-K (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+              (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                      (NODE-BINARY-OP->RIGHT X)
+                                      NIL K)
+              (+ -1 FUEL))
+            (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (NODE-BINARY-OP->LEFT X)))
+               (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                      (NODE-BINARY-OP->RIGHT X)
+                                      NIL '(:INIT))
+               (+ -1 FUEL))
+            (APPLY-K (ERL-VALUE-INTEGER (NODE-STRING->VAL (NODE-BINARY-OP->LEFT X)))
+              (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                      (NODE-BINARY-OP->RIGHT X)
+                                      NIL K)
+              (+ -1 FUEL))
+            (APPLY-K (ERL-VALUE-INTEGER (NODE-STRING->VAL (NODE-BINARY-OP->LEFT X)))
+               (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                      (NODE-BINARY-OP->RIGHT X)
+                                      NIL '(:INIT))
+               (+ -1 FUEL))
+            (EVAL-EXPR
+              (NODE-BINARY-OP->LEFT (NODE-BINARY-OP->LEFT X))
+              (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP (NODE-BINARY-OP->LEFT X))
+                                    (NODE-BINARY-OP->RIGHT (NODE-BINARY-OP->LEFT X))
+                                    NIL
+                                    (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                                            (NODE-BINARY-OP->RIGHT X)
+                                                            NIL K))
+              (+ -1 FUEL))
+            (EVAL-EXPR
+              (NODE-BINARY-OP->LEFT (NODE-BINARY-OP->LEFT X))
+              (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP (NODE-BINARY-OP->LEFT X))
+                                    (NODE-BINARY-OP->RIGHT (NODE-BINARY-OP->LEFT X))
+                                    NIL
+                                    (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                                            (NODE-BINARY-OP->RIGHT X)
+                                                            NIL '(:INIT)))
+              (+ -1 FUEL))
+            (EVAL-EXPR (NODE-BINARY-OP->RIGHT X)
+              (ERL-K-BINARY-OP-EXPR2
+                   (NODE-BINARY-OP->OP X)
+                   (ERL-VALUE-ATOM (NODE-ATOM->VAL (NODE-BINARY-OP->LEFT X)))
+                   NIL '(:INIT))
+              (+ -2 FUEL))
+            (EVAL-EXPR (NODE-BINARY-OP->RIGHT X)
+              (ERL-K-BINARY-OP-EXPR2
+                   (NODE-BINARY-OP->OP X)
+                   (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+                   NIL '(:INIT))
+              (+ -2 FUEL))
+            (EVAL-EXPR (NODE-BINARY-OP->RIGHT X)
+              (ERL-K-BINARY-OP-EXPR2
+                   (NODE-BINARY-OP->OP X)
+                   (ERL-VALUE-STRING (NODE-STRING->VAL (NODE-BINARY-OP->LEFT X)))
+                   NIL '(:INIT))
+              (+ -2 FUEL))
+            (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (NODE-BINARY-OP->LEFT X)))
+           (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                  (NODE-BINARY-OP->RIGHT X)
+                                  NIL K)
+           (+ -1 FUEL))
+          (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (NODE-BINARY-OP->LEFT X)))
+           (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                  (NODE-BINARY-OP->RIGHT X)
+                                  NIL K)
+           (+ -1 FUEL))
+          (EVAL-EXPR
+            (NODE-BINARY-OP->RIGHT X)
+            (ERL-K-BINARY-OP-EXPR2
+                  (NODE-BINARY-OP->OP X)
+                  (ERL-VALUE-STRING (NODE-STRING->VAL (NODE-BINARY-OP->LEFT X)))
+                  NIL K)
+            (+ -2 FUEL))
+          (EVAL-EXPR (NODE-BINARY-OP->RIGHT X)
+             (ERL-K-BINARY-OP-EXPR2
+                  (NODE-BINARY-OP->OP X)
+                  (ERL-VALUE-ATOM (NODE-ATOM->VAL (NODE-BINARY-OP->LEFT X)))
+                  NIL K)
+             (+ -2 FUEL))
+        (EVAL-EXPR (NODE-BINARY-OP->RIGHT X)
+             (ERL-K-BINARY-OP-EXPR2
+                  (NODE-BINARY-OP->OP X)
+                  (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+                  NIL K)
+             (+ -2 FUEL))
+      (APPLY-K (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+             (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                    (NODE-BINARY-OP->RIGHT X)
+                                    NIL '(:INIT))
+             (+ -1 FUEL))
+      (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (NODE-BINARY-OP->LEFT X)))
+             (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                    (NODE-BINARY-OP->RIGHT X)
+                                    NIL '(:INIT))
+             (+ -1 FUEL))
+      (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (NODE-BINARY-OP->LEFT X)))
+             (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                    (NODE-BINARY-OP->RIGHT X)
+                                    NIL '(:INIT))
+             (+ -1 FUEL)))
+    ;; 30'' and 33''
+    :hints (("Subgoal 30''" 
+              :use ((:instance fuel-is-good-if-less-fuel-is-good-apply
+                (val  (APPLY-K
+                        (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->RIGHT X)))
+                        (ERL-K-BINARY-OP-EXPR2
+                            (NODE-BINARY-OP->OP X)
+                            (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+                            NIL '(:INIT))
+                        (+ -3 FUEL)))
+                (k k)
+                (fuel fuel)
+                (z -3))))
+            ("Subgoal 33''" 
+              :use ((:instance fuel-is-good-if-less-fuel-is-good-apply
+                (val (APPLY-K
+                        (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->RIGHT X)))
+                        (ERL-K-BINARY-OP-EXPR2
+                            (NODE-BINARY-OP->OP X)
+                            (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (NODE-BINARY-OP->LEFT X)))
+                            NIL '(:INIT))
+                        (+ -3 FUEL)))
+                (k k)
+                (fuel fuel)
+                (z -3))))
+
+              
+          ))
+
+
+
+
+
+
+
+
 ;; ============================================================================================
 
-; 1/10'''
-; Subgoal *1/4.42'
 (in-theory (disable more-fuel-is-good-for-apply))
 
-(defrule fuel-good
+(defrule fuel-is-good-if-less-fuel-is-good-apply
   (implies (and (erl-value-p val)
                 (erl-k-p k)
                 (natp (+ z fuel))
@@ -213,132 +455,153 @@
           (fuel1 (+ z fuel))
           (fuel2 fuel))))
 
+(in-theory (disable fuel-is-good-if-less-fuel-is-good-apply))
 
-(defrule stupid-x
-  (implies (and ())
-           ()))
 
-(defun step1-hint (clause)
+
+(defrule fuel-is-not-fault-if-less-fuel-is-not-fault-apply
+  (implies (and (erl-value-p val)
+                (erl-k-p k)
+                (natp (+ z fuel))
+                (integerp z)
+                (< z 0)
+                (natp fuel)
+                (not (equal (erl-value-kind (apply-k val k (+ z fuel))) :fault)))
+           (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
+  :use ((:instance more-fuel-is-good-for-apply
+          (val val)
+          (k k)
+          (fuel1 (+ z fuel))
+          (fuel2 fuel))))
+
+(in-theory (disable more-fuel-is-good-for-eval))
+
+(defrule fuel-is-good-if-less-fuel-is-good
+  (implies (and (expr-p x)
+                (erl-k-p k)
+                (natp (+ z fuel))
+                (integerp z)
+                (< z 0)
+                (natp fuel)
+                (not (equal (erl-value-kind (eval-expr x k (+ z fuel))) :fault)))
+           (equal (eval-expr x k (+ z fuel)) (eval-expr x k fuel)))
+  :use ((:instance more-fuel-is-good-for-eval
+          (x x)
+          (k k)
+          (fuel1 (+ z fuel))
+          (fuel2 fuel))))
+
+(defrule fuel-is-not-fault-if-less-fuel-is-not-fault-eval
+  (implies (and (expr-p x)
+                (erl-k-p k)
+                (natp (+ z fuel))
+                (integerp z)
+                (< z 0)
+                (natp fuel)
+                (not (equal (erl-value-kind (eval-expr x k (+ z fuel))) :fault)))
+           (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
+  :use ((:instance more-fuel-is-good-for-eval
+          (x x)
+          (k k)
+          (fuel1 (+ z fuel))
+          (fuel2 fuel))))
+
+
+;; =============================================================================================
+
+
+
+
+
+
+
+
+
+
+;; ===============================================================================================
+(defrule crock-0
+  (implies (and (expr-p x)
+                (erl-k-p k)
+                (natp fuel)
+                (natp (+ z fuel))
+                (< z 0)
+                (equal (node-kind x) :binary-op)
+                (NOT (EQUAL (ERL-VALUE-KIND (EVAL-EXPR (NODE-BINARY-OP->LEFT X) 
+                                                       (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X) 
+                                                                              (NODE-BINARY-OP->RIGHT X) NIL K) 
+                                                       (+ z FUEL)))
+                            :FAULT)))
+            (not (EQUAL (ERL-VALUE-KIND (EVAL-EXPR (NODE-BINARY-OP->LEFT X)
+                                                   (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                                                          (NODE-BINARY-OP->RIGHT X) NIL K)
+                                                   FUEL))
+                 :FAULT)))
+  :use ((:instance fuel-is-not-fault-if-less-fuel-is-not-fault-eval
+        (x (NODE-BINARY-OP->LEFT X))
+        (k (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X) (NODE-BINARY-OP->RIGHT X) NIL K))
+        (fuel fuel)
+        (z z))))
+
+(defrule crock-1
+  (implies (and (expr-p x)
+                (erl-k-p k)
+                (natp fuel)
+                (natp (+ -1 fuel))
+                (equal (node-kind x) :binary-op)
+                (NOT (EQUAL (ERL-VALUE-KIND (EVAL-EXPR (NODE-BINARY-OP->LEFT X) 
+                                                       (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X) 
+                                                                              (NODE-BINARY-OP->RIGHT X) NIL K) 
+                                                       (+ -1 FUEL)))
+                            :FAULT)))
+            (not (EQUAL (ERL-VALUE-KIND (EVAL-EXPR (NODE-BINARY-OP->LEFT X)
+                                                   (ERL-K-BINARY-OP-EXPR1 (NODE-BINARY-OP->OP X)
+                                                                          (NODE-BINARY-OP->RIGHT X) NIL K)
+                                                   FUEL))
+                 :FAULT)))
+  :use ((:instance crock-0
+        (x x)
+        (k k)
+        (fuel fuel)
+        (z -1))))
+
+
+
+(defun eval-init-hint (clause)
   (cond 
     ((acl2::occur-lst '(flag-is 'eval) clause)
 	   '(:expand ((eval-expr x k fuel)
                 (EVAL-EXPR X K 0)
+                (EVAL-EXPR X :INIT FUEL)
+              
                     )))
 	  ((acl2::occur-lst '(flag-is 'apply) clause)
 	  '(:expand ((APPLY-K VAL K FUEL)
                (APPLY-K VAL K 0)
-               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) (ERL-K-BINARY-OP-EXPR2->K K) (+ -1 FUEL))
-               (APPLY-K VAL (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) NIL '(:INIT)) FUEL)
-               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) '(:INIT) (+ -1 FUEL))
-               (APPLY-K VAL (ERL-K-BINARY-OP-EXPR1 (ERL-K-BINARY-OP-EXPR1->OP K) (ERL-K-BINARY-OP-EXPR1->EXPR2 K) NIL '(:INIT)) FUEL)
-               (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) (+ -1 FUEL))
-               (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) (+ -1 FUEL))
-               (APPLY-K '(:FAULT OUT-OF-FUEL) (ERL-K-BINARY-OP-EXPR1->K K) 2)
-               (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) :INIT 1)
-               (APPLY-K '(:FAULT OUT-OF-FUEL) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) 1)
-               (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) :INIT (+ -1 FUEL))
-               (APPLY-K '(:FAULT OUT-OF-FUEL) (ERL-K-BINARY-OP-EXPR1->K K) (+ -1 FUEL)) 
-              ;; integer
-               (APPLY-K (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) (+ -2 FUEL))
-               (APPLY-K (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) '(:INIT) 0)
-               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR1->OP K) VAL (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K)))) '(:INIT) (+ -3 FUEL)) 
-               (APPLY-K (ERL-VALUE-INTEGER (NODE-INTEGER->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) FUEL)
-              ;;atom
-               (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) (+ -2 FUEL))
-               (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) '(:INIT) 0)
-               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR1->OP K) VAL (ERL-VALUE-ATOM (NODE-ATOM->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K)))) '(:INIT) (+ -3 FUEL)) 
-               (APPLY-K (ERL-VALUE-ATOM (NODE-ATOM->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) FUEL)
-
-              ;;string
-               (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) (+ -2 FUEL))
-               (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) '(:INIT) 0)
-               (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR1->OP K) VAL (ERL-VALUE-STRING (NODE-STRING->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K)))) '(:INIT) (+ -3 FUEL)) 
-               (APPLY-K (ERL-VALUE-STRING (NODE-STRING->VAL (ERL-K-BINARY-OP-EXPR1->EXPR2 K))) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) FUEL)
-
-              ;; new
-              (APPLY-K VAL K FUEL)
-              (APPLY-K VAL :INIT FUEL)
-              (APPLY-K (APPLY-ERL-BINOP (ERL-K-BINARY-OP-EXPR2->OP K) (ERL-K-BINARY-OP-EXPR2->RESULT K) VAL) (ERL-K-BINARY-OP-EXPR2->K K) FUEL)
-              (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL (ERL-K-BINARY-OP-EXPR1->K K)) 0)
-              (EVAL-EXPR (ERL-K-BINARY-OP-EXPR1->EXPR2 K) (ERL-K-BINARY-OP-EXPR2 (ERL-K-BINARY-OP-EXPR1->OP K) VAL NIL '(:INIT)) 0)
-
+               (APPLY-K VAL :INIT FUEL)
+               
               )))
 	  (t nil)))
 
-(defthm-eval-expr-flag init-k-returns-as-is-binop
-  (defthm init-k-returns-as-is-binop-1-eval
-    (implies (and (expr-p x) 
+(defthm-eval-expr-flag init-k-is-equiv
+  (defthm init-k-is-equiv-for-binary-op
+    (implies (and (expr-p x)
+                  (equal (node-kind x) :binary-op)
                   (erl-k-p k)
-                  (equal (erl-k-kind k) :binary-op-expr2)
                   (natp fuel)
                   (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
-           (let ((op (erl-k-binary-op-expr2->op k))
-                 (result (erl-k-binary-op-expr2->result k))
-                 (k_next (erl-k-binary-op-expr2->k k)))
-                (equal (eval-expr x k fuel)
-                       (apply-k (eval-expr x (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel) k_next fuel))))
-    :flag eval)
-  (defthm init-k-returns-as-is-binop-2-eval
-    (implies (and (expr-p x) 
-                  (erl-k-p k)
-                  (equal (erl-k-kind k) :binary-op-expr1)
-                  (natp fuel)
-                  (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
-           (let ((op (erl-k-binary-op-expr1->op k))
-                 (expr2 (erl-k-binary-op-expr1->expr2 k))
-                 (k_next (erl-k-binary-op-expr1->k k)))
-                (equal (eval-expr x k fuel)
-                       (apply-k (eval-expr x (make-erl-k-binary-op-expr1 :op op :expr2 expr2 :k :init) fuel) k_next fuel))))
+           (let ((op (node-binary-op->op x))
+                 (left (node-binary-op->left x))
+                 (right (node-binary-op->right x)))
+                (equal (eval-expr left (make-erl-k-binary-op-expr1 :op op :expr2 right :k k) fuel)
+                       (apply-k (eval-expr left (make-erl-k-binary-op-expr1 :op op :expr2 right :k :init) fuel) k fuel))))
     :flag eval)
 
-  (defthm init-k-returns-as-is-binop-1-apply
-    (implies (and (erl-value-p val) 
-                (erl-k-p k)
-                (equal (erl-k-kind k) :binary-op-expr2)
-                (natp fuel)
-                (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
-           (let ((op (erl-k-binary-op-expr2->op k))
-                 (result (erl-k-binary-op-expr2->result k))
-                 (k_next (erl-k-binary-op-expr2->k k)))
-                (equal (apply-k val k fuel)
-                       (apply-k (apply-k val (make-erl-k-binary-op-expr2 :op op :result result :k :init) fuel) k_next fuel))))
-    :flag apply)
-  (defthm init-k-returns-as-is-binop-1-apply
-    (implies (and (erl-value-p val) 
-                (erl-k-p k)
-                (equal (erl-k-kind k) :binary-op-expr1)
-                (natp fuel)
-                (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
-           (let ((op (erl-k-binary-op-expr1->op k))
-                 (expr2 (erl-k-binary-op-expr1->expr2 k))
-                 (k_next (erl-k-binary-op-expr1->k k)))
-                (equal (apply-k val k fuel)
-                       (apply-k (apply-k val (make-erl-k-binary-op-expr1 :op op :expr2 expr2 :k :init) fuel) k_next fuel))))
-    :flag apply)
-  
-  (defthm init-k-returns-as-is-apply
-    (implies (and (erl-value-p val) 
-                  (erl-k-p k)
-                  (natp fuel)
-                  (not (equal (erl-value-kind (apply-k val k fuel)) :fault)))
-             (equal (apply-k val k fuel)
-                    (apply-k (apply-k val :init fuel) k fuel)))
-    :flag apply)
-  (defthm init-k-returns-as-is-eval
+  (defthm init-k-is-equiv-eval
     (implies (and (expr-p x) 
                   (erl-k-p k)
                   (natp fuel)
                   (not (equal (erl-value-kind (eval-expr x k fuel)) :fault)))
-             (equal (eval-expr x k fuel)
+              (equal (eval-expr x k fuel)
                     (apply-k (eval-expr x :init fuel) k fuel)))
     :flag eval)
-  
-  :hints((step1-hint clause)))
-
-
-
-
-
-
-
-
+    :hints((eval-init-hint clause)))
