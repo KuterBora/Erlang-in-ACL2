@@ -80,7 +80,7 @@
   :in-theory (enable apply-k))
 
 
-(defrule apply-k-of-append
+(defruled apply-k-of-append
   (implies
     (and (erl-k-list-p klst1)
          (erl-k-list-p klst2)
@@ -94,40 +94,166 @@
   :in-theory (enable apply-k))
 
 
-(defrule apply-k-of-car
+(defrule apply-k-of-fault
   (implies
-    (and (erl-k-list-p klst)
-         (not (endp klst))
-         (erl-value-p val)
-         (natp fuel)
+    (and (erl-value-p val)
 	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault)))
-    (equal
-      (apply-k val klst fuel)
-      (apply-k (apply-k val (list (car klst)) fuel) (cdr klst) fuel)))
-  :use (:instance apply-k-of-append
-          (klst1 (list (car klst)))
-          (klst2 (cdr klst))
-          (fuel fuel)
-          (val val)))
+    (not (equal (erl-value-kind val) :fault)))
+  :expand (apply-k val klst fuel))
 
 
 (defrule apply-k-of-binop
   (implies
     (and (erl-k-list-p klst)
+         (not (endp klst))
          (erl-value-p val)
          (natp fuel)
 	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
-         (car (erl-)))
+         (equal (erl-k-kind (car klst)) :expr)
+         (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op))
     (equal
-      (apply-k val klst fuel)
-      (apply-k (apply-k val (list (car klst)) fuel) (cdr klst) fuel)))
-  :use (:instance apply-k-of-append
-          (klst1 (list (car klst)))
-          (klst2 (cdr klst))
-          (fuel fuel)
-          (val val)))
-
-
-
-
-
+      (apply-k 
+        (apply-erl-binop
+          (node-binary-op->op (erl-k-expr->expr (car klst)))
+          (apply-k '(:nil) (list (make-erl-k-expr :expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+          (apply-k '(:nil) (list (make-erl-k-expr :expr (node-binary-op->right (erl-k-expr->expr (car klst))))) fuel))
+        (cdr klst) fuel)
+      (apply-k val klst fuel)))
+   :expand ((APPLY-K VAL (LIST (CAR KLST)) FUEL)
+            (APPLY-K '(:FAULT OUT-OF-FUEL) (CDR KLST) 0))
+  :hints (("Goal" :use (:instance apply-k-of-append
+            (klst1 (list (car klst)))
+            (klst2 (cdr klst))
+            (klst klst)
+            (val val)
+            (fuel fuel)))
+          ("Subgoal 2" :expand (EVAL-K (CAR KLST) VAL))
+          ("Subgoal 2'" :use (:instance a-little-more-fuel-is-good
+            (val '(:NIL))
+            (klst 
+              (LIST (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST))))
+                    (ERL-K-BINARY-OP-EXPR1
+                        (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                        (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
+                        NIL)))
+            (fuel fuel)))
+          ("Subgoal 2.1" :use (:instance apply-k-of-append
+            (klst1 (list (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST))))))
+            (klst2 (list (ERL-K-BINARY-OP-EXPR1
+                          (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                          (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
+                          NIL)))
+            (klst (LIST (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST))))
+                        (ERL-K-BINARY-OP-EXPR1
+                            (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                            (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
+                            NIL)))
+            (val '(:NIL))
+            (fuel fuel)))
+          
+          ("Subgoal 2.1.1" :expand 
+            (:free (v) (APPLY-K
+              v
+              (LIST (ERL-K-BINARY-OP-EXPR1
+                        (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                        (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
+                        NIL))
+              FUEL)))
+          ("Subgoal 2.1.1.2" :expand
+             (EVAL-K
+                (ERL-K-BINARY-OP-EXPR1
+                      (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                      (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
+                      NIL)
+                (APPLY-K
+                  '(:NIL)
+                  (LIST
+                      (ERL-K-EXPR
+                            (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
+                  FUEL)))
+          ("Subgoal 2.1.1.2'" :use (:instance a-little-more-fuel-is-good
+              (val '(:NIL))
+              (klst (LIST
+                    (ERL-K-EXPR (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST))))
+                    (ERL-K-BINARY-OP-EXPR2
+                      (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                      (APPLY-K
+                      '(:NIL)
+                      (LIST
+                          (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
+                      FUEL)
+                      NIL)))
+              (fuel fuel)
+            ))
+          ("Subgoal 2.1.1.2.1" :use (:instance apply-k-of-append
+            (klst1 (list (ERL-K-EXPR (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST))))))
+            (klst2 (list (ERL-K-BINARY-OP-EXPR2
+                              (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                              (APPLY-K
+                              '(:NIL)
+                              (LIST
+                                  (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
+                              FUEL)
+                              NIL)))
+            (klst (LIST
+                    (ERL-K-EXPR (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST))))
+                    (ERL-K-BINARY-OP-EXPR2
+                      (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                      (APPLY-K
+                      '(:NIL)
+                      (LIST
+                          (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
+                      FUEL)
+                      NIL)))
+            (val '(:NIL))
+            (fuel fuel)))
+          ("Subgoal 2.1.1.2.1.1" :expand
+            (:free (v1 v2) 
+              (APPLY-K
+                  v1
+                  (LIST
+                  (ERL-K-BINARY-OP-EXPR2
+                    (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                    v2
+                    NIL))
+                  FUEL)))
+          ("Subgoal 2.1.1.2.1.1.2"
+            :expand (EVAL-K
+                (ERL-K-BINARY-OP-EXPR2
+                (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                (APPLY-K
+                  '(:NIL)
+                  (LIST
+                    (ERL-K-EXPR
+                          (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
+                  FUEL)
+                NIL)
+                (APPLY-K
+                '(:NIL)
+                (LIST
+                    (ERL-K-EXPR
+                        (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))))
+                FUEL)))
+          ("Subgoal 2.1.1.2.1.1.2'" :use (:instance a-little-more-fuel-is-good
+            (val  (APPLY-ERL-BINOP
+                      (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                      (APPLY-K
+                        '(:NIL)
+                        (LIST
+                            (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
+                        FUEL)
+                      (APPLY-K
+                        '(:NIL)
+                        (LIST
+                            (ERL-K-EXPR (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))))
+                        FUEL)))
+            (klst nil)
+            (fuel fuel)))
+          ("Subgoal 2.1.1.2.1.1.2.1" :expand
+            (:free (op v1 v2)
+              (APPLY-K
+                (APPLY-ERL-BINOP
+                op
+                v1
+                v2)
+                NIL FUEL)))))
