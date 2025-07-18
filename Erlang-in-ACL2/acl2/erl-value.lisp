@@ -11,18 +11,18 @@
 (fty::deftypes erl-value
   (fty::deftagsum erl-value
     (:integer ((val integerp)))
-		(:atom ((val symbolp)))
-		(:string ((val stringp)))
+    (:atom ((val symbolp)))
+    (:string ((val stringp)))
     (:nil ())
-		(:cons ((lst erl-value-list-p)))
-		(:tuple ((tuple erl-value-list-p)))
+    (:cons ((lst erl-value-list-p)))
+    (:tuple ((tuple erl-value-list-p)))
     (:error ((err symbolp)))
     (:fault ((err symbolp)))
     :measure (list (acl2-count x) 1))
   (fty::deflist erl-value-list
-	  :elt-type erl-value-p
-		:true-listp t
-		:measure (list (acl2-count x) 0)))
+    :elt-type erl-value-p
+    :true-listp t
+    :measure (list (acl2-count x) 0)))
 
 ;; Bindings of variables to values
 (fty::defalist bind

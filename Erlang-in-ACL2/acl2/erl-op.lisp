@@ -1,4 +1,6 @@
+(in-package "ACL2")
 (include-book "std/util/top" :DIR :SYSTEM)
+(include-book "erl-value")
 (set-induction-depth-limit 1)
 
 ;; Erl Addition

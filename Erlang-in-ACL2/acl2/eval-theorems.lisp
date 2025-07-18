@@ -1,6 +1,7 @@
 (in-package "ACL2")
 (include-book "centaur/fty/top" :DIR :SYSTEM)
 (include-book "std/util/top" :DIR :SYSTEM)
+(include-book "erl-kont")
 (set-induction-depth-limit 1)
 
 ;; Theorems to help admit the evaluator
