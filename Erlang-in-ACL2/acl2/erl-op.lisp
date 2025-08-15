@@ -81,10 +81,24 @@
   :returns (v erl-value-p)
   (b* ((op (symbol-fix op))
        (left (erl-value-fix left))
-       (right (erl-value-fix right)))
+       (right (erl-value-fix right))
+       ((if (equal (erl-value-kind left) :fault)) '(:fault bad-ast))
+       ((if (equal (erl-value-kind right) :fault)) '(:fault bad-ast)))
       (case op
-            (+ (erl-add left right))
-            (- (erl-sub left right))
-            (* (erl-mul left right))
-            (div (erl-div left right))
-            (otherwise '(:fault bad-op)))))
+        (+ (erl-add left right))
+        (- (erl-sub left right))
+        (* (erl-mul left right))
+        (div (erl-div left right))
+        (otherwise '(:fault bad-op))))
+        
+    ///
+    (defrule apply-erl-binop-of-fault
+      (implies (and (erl-value-p left)
+                    (erl-value-p right)
+                    (symbolp op))
+                (iff (not (equal (erl-value-kind (apply-erl-binop op left right)) :fault))
+                     (and (not (equal (erl-value-kind left) :fault))
+                          (not (equal (erl-value-kind right) :fault))
+                          (member op '(+ - * div)))))
+      :enable (erl-add erl-sub erl-mul erl-div)))
+

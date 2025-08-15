@@ -1,20 +1,20 @@
 (in-package "ACL2")
-(include-book "centaur/fty/top" :DIR :SYSTEM)
-(include-book "std/util/top" :DIR :SYSTEM)
+(include-book "centaur/fty/top" :dir :system)
+(include-book "std/util/top" :dir :system)
 (include-book "erl-op")
 (include-book "eval-theorems")
 
 (set-induction-depth-limit 1)
 
-;; ------------------------------- Erlang Evaluator ----------------------------------------------
+;; ------------------------------- erlang evaluator ----------------------------------------------
 
 (fty::defprod erl-val-klst
   ((v erl-value-p :default (make-erl-value-nil))
    (k erl-k-list-p :default nil)))
 
-; eval-k is non-recursive.  I could embed eval-k in the boddy of apply-k.
-; I'm guessing that making a separate function for eval-k may be handy because we will
-; be able to prove lemmas that apply regardless of the kind of k.  Likewise, proofs
+; eval-k is non-recursive.  i could embed eval-k in the boddy of apply-k.
+; i'm guessing that making a separate function for eval-k may be handy because we will
+; be able to prove lemmas that apply regardless of the kind of k.  likewise, proofs
 ; about apply-k are less likely to split into a large number of redundant cases.
 (define eval-k ((k erl-k-p) (val erl-value-p))
   :returns (kv erl-val-klst-p)
@@ -28,12 +28,11 @@
         (:binary-op
           (make-erl-val-klst
             :k (list (make-erl-k-expr :expr x.left)
-              (make-erl-k-binary-op-expr1 :op x.op :right-expr x.right))))
+                     (make-erl-k-binary-op-expr1 :op x.op :right-expr x.right))))
         (:fault (make-erl-val-klst :v (make-erl-value-fault :err 'bad-ast)))
         (otherwise (make-erl-val-klst :v (make-erl-value-fault :err 'not-implemented))))))
     (:binary-op-expr1
-      (make-erl-val-klst
-        :k (list (make-erl-k-expr :expr k.right-expr)
+      (make-erl-val-klst :k (list (make-erl-k-expr :expr k.right-expr)
       (make-erl-k-binary-op-expr2 :op k.op :left-val val))))
     (:binary-op-expr2
       (make-erl-val-klst :v (apply-erl-binop k.op k.left-val val)))
@@ -54,7 +53,7 @@
     (apply-k kv.v (append kv.k ktl) (- fuel (if kv.v 1 0)))))
 
 
-;;-------------------------------------- Theorems --------------------------------------------------
+;;-------------------------------------- theorems --------------------------------------------------
 
 (defrule more-fuel-is-good
   (implies 
@@ -68,7 +67,7 @@
   :in-theory (enable apply-k))
 
 
-;; This might be dangerous in some contexts - where fuel is known to be much greater than 0.
+;; this might be dangerous in some contexts - where fuel is known to be much greater than 0.
 (defrule a-little-more-fuel-is-good
   (implies 
     (and (erl-value-p val)
@@ -94,7 +93,7 @@
   :in-theory (enable apply-k))
 
 
-(defrule apply-k-of-fault
+(defrule apply-k-val-is-not-fault
   (implies
     (and (erl-value-p val)
 	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault)))
@@ -102,7 +101,19 @@
   :expand (apply-k val klst fuel))
 
 
-(defrule apply-k-of-binop
+(defrule apply-k-of-nil
+  (implies (and (erl-value-p val)
+                (posp fuel))
+           (equal (apply-k val nil fuel)
+                  val))
+  :expand (apply-k val nil fuel))
+
+
+
+
+;;; APPLY-K of BINOP
+
+(defruled reveal-apply-k-of-binary-op-step-1
   (implies
     (and (erl-k-list-p klst)
          (not (endp klst))
@@ -111,149 +122,218 @@
 	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
          (equal (erl-k-kind (car klst)) :expr)
          (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op))
-    (equal
-      (apply-k 
-        (apply-erl-binop
-          (node-binary-op->op (erl-k-expr->expr (car klst)))
-          (apply-k '(:nil) (list (make-erl-k-expr :expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
-          (apply-k '(:nil) (list (make-erl-k-expr :expr (node-binary-op->right (erl-k-expr->expr (car klst))))) fuel))
-        (cdr klst) fuel)
-      (apply-k val klst fuel)))
-   :expand ((APPLY-K VAL (LIST (CAR KLST)) FUEL)
-            (APPLY-K '(:FAULT OUT-OF-FUEL) (CDR KLST) 0))
-  :hints (("Goal" :use (:instance apply-k-of-append
-            (klst1 (list (car klst)))
-            (klst2 (cdr klst))
-            (klst klst)
-            (val val)
-            (fuel fuel)))
-          ("Subgoal 2" :expand (EVAL-K (CAR KLST) VAL))
-          ("Subgoal 2'" :use (:instance a-little-more-fuel-is-good
-            (val '(:NIL))
-            (klst 
-              (LIST (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST))))
-                    (ERL-K-BINARY-OP-EXPR1
-                        (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                        (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
-                        NIL)))
-            (fuel fuel)))
-          ("Subgoal 2.1" :use (:instance apply-k-of-append
-            (klst1 (list (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST))))))
-            (klst2 (list (ERL-K-BINARY-OP-EXPR1
-                          (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                          (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
-                          NIL)))
-            (klst (LIST (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST))))
-                        (ERL-K-BINARY-OP-EXPR1
-                            (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                            (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
-                            NIL)))
-            (val '(:NIL))
-            (fuel fuel)))
-          
-          ("Subgoal 2.1.1" :expand 
-            (:free (v) (APPLY-K
-              v
-              (LIST (ERL-K-BINARY-OP-EXPR1
-                        (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                        (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
-                        NIL))
-              FUEL)))
-          ("Subgoal 2.1.1.2" :expand
-             (EVAL-K
-                (ERL-K-BINARY-OP-EXPR1
-                      (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                      (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
-                      NIL)
-                (APPLY-K
-                  '(:NIL)
-                  (LIST
-                      (ERL-K-EXPR
-                            (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
-                  FUEL)))
-          ("Subgoal 2.1.1.2'" :use (:instance a-little-more-fuel-is-good
-              (val '(:NIL))
-              (klst (LIST
-                    (ERL-K-EXPR (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST))))
-                    (ERL-K-BINARY-OP-EXPR2
-                      (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                      (APPLY-K
-                      '(:NIL)
-                      (LIST
-                          (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
-                      FUEL)
-                      NIL)))
-              (fuel fuel)
-            ))
-          ("Subgoal 2.1.1.2.1" :use (:instance apply-k-of-append
-            (klst1 (list (ERL-K-EXPR (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST))))))
-            (klst2 (list (ERL-K-BINARY-OP-EXPR2
-                              (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                              (APPLY-K
-                              '(:NIL)
-                              (LIST
-                                  (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
-                              FUEL)
-                              NIL)))
-            (klst (LIST
-                    (ERL-K-EXPR (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST))))
-                    (ERL-K-BINARY-OP-EXPR2
-                      (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                      (APPLY-K
-                      '(:NIL)
-                      (LIST
-                          (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
-                      FUEL)
-                      NIL)))
-            (val '(:NIL))
-            (fuel fuel)))
-          ("Subgoal 2.1.1.2.1.1" :expand
-            (:free (v1 v2) 
-              (APPLY-K
-                  v1
-                  (LIST
-                  (ERL-K-BINARY-OP-EXPR2
-                    (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                    v2
-                    NIL))
-                  FUEL)))
-          ("Subgoal 2.1.1.2.1.1.2"
-            :expand (EVAL-K
-                (ERL-K-BINARY-OP-EXPR2
-                (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                (APPLY-K
-                  '(:NIL)
-                  (LIST
-                    (ERL-K-EXPR
-                          (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
-                  FUEL)
-                NIL)
-                (APPLY-K
-                '(:NIL)
-                (LIST
-                    (ERL-K-EXPR
-                        (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))))
-                FUEL)))
-          ("Subgoal 2.1.1.2.1.1.2'" :use (:instance a-little-more-fuel-is-good
-            (val  (APPLY-ERL-BINOP
-                      (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
-                      (APPLY-K
-                        '(:NIL)
-                        (LIST
-                            (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST)))))
-                        FUEL)
-                      (APPLY-K
-                        '(:NIL)
-                        (LIST
-                            (ERL-K-EXPR (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))))
-                        FUEL)))
-            (klst nil)
-            (fuel fuel)))
-          ("Subgoal 2.1.1.2.1.1.2.1" :expand
-            (:free (op v1 v2)
-              (APPLY-K
-                (APPLY-ERL-BINOP
-                op
-                v1
-                v2)
-                NIL FUEL)))))
+    (and  (> fuel 1)
+          (equal (apply-k val klst fuel)
+                 (apply-k '(:nil)
+                          (append (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))
+                                        (erl-k-binary-op-expr1 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                                                (node-binary-op->right (erl-k-expr->expr (car klst)))
+                                                                                nil))
+                                  (cdr klst))
+                          fuel))))
+  :in-theory (enable apply-k eval-k))
+
+(defruled reveal-apply-k-of-binary-op-step-1.5
+  (implies
+    (and (erl-k-list-p klst)
+         (not (endp klst))
+         (erl-value-p val)
+         (natp fuel)
+	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
+         (equal (erl-k-kind (car klst)) :expr)
+         (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op))
+    (equal  (apply-k val klst fuel)
+            (apply-k val
+                    (append (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))
+                                  (erl-k-binary-op-expr1 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                                          (node-binary-op->right (erl-k-expr->expr (car klst)))
+                                                                          nil))
+                            (cdr klst))
+                    fuel)))
+  :use (:instance reveal-apply-k-of-binary-op-step-1
+          (klst klst) (val val) (fuel fuel))
+  :expand (:free (v) (apply-k v
+                          (LIST* (ERL-K-EXPR (NODE-BINARY-OP->LEFT (ERL-K-EXPR->EXPR (CAR KLST))))
+            (ERL-K-BINARY-OP-EXPR1
+                 (NODE-BINARY-OP->OP (ERL-K-EXPR->EXPR (CAR KLST)))
+                 (NODE-BINARY-OP->RIGHT (ERL-K-EXPR->EXPR (CAR KLST)))
+                 NIL)
+            (CDR KLST))
+                          fuel))
+  :enable (eval-k))
+
+
+
+(defruled reveal-apply-k-of-binary-op-step-2
+  (implies
+    (and (erl-k-list-p klst)
+         (not (endp klst))
+         (erl-value-p val)
+         (natp fuel)
+	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
+         (equal (erl-k-kind (car klst)) :expr)
+         (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op))
+    (equal  (apply-k val klst fuel)
+            (apply-k (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+                    (cons (erl-k-binary-op-expr1 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                  (node-binary-op->right (erl-k-expr->expr (car klst)))
+                                                  nil)
+                          (cdr klst)) 
+                    fuel)))
+  :use  ((:instance reveal-apply-k-of-binary-op-step-1.5
+          (klst klst) (val val) (fuel fuel))   
+          (:instance apply-k-of-append 
+          (klst (list* (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))
+                       (erl-k-binary-op-expr1
+                          (node-binary-op->op (erl-k-expr->expr (car klst)))
+                          (node-binary-op->right (erl-k-expr->expr (car klst)))
+                          nil)
+                       (cdr klst))) 
+          (klst1 (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))))
+          (klst2 (cons (erl-k-binary-op-expr1 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                              (node-binary-op->right (erl-k-expr->expr (car klst)))
+                                              nil)
+                        (cdr klst)))
+          (val val)
+          (fuel fuel))))
+
+
+(defruled reveal-apply-k-of-binary-op-step-3
+  (implies
+    (and (erl-k-list-p klst)
+         (not (endp klst))
+         (erl-value-p val)
+         (natp fuel)
+	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
+         (equal (erl-k-kind (car klst)) :expr)
+         (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op))
+    (equal (apply-k val klst fuel)
+           (apply-k '(:nil)
+                    (append (list (erl-k-expr (node-binary-op->right (erl-k-expr->expr (car klst))))
+                                  (erl-k-binary-op-expr2 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                        (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+                                                        nil))
+                            (cdr klst))
+                      fuel)))
+    :use ((:instance reveal-apply-k-of-binary-op-step-2
+          (klst klst) (val val) (fuel fuel)))
+    :expand 
+      (:free (v) (apply-k v 
+                          (cons (erl-k-binary-op-expr1 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                       (node-binary-op->right (erl-k-expr->expr (car klst)))
+                                                        nil)
+                                (cdr klst))
+                          fuel))
+    :enable (eval-k))
+
+
+(defruled reveal-apply-k-of-binary-op-step-3.5
+  (implies
+    (and (erl-k-list-p klst)
+         (not (endp klst))
+         (erl-value-p val)
+         (natp fuel)
+	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
+         (equal (erl-k-kind (car klst)) :expr)
+         (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op))
+    (equal  (apply-k val klst fuel)
+            (apply-k  val
+                      (append (list (erl-k-expr (node-binary-op->right (erl-k-expr->expr (car klst))))
+                                    (erl-k-binary-op-expr2 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                          (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+                                                          nil))
+                              (cdr klst))
+                        fuel)))
+    :use (:instance reveal-apply-k-of-binary-op-step-3
+          (klst klst) (val val) (fuel fuel))
+    :expand (:free (v) (apply-k 
+                          v
+                          (list*  (erl-k-expr (node-binary-op->right (erl-k-expr->expr (car klst))))
+                                  (erl-k-binary-op-expr2 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                        (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+                                                        nil)
+                                  (cdr klst))
+                           fuel))
+    :enable (eval-k))
+
+(defruled reveal-apply-k-of-binary-op-step-4
+  (implies
+    (and (erl-k-list-p klst)
+         (not (endp klst))
+         (erl-value-p val)
+         (natp fuel)
+	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
+         (equal (erl-k-kind (car klst)) :expr)
+         (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op))
+    (equal  (apply-k val klst fuel)
+            (apply-k (apply-k val (list (erl-k-expr (node-binary-op->right (erl-k-expr->expr (car klst))))) fuel)
+                     (cons (erl-k-binary-op-expr2 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                        (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+                                                        nil)
+                          (cdr klst)) 
+                    fuel)))
+
+  :use  ((:instance reveal-apply-k-of-binary-op-step-3.5
+          (klst klst) (val val) (fuel fuel))   
+          (:instance apply-k-of-append 
+          (klst (list* (erl-k-expr (node-binary-op->right (erl-k-expr->expr (car klst))))
+                       (erl-k-binary-op-expr2 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                              (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+                                              nil)
+                       (cdr klst))) 
+          (klst1 (list (erl-k-expr (node-binary-op->right (erl-k-expr->expr (car klst))))))
+          (klst2 (cons (erl-k-binary-op-expr2 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                              (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+                                              nil)
+                        (cdr klst)))
+          (val val)
+          (fuel fuel))))
+
+(defrule apply-k-of-binary-op
+  (implies
+    (and (erl-k-list-p klst)
+         (not (endp klst))
+         (erl-value-p val)
+         (natp fuel)
+	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
+         (equal (erl-k-kind (car klst)) :expr)
+         (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op))
+    (equal (apply-k val klst fuel)
+           (apply-k 
+            (apply-erl-binop
+              (node-binary-op->op (erl-k-expr->expr (car klst)))
+              (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+              (apply-k val (list (erl-k-expr (node-binary-op->right (erl-k-expr->expr (car klst))))) fuel))
+            (cdr klst) fuel)))
+
+    :use ((:instance reveal-apply-k-of-binary-op-step-4
+          (klst klst) (val val) (fuel fuel)))
+    :expand 
+      (:free (v) (apply-k v 
+                          (cons (erl-k-binary-op-expr2 (node-binary-op->op (erl-k-expr->expr (car klst)))
+                                                       (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel)
+                                                       nil)
+                                (cdr klst)) 
+                          fuel))
+    :enable (eval-k))
+
+;; This is of course trivial to prove, but it is painful to try to do this for the
+;; corresponding expression itself. The question is: would that even be useful?
+(defrule apply-k-of-binary-op-comm
+  (implies
+    (and (erl-k-list-p klst)
+         (not (endp klst))
+         (erl-value-p val)
+         (natp fuel)
+	       (not (equal (erl-value-kind (apply-k val klst fuel)) :fault))
+         (equal (erl-k-kind (car klst)) :expr)
+         (equal (node-kind (erl-k-expr->expr (car klst))) :binary-op)
+         (equal (node-binary-op->op (erl-k-expr->expr (car klst))) '+))
+    (equal (apply-k val klst fuel)
+           (apply-k 
+            (apply-erl-binop
+              (node-binary-op->op (erl-k-expr->expr (car klst)))
+              (apply-k val (list (erl-k-expr (node-binary-op->right (erl-k-expr->expr (car klst))))) fuel)
+              (apply-k val (list (erl-k-expr (node-binary-op->left (erl-k-expr->expr (car klst))))) fuel))
+            (cdr klst) fuel)))
+  :enable apply-erl-binop)
