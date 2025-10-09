@@ -1,4 +1,4 @@
-# Erl in ACL2 Code Repository
+# Erlang in ACL2 Code Repository
 
 # Setup
 
