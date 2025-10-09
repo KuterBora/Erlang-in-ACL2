@@ -16,7 +16,7 @@
 3. **Certify the Books**
     TODO
 
-# Erlang in ACL2
+## Erlang in ACL2
 
 TODO: description of Erlang in ACL2
 
