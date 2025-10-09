@@ -1,6 +1,6 @@
 # Erlang in ACL2 Code Repository
 
-# Setup
+## Setup
 
 1. **Install Erlang and ALC2**
    - Erlang: TODO
