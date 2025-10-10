@@ -1,19 +1,21 @@
 (in-package "ACL2")
 (include-book "std/util/top" :DIR :SYSTEM)
 (include-book "erl-value")
+
+; Erlang Operations ------------------------------------------------------------
+
 (set-induction-depth-limit 1)
 
-;; Erl Addition
-;; Returns badarg if arguments are not integers
-(define erl-add ((left erl-value-p) (right erl-value-p))
-  :returns (v erl-value-p)
-  (b* ((left (erl-value-fix left)) 
-       (right (erl-value-fix right)))
-    (if (and (equal (erl-value-kind left) :integer)
-             (equal (erl-value-kind right) :integer))
-        (make-erl-value-integer :val (+ (erl-value-integer->val left)
-                                        (erl-value-integer->val right)))
-        '(:error badarg)))
+; Representation of Erlang addition in ACL2.
+; - Returns badarg if arguments are not integers.
+(define erl-add ((left erl-val-p) (right erl-val-p))
+  :returns (v erl-val-p)
+  (b* ((left (erl-val-fix left)) 
+       (right (erl-val-fix right))
+       ((unless (equal (erl-val-kind left) :integer)) (make-erl-val-error :err 'badarg))
+       ((unless (equal (erl-val-kind right) :integer)) (make-erl-val-error :err 'badarg)))
+      (make-erl-val-integer :val (+ (erl-val-integer->val left)
+                                    (erl-val-integer->val right))))
   ///
   (defrule commutativity-of-erl-add
     (equal (erl-add x y)
@@ -22,31 +24,27 @@
     (equal (erl-add (erl-add x y) z)
            (erl-add x (erl-add y z)))))
 
+; Representation of Erlang substraction in ACL2.
+; - Returns badarg if arguments are not integers.
+(define erl-sub ((left erl-val-p) (right erl-val-p))
+  :returns (v erl-val-p)
+  (b* ((left (erl-val-fix left)) 
+       (right (erl-val-fix right))
+       ((unless (equal (erl-val-kind left) :integer)) (make-erl-val-error :err 'badarg))
+       ((unless (equal (erl-val-kind right) :integer)) (make-erl-val-error :err 'badarg)))
+      (make-erl-val-integer :val (- (erl-val-integer->val left)
+                                    (erl-val-integer->val right)))))
 
-;; Erl Substraction
-;; Returns badarg if arguments are not integers
-(define erl-sub ((left erl-value-p) (right erl-value-p))
-  :returns (v erl-value-p)
-  (b* ((left (erl-value-fix left)) 
-       (right (erl-value-fix right)))
-    (if (and (equal (erl-value-kind left) :integer)
-             (equal (erl-value-kind right) :integer))
-        (make-erl-value-integer :val (- (erl-value-integer->val left)
-                                        (erl-value-integer->val right)))
-        '(:error badarg))))
-
-
-;; Erl Multiplication
-;; Returns badarg if arguments are not integers
-(define erl-mul ((left erl-value-p) (right erl-value-p))
-  :returns (v erl-value-p)
-  (b* ((left (erl-value-fix left)) 
-       (right (erl-value-fix right)))
-    (if (and (equal (erl-value-kind left) :integer)
-             (equal (erl-value-kind right) :integer))
-        (make-erl-value-integer :val (* (erl-value-integer->val left)
-                                        (erl-value-integer->val right)))
-        '(:error badarg)))
+; Representation of Erlang multiplication in ACL2.
+; - Returns badarg if arguments are not integers.
+(define erl-mul ((left erl-val-p) (right erl-val-p))
+  :returns (v erl-val-p)
+  (b* ((left (erl-val-fix left)) 
+       (right (erl-val-fix right))
+       ((unless (equal (erl-val-kind left) :integer)) (make-erl-val-error :err 'badarg))
+       ((unless (equal (erl-val-kind right) :integer)) (make-erl-val-error :err 'badarg)))
+      (make-erl-val-integer :val (* (erl-val-integer->val left)
+                                    (erl-val-integer->val right))))
   ///
   (defrule commutativity-of-erl-mul
     (equal (erl-mul x y)
@@ -55,50 +53,41 @@
     (equal (erl-mul (erl-mul x y) z)
            (erl-mul z (erl-mul y x)))))
 
-
-;; Erl Divison (Div)
-;; Returns the result of left / right rounded to the closes integer 
-;; or badarg if arguments are not integers, or if the second argument is 0
-(define erl-div ((left erl-value-p) (right erl-value-p))
-  :returns (v erl-value-p)
-  (b* ((left (erl-value-fix left)) 
-       (right (erl-value-fix right)))
-    (if (and (equal (erl-value-kind left) :integer)
-             (equal (erl-value-kind right) :integer)
-             (not (equal (erl-value-integer->val right) 0)))
-        (b* ((left-val (erl-value-integer->val left))
-             (right-val (erl-value-integer->val right))
-             (sign (if (and (minusp left-val) (minusp right-val)) 
-                       1 
-                       (if (or (minusp left-val) (minusp right-val)) -1 1)))
-             (val (floor (abs left-val) (abs right-val))))
-          (make-erl-value-integer :val (* sign val)))
-        '(:error badarg))))
+; Representation of Erlang integer division (div) in ACL2.
+; - The result is rounded down to the largest integer less than the result.
+; - Returns badarg if arguments are not integers or if there is division by 0.
+(define erl-div ((left erl-val-p) (right erl-val-p))
+  :returns (v erl-val-p)
+  (b* ((left (erl-val-fix left)) 
+       (right (erl-val-fix right))
+       ((unless (equal (erl-val-kind left) :integer)) (make-erl-val-error :err 'badarg))
+       ((unless (equal (erl-val-kind right) :integer)) (make-erl-val-error :err 'badarg))
+       ((if (equal (erl-val-integer->val right) 0)) (make-erl-val-error :err 'badarg))
+       (left-val (erl-val-integer->val left))
+       (right-val (erl-val-integer->val right)))
+      (make-erl-val-integer :val (floor left-val right-val))))
 
 
-;; Apply Erlang binary operation
-(define apply-erl-binop ((op symbolp) (left erl-value-p) (right erl-value-p))
-  :returns (v erl-value-p)
-  (b* ((op (symbol-fix op))
-       (left (erl-value-fix left))
-       (right (erl-value-fix right))
-       ((if (equal (erl-value-kind left) :fault)) '(:fault bad-ast))
-       ((if (equal (erl-value-kind right) :fault)) '(:fault bad-ast)))
+; Given a binop, apply the corresponding Erlang operation.
+(define apply-erl-binop ((op erl-binop-p) (left erl-val-p) (right erl-val-p))
+  :returns (v erl-val-p)
+  (b* ((op (erl-binop-fix op))
+       (left (erl-val-fix left))
+       (right (erl-val-fix right))
+       ((if (equal left (make-erl-val-fault))) left)
+       ((if (equal right (make-erl-val-fault))) right))
       (case op
         (+ (erl-add left right))
         (- (erl-sub left right))
         (* (erl-mul left right))
         (div (erl-div left right))
-        (otherwise '(:fault bad-op))))
-        
+        (otherwise (make-erl-val-fault))))
     ///
     (defrule apply-erl-binop-of-fault
-      (implies (and (erl-value-p left)
-                    (erl-value-p right)
-                    (symbolp op))
-                (iff (not (equal (erl-value-kind (apply-erl-binop op left right)) :fault))
-                     (and (not (equal (erl-value-kind left) :fault))
-                          (not (equal (erl-value-kind right) :fault))
-                          (member op '(+ - * div)))))
+      (implies (and (erl-val-p left)
+                    (erl-val-p right)
+                    (erl-binop-p op)
+                    (not (equal (apply-erl-binop op left right) (make-erl-val-fault))))
+              (and (not (equal left (make-erl-val-fault)))
+                   (not (equal right (make-erl-val-fault)))))
       :enable (erl-add erl-sub erl-mul erl-div)))
-

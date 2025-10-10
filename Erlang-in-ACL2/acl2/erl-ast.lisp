@@ -1,204 +1,201 @@
 (in-package "ACL2")
-(include-book "centaur/fty/top" :DIR :SYSTEM)
 (include-book "std/util/top" :DIR :SYSTEM)
-(set-induction-depth-limit 1)
+(include-book "centaur/fty/top" :DIR :SYSTEM)
+(include-book "kestrel/fty/defsubtype" :DIR :SYSTEM)
 
+; Erlang AST Types -------------------------------------------------------------
+
+(set-induction-depth-limit 1)
 (set-well-founded-relation l<)
 
-;; Node represents an Erlang AST without the restrictions of patterns and guards.
-;; TODO: fun, receive, call, pid
-;; TODO: op's symbolp should have a contraint, for example: (member op '(+ - * div)) 
+; Term comparison operations
+(define comp-binop-p ((x symbolp))
+  :enabled t
+  (b* ((x (symbol-fix x)))
+      (not (null (member x '())))))
+
+; Arithmetic binary operations
+(define arithm-binop-p ((x symbolp))
+  :enabled t
+  (b* ((x (symbol-fix x)))
+      (not (null (member x '(+ - * div))))))
+
+; Arithmetic unary operations
+(define arithm-unop-p ((x symbolp))
+  :enabled t
+  (b* ((x (symbol-fix x)))
+      (not (null (member x '(+ -))))))
+
+; Binary boolean operations
+(define bool-binop-p ((x symbolp))
+  :enabled t
+  (b* ((x (symbol-fix x)))
+      (not (null (member x '())))))
+
+; Unary boolean operations
+(define bool-unop-p ((x symbolp))
+  :enabled t
+  (b* ((x (symbol-fix x)))
+      (member x '())))
+
+; Short-circuit operations
+(define short-circ-op-p ((x symbolp))
+  :enabled t
+  (b* ((x (symbol-fix x)))
+      (member x '())))
+
+; List operations
+(define list-op-p ((x symbolp))
+  :enabled t
+  (b* ((x (symbol-fix x)))
+      (member x '())))
+
+; Erlang binary operators
+(fty::defsubtype erl-binop
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (or (comp-binop-p x)
+          (arithm-binop-p x)
+          (bool-binop-p x)
+          (short-circ-op-p x)
+          (list-op-p x)))
+  :fix-value '+)
+
+; Erlang binary arithmetic operators
+(fty::defsubtype erl-numeric-binop
+  :supertype erl-binop-p
+  :restriction (lambda (x) (arithm-binop-p x))
+  :fix-value '+)
+
+; Erlang unary operators
+(fty::defsubtype erl-unop
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (or (arithm-unop-p x)
+          (bool-unop-p x)))
+  :fix-value '+)
+
+; Erlang binary arithmetic operators
+(fty::defsubtype erl-numeric-unnop
+  :supertype erl-unop-p
+  :restriction (lambda (x) (arithm-unop-p x))
+  :fix-value '+)
+
+; Node represents an Erlang AST without the restrictions of patterns and guards.
 (fty::deftypes node
   (fty::deftagsum node
     (:integer ((val integerp)))
     (:atom ((val symbolp)))
     (:string ((val stringp)))
-    (:nil ())
-    (:cons ((left node-p)
-            (right node-p)))
-    (:tuple ((lst node-list-p)))
-    (:var ((var symbolp)))
-    (:unary-op ((op symbolp)
-		            (opand node-p)))
-    (:binary-op ((op symbolp)
-		             (left node-p)
-                 (right node-p)))
-    (:if ((clauses node-clause-list-p)))
-    (:case-of ((expr node-p) (clauses node-clause-list-p)))
-    (:match ((lhs node-p)
-             (rhs node-p)))
-    (:fault ())
+    (:binop ((op erl-binop-p)
+		         (left node-p)
+             (right node-p)))
     :measure (list (acl2-count x) 1))
+
   (fty::deflist node-list
     :elt-type node-p
-    :true-listp t
-    :measure (list (acl2-count x) 0))
-    
-  (fty::defprod node-clause
-    ((cases node-list-p)
-     (guards node-list-p :default nil)
-     (body node-p))
-    :measure (list (acl2-count x) 2))
-  (fty::deflist node-clause-list
-    :elt-type node-clause-p
     :true-listp t
     :measure (list (acl2-count x) 0)))
 
 
-;; Erl Pattern
-;; Not allowed to have case/if/receive/fun/call
-(defines pattern
-  :flag-local nil
-  (define pattern-p ((x acl2::any-p))
+; Arithmetic Expression --------------------------------------------------------
+
+; Arithmetic expressions are expressions allowed in patterns.
+;  1) They contain only numeric and bitwise operations.
+;  2) They can be evaluated to a constant when compiled. For the ACL2 evaluator,
+;     this means that they can be evaluated in isolation, i.e. without bindings,
+;     and will not have any side effects, i.e. no new bindings, messages, etc.. 
+(define arithm-expr-p ((x acl2::any-p))
+  :returns (ok booleanp)
+  :measure (node-count x)
+  (and (node-p x)
+       (case (node-kind x)
+         (:integer t)
+         (:atom t)
+         (:string t)
+         (:binop (and (erl-numeric-binop-p (node-binop->op x))
+                      (arithm-expr-p (node-binop->left x))
+                      (arithm-expr-p (node-binop->right x)))))))
+
+
+; Erlang Pattern ---------------------------------------------------------------
+
+; A pattern has the same structure as a term but can contain unbound variables.
+; - The match operator is allowed if both operands are valid patterns.
+; - Arithmetic expressions are allowed.
+; - List concatenation is allowed, but not list substraction.
+(define pattern-p ((x acl2::any-p))
+  :returns (ok booleanp)
+  :measure (node-count x)
+  (and 
+    (node-p x)
+    (or (arithm-expr-p x)
+        (case (node-kind x)
+              (:integer t)
+              (:atom t)
+              (:string t)
+              (:binop
+                ;; TODO: I could enforce erl-list-p
+                (and (equal (node-binop->op x) '++)
+                    (pattern-p (node-binop->left x))
+                    (pattern-p (node-binop->right x))))))))
+
+
+; Erlang Expression ------------------------------------------------------------
+
+; All Erlang expression types supported by the evaluator.
+(define expr-p ((x acl2::any-p))
     :returns (ok booleanp)
     :measure (node-count x)
-    :flag pattern
     (and (node-p x)
          (case (node-kind x)
           (:integer t)
           (:atom t)
           (:string t)
-          (:nil t)
-          (:cons (and (pattern-p (node-cons->left x))
-                      (pattern-p (node-cons->right x))))
-          (:tuple (pattern-list-p (node-tuple->lst x)))
-          (:var t)
-          (:unary-op (pattern-p (node-unary-op->opand x)))
-          (:binary-op (and (pattern-p (node-binary-op->left x))
-                           (pattern-p (node-binary-op->right x))))
-          (:if nil)
-          (:case-of nil)
-          (:match (and (pattern-p (node-match->lhs x))
-                       (pattern-p (node-match->rhs x))))
-          (:fault t))))
-  (define pattern-list-p ((x acl2::any-p))
-    :returns (ok booleanp)
-    :measure (node-list-count x)
-    :flag pattern-lst
-    (if (consp x)
-      (and (pattern-p (car x)) (pattern-list-p (cdr x)))
-      (null x))))
+          (:binop (and (expr-p (node-binop->left x))
+                       (expr-p (node-binop->right x)))))))
 
 
-;; Erl Guard
-;; Not allowed to have match/case/if/receive/fun/call
-(defines erl-guard
-  :flag-local nil
-  (define erl-guard-p ((x acl2::any-p))
-    :returns (ok booleanp)
-    :measure (node-count x)
-    :flag erl-guard
-    (and (node-p x)
-         (case (node-kind x)
-          (:integer t)
-          (:atom t)
-          (:string t)
-          (:nil t)
-          (:cons (and (erl-guard-p (node-cons->left x))
-                      (erl-guard-p (node-cons->right x))))
-          (:tuple (erl-guard-list-p (node-tuple->lst x)))
-          (:var t)
-          (:unary-op (erl-guard-p (node-unary-op->opand x)))
-          (:binary-op (and (erl-guard-p (node-binary-op->left x))
-                           (erl-guard-p (node-binary-op->right x))))
-          (:if nil)
-          (:case-of nil)
-          (:match nil)
-          (:fault t))))
-  (define erl-guard-list-p ((x acl2::any-p))
-    :returns (ok booleanp)
-    :measure (node-list-count x)
-    :flag erl-guard-lst
-    (if (consp x)
-      (and (erl-guard-p (car x)) (erl-guard-list-p (cdr x)))
-      (null x))))
+; Theorems ---------------------------------------------------------------------
 
+;; Arithmetic Expression is a subtype of Expression
+(defrule arithm-expr-is-subtype-of-expr
+  (implies (arithm-expr-p x) (expr-p x))
+  :enable (arithm-expr-p expr-p))
 
-;; Erl Expression
-(defines expr
-  :flag-local nil
-  (define expr-p ((x acl2::any-p))
-    :returns (ok booleanp)
-    :measure (node-count x)
-    :flag expr
-    (and (node-p x)
-         (case (node-kind x)
-          (:integer t)
-          (:atom t)
-          (:string t)
-          (:nil t)
-          (:cons (and (expr-p (node-cons->left x))
-                      (expr-p (node-cons->right x))))
-          (:tuple (expr-list-p (node-tuple->lst x)))
-          (:var t)
-          (:unary-op (expr-p (node-unary-op->opand x)))
-          (:binary-op (and (expr-p (node-binary-op->left x))
-                           (expr-p (node-binary-op->right x))))
-          (:if (clause-list-p (node-if->clauses x)))
-          (:case-of (clause-list-p (node-case-of->clauses x)))
-          (:match (and (pattern-p (node-match->lhs x))
-                       (expr-p (node-match->rhs x))))
-          (:fault t))))
-  (define expr-list-p ((x acl2::any-p))
-    :returns (ok booleanp)
-    :measure (node-list-count x)
-    :flag expr-lst
-    (if (consp x)
-      (and (expr-p (car x)) (expr-list-p (cdr x)))
-      (null x)))
+;; Pattern is a subtype of Expression
+(defrule pattern-is-subtype-of-expr
+  (implies (pattern-p x) (expr-p x))
+  :expand ((expr-p x) (pattern-p x)))
 
-  (define clause-p ((x acl2::any-p))
-    :returns (ok booleanp)
-    :measure (node-clause-count x)
-    :flag clause 
-    (and (node-clause-p x)
-         (pattern-list-p (node-clause->cases x))
-         (erl-guard-list-p (node-clause->guards x))
-         (expr-p (node-clause->body x))))
-  (define clause-list-p ((x acl2::any-p))
-    :returns (ok booleanp)
-    :measure (node-clause-list-count x)
-    :flag clause-list
-    (if (consp x)
-      (and (clause-p (car x)) (clause-list-p (cdr x)))
-      (null x))))
-
-
-;; Theorems
-
-;; pattern-is-expr
-(defthm-pattern-flag
-  (defthm pattern-is-subtype-of-expr
-    (implies (pattern-p x) (expr-p x))
-    :flag pattern
-    :hints ('(:expand ((expr-p x) (pattern-p x)))))
-
-  (defthm pattern-list-is-subtype-of-expr-list
-    (implies (pattern-list-p x) (expr-list-p x))
-    :flag pattern-lst
-    :hints ('(:expand ((expr-list-p x) (pattern-list-p x))))))
-
-;; erl-guard-is-expr
-(defthm-erl-guard-flag
-  (defthm erl-guard-is-subtype-of-expr
-    (implies (erl-guard-p x) (expr-p x))
-    :flag erl-guard
-    :hints ('(:expand ((expr-p x) (erl-guard-p x)))))
-
-  (defthm erl-guard-list-is-subtype-of-expr-list
-    (implies (erl-guard-list-p x) (expr-list-p x))
-    :flag erl-guard-lst
-    :hints ('(:expand ((expr-list-p x) (erl-guard-list-p x))))))
+(defrule expr-is-subtype-of-node
+  (implies (expr-p x) (node-p x))
+  :expand (expr-p x))
 
 (set-well-founded-relation o<)
 
 
-;; Fixing Functions
+; Fixing Functions -------------------------------------------------------------
 
-;; pattern-fix
+(define arithm-expr-fix ((x arithm-expr-p))
+  :inline t
+  (mbe :logic (if (arithm-expr-p x) x (make-node-atom :val 'oops))
+       :exec x))
+
+(defrule arithm-expr-fix-produces-arithm-expr
+  (arithm-expr-p (arithm-expr-fix x))
+  :expand (arithm-expr-fix x))
+
+(defrule arithm-expr-fix-is-the-identity-on-arithm-expr
+  (implies (arithm-expr-p x)
+           (equal (arithm-expr-fix x) x))
+  :expand (arithm-expr-fix x))
+
 (define pattern-fix ((x pattern-p))
   :inline t
-  (mbe :logic (if (pattern-p x) x (make-node-fault))
+  (mbe :logic (if (pattern-p x) x (make-node-atom :val 'oops))
        :exec x))
 
 (defrule pattern-fix-produces-pattern
@@ -210,25 +207,9 @@
            (equal (pattern-fix x) x))
   :expand (pattern-fix x))
 
-;; guard-fix
-(define erl-guard-fix ((x erl-guard-p))
-  :inline t
-  (mbe :logic (if (erl-guard-p x) x (make-node-fault))
-       :exec x))
-
-(defrule erl-guard-fix-produces-erl-guard
-  (erl-guard-p (erl-guard-fix x))
-  :expand (erl-guard-fix x))
-
-(defrule erl-guard-fix-is-the-identity-on-erl-guard
-  (implies (erl-guard-p x)
-           (equal (erl-guard-fix x) x))
-  :expand (erl-guard-fix x))
-
-;; expr-fix
 (define expr-fix ((x expr-p))
   :inline t
-  (mbe :logic (if (expr-p x) x (make-node-fault))
+  (mbe :logic (if (expr-p x) x (make-node-atom :val 'oops))
        :exec x))
 
 (defrule expr-fix-produces-expr
@@ -240,25 +221,18 @@
            (equal (expr-fix x) x))
   :expand (expr-fix x))
 
-;; clause-fix
-(define clause-fix ((x clause-p))
-  :inline t
-  (mbe :logic (if (clause-p x) 
-                  x 
-                  '((cases) (guards) (body :fault)))
-       :exec x))
 
-(defrule clause-fix-produces-clause
-  (clause-p (clause-fix x))
-  :expand (clause-fix x))
+; FTY Types --------------------------------------------------------------------
 
-(defrule clause-fix-is-the-identity-on-clause
-  (implies (clause-p x)
-           (equal (clause-fix x) x))
-  :expand (clause-fix x))
+; Arithmetic Erlang Expression
+(fty::deffixtype arithm-expr
+  :pred   arithm-expr-p
+  :fix    arithm-expr-fix
+  :equiv  arithm-expr-equiv
+  :define t
+  :forward t)
 
-
-;; FTY Types
+; Erlang Pattern
 (fty::deffixtype pattern
   :pred   pattern-p
   :fix    pattern-fix
@@ -266,43 +240,10 @@
   :define t
   :forward t)
 
-(fty::deflist pattern-list
-    :elt-type pattern-p
-    :true-listp t
-    :pred pattern-list-p)
-
-(fty::deffixtype erl-guard
-  :pred   erl-guard-p
-  :fix    erl-guard-fix
-  :equiv  erl-guard-equiv
-  :define t
-  :forward t)
-
-(fty::deflist erl-guard-list
-    :elt-type erl-guard-p
-    :true-listp t
-    :pred erl-guard-list-p)
-
+; Erlang Expression
 (fty::deffixtype expr
   :pred   expr-p
   :fix    expr-fix
   :equiv  expr-equiv
   :define t
   :forward t)
-
-(fty::deflist expr-list
-    :elt-type expr-p
-    :true-listp t
-    :pred expr-list-p)
-
-(fty::deffixtype clause
-  :pred   clause-p
-  :fix    clause-fix
-  :equiv  clause-equiv
-  :define t
-  :forward t)
-
-(fty::deflist clause-list
-    :elt-type clause-p
-    :true-listp t
-    :pred clause-list-p)
