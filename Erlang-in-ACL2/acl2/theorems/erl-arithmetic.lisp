@@ -9,12 +9,11 @@
 (defrule apply-k-of-addition-is-commutative-crock-2
   (implies
     (and
-      (erl-value-p val)
-      (erl-k-list-p rest)
-      (erl-k-p k)
+      (erl-val-p val)
+      (erl-klst-p rest)
       (expr-p left)
       (expr-p right)
-      (not (equal val (make-erl-value-fault)))
+      (not (equal val (make-erl-val-fault)))
       (natp fuel))
     (and (erl-k-p (make-erl-k :fuel fuel :kont (make-kont-expr :expr (node-binop '+ left right))))
          (equal (kont-kind (erl-k->kont (make-erl-k :fuel fuel :kont (make-kont-expr :expr (node-binop '+ left right))))) :expr)
@@ -32,12 +31,11 @@
 (defrule apply-k-of-addition-is-commutative-crock-3
   (implies
     (and
-      (erl-value-p val)
-      (erl-k-list-p rest)
-      (erl-k-p k)
+      (erl-val-p val)
+      (erl-klst-p rest)
       (expr-p right)
       (expr-p left)
-      (not (equal val (make-erl-value-fault)))
+      (not (equal val (make-erl-val-fault)))
       (natp fuel)
       (> fuel 3))
     (equal 
@@ -52,15 +50,14 @@
 (defrule apply-k-of-binop-ensures-2
   (implies 
     (and
-      (erl-value-p val)
-      (erl-k-list-p rest)
+      (erl-val-p val)
+      (erl-klst-p rest)
       (expr-p right)
       (expr-p left)
-      (erl-k-p k)
       (not (equal (apply-k val (cons (make-erl-k :fuel fuel :kont (make-kont-expr :expr (node-binop '+ left right))) rest)) '(:fault)))
       (natp fuel)
       (> fuel 3)
-      (not (equal val (make-erl-value-fault))))
+      (not (equal val (make-erl-val-fault))))
     (and (not (equal (apply-k '(:nil) (list (erl-k (+ -1 fuel) (kont-expr left)))) '(:fault)))    
          (not (equal (apply-k '(:nil) (list (erl-k (+ -2 fuel) (kont-expr right)))) '(:fault)))
          ))
@@ -77,8 +74,8 @@
 (defrule apply-binop-of-erl-addition-is-commutative
   (implies
     (and
-      (erl-value-p right)
-      (erl-value-p left))
+      (erl-val-p right)
+      (erl-val-p left))
     (equal 
       (apply-erl-binop '+ left right)
       (apply-erl-binop '+ right left)))
@@ -89,12 +86,11 @@
 (defrule apply-k-of-addition-is-commutative
   (implies
     (and
-      (erl-value-p val)
-      (erl-k-list-p rest)
-      (erl-k-p k)
+      (erl-val-p val)
+      (erl-klst-p rest)
       (expr-p right)
       (expr-p left)
-      (not (equal val (make-erl-value-fault)))
+      (not (equal val (make-erl-val-fault)))
       (not (equal (apply-k val (cons (make-erl-k :fuel fuel :kont (make-kont-expr :expr (node-binop '+ left right))) rest)) '(:fault)))
       (natp fuel)
       (> fuel 3))
@@ -109,27 +105,26 @@
         (rest rest)
         (left left)
         (right right)
-        (k k)
         (fuel fuel)))
       ("Goal'5'" :use (
           (:instance more-fuel-is-good-for-apply
             (val '(:nil))
             (klst (LIST (ERL-K (+ -1 FUEL) (KONT-EXPR LEFT))))
-            (z 1))
+            (n 1))
           (:instance more-fuel-is-good-for-apply
             (val '(:nil))
             (klst (LIST (ERL-K (+ -2 FUEL) (KONT-EXPR RIGHT))))
-            (z 3))))))
+            (n 3))))))
 
 (defun-sk exists-fuel-for-commutative-erl-addition (v x y f rest)
   (exists (f2)
     (implies
       (and (expr-p x)
            (expr-p y)
-           (erl-value-p v)
+           (erl-val-p v)
            (natp f)
            (> f 3)
-           (erl-k-list-p rest)
+           (erl-klst-p rest)
            (not (equal v '(:fault)))
            (not (equal (apply-k v (cons (make-erl-k :fuel f :kont (make-kont-expr :expr (node-binop '+ x y))) rest)) '(:fault))))
       (and (not (equal (apply-k v (cons (make-erl-k :fuel f2 :kont (make-kont-expr :expr (node-binop '+ y x))) rest)) '(:fault)))
@@ -153,6 +148,5 @@
                       (rest rest)
                       (left x)
                       (right y)
-                      (fuel f)
-                      (k k))))
+                      (fuel f))))
                       ))
