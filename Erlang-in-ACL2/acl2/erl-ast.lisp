@@ -10,45 +10,38 @@
 
 ; Term comparison operations
 (define comp-binop-p ((x symbolp))
-  :enabled t
   (b* ((x (symbol-fix x)))
       (not (null (member x '())))))
 
 ; Arithmetic binary operations
 (define arithm-binop-p ((x symbolp))
-  :enabled t
   (b* ((x (symbol-fix x)))
       (not (null (member x '(+ - * div))))))
 
 ; Arithmetic unary operations
 (define arithm-unop-p ((x symbolp))
-  :enabled t
   (b* ((x (symbol-fix x)))
       (not (null (member x '(+ -))))))
 
 ; Binary boolean operations
 (define bool-binop-p ((x symbolp))
-  :enabled t
   (b* ((x (symbol-fix x)))
       (not (null (member x '())))))
 
 ; Unary boolean operations
 (define bool-unop-p ((x symbolp))
-  :enabled t
   (b* ((x (symbol-fix x)))
-      (member x '())))
+      (not (member x '()))))
 
 ; Short-circuit operations
 (define short-circ-op-p ((x symbolp))
-  :enabled t
   (b* ((x (symbol-fix x)))
-      (member x '())))
+      (not (member x '()))))
 
 ; List operations
 (define list-op-p ((x symbolp))
-  :enabled t
   (b* ((x (symbol-fix x)))
-      (member x '())))
+      (not (member x '()))))
 
 ; Erlang binary operators
 (fty::defsubtype erl-binop
