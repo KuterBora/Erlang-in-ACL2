@@ -2,6 +2,7 @@
 (include-book "erl-op")
 (include-book "ast-theorems")
 (include-book "erl-kont")
+(include-book "termination")
 
 ; Erlang Evaluator -------------------------------------------------------------
 
@@ -42,98 +43,131 @@
       ;; apply the binop to the evaluated operands
       (:binop-expr2 (make-erl-val-klst :v (apply-erl-binop k.op k.val val))))))
 
-;; include the measure for k-list
-(include-book "apply-k-termination")
+; calls to eval-k either return a tuple of two contunuations, or an empty list
+(defrule eval-k-decreases-fuel
+  (implies 
+    (and (erl-val-p val) (erl-k-p k))
+    (or (null (erl-val-klst->klst (eval-k k val)))
+        (and (tuplep 2 (erl-val-klst->klst (eval-k k val)))
+              (equal (erl-k->fuel (car (erl-val-klst->klst (eval-k k val)))) 
+                    (- (erl-k->fuel k) 1))
+              (equal (erl-k->fuel (cadr (erl-val-klst->klst (eval-k k val)))) 
+                    (- (erl-k->fuel k) 1))
+              (equal (cdr (erl-val-klst->klst (eval-k k val))) 
+                    (cons (cadr (erl-val-klst->klst (eval-k k val))) nil)))))
+  :enable eval-k)
 
-;; Recursively apply the next continuation to the value produced by the previous.
-(define apply-k ((val erl-value-p) (klst erl-k-list-p))
-  :returns (v erl-value-p)
+; Eval-op decreases the klst-measure
+(defrule eval-k-decreases-klst-measure
+  (b* ((klst (erl-klst-fix klst))
+        (val (erl-val-fix val))
+        ((if (null klst)) t))
+    (l< (klst-measure (append (erl-val-klst->klst (eval-k (car klst) val))
+                              (cdr klst)))
+        (klst-measure klst)))
+  :enable eval-k
+  :use (:functional-instance eval-op-decreases-klst-measure  
+      (eval-op eval-k)
+      (eval-result-p erl-val-klst-p)
+      (eval-result->klst erl-val-klst->klst))) 
+
+; Recursively apply the next continuation to the value produced by the previous.
+(define apply-k ((val erl-val-p) (klst erl-klst-p))
+  :returns (v erl-val-p)
   :well-founded-relation l<
-  :measure (k-list-measure (erl-k-list-fix klst))
-  (b* ((val (erl-value-fix val))
-       (klst (erl-k-list-fix klst))
-       ((if (equal val (make-erl-value-fault))) val)
+  :measure (klst-measure (erl-klst-fix klst))
+  (b* ((val (erl-val-fix val))
+       (klst (erl-klst-fix klst))
+       ((if (equal val (make-erl-val-fault))) val)
        ((if (endp klst)) val)
        ((cons khd ktl) klst)
        ((erl-val-klst kv) (eval-k khd val))
-       ((if (equal kv.v (make-erl-value-fault))) kv.v))
+       ((if (equal kv.v (make-erl-val-fault))) kv.v))
     (apply-k kv.v (append kv.klst ktl)))
-  :hints (("Goal" :use ((:instance eval-k-decreases-k-list-measure (klst klst) (val val)))
-                  :in-theory (disable k-list-measure eval-k-decreases-k-list-measure))))
+  :hints (("Goal" :use ((:instance eval-k-decreases-klst-measure (klst klst) (val val)))
+                  :in-theory (disable klst-measure eval-k-decreases-klst-measure))))
 
 
-;;-------------------------------------- Theorems --------------------------------------------------
+; Theorems ---------------------------------------------------------------------
 
-;; splitting the klst and applying the two parts in order will yield the same result
+; Applying a concatenated continuation list equals applying each sublist in sequence.
 (defrule apply-k-of-append
   (implies
-    (and (erl-k-list-p klst1)
-         (erl-k-list-p klst2)
-         (erl-value-p val)
+    (and (erl-klst-p klst1)
+         (erl-klst-p klst2)
+         (erl-val-p val)
          (equal klst (append klst1 klst2)))
     (equal
       (apply-k val klst)
       (apply-k (apply-k val klst1) klst2)))
   :in-theory (enable apply-k))
 
-;; calling apply-k with a fault value will return fault
+
+; Calling apply-k with a fault value will return fault
 (defrule apply-k-of-fault
-  (implies (equal (erl-value-kind val) (make-erl-value-fault))
-           (equal (apply-k val klst)   (make-erl-value-fault)))
+  (implies (equal (erl-val-kind val) (make-erl-val-fault))
+           (equal (apply-k val klst) (make-erl-val-fault)))
   :enable apply-k)
 
-;; Increase the fuel of each continuation in the list by n.
-(define increase-fuel ((klst erl-k-list-p) (n natp))
+
+; The following theorems show that if evaluating a value and klst terminates
+; without fault, then increasing the fuel of the continuations will not change the result.
+; It is easier, and more elegant, for ACL2 to prove this for the more general case where 
+; each k in the klst is given more fuel, rather than, for example, increasing the fuel of
+; only the first k. This is why increase-fuel and the corresponding theorems are defined.
+
+; Increase the fuel of each continuation in klst by n.
+(define increase-fuel ((klst erl-klst-p) (n natp))
   :measure (len klst)
-  :returns (ks erl-k-list-p)
-  (b* ((klst (erl-k-list-fix klst))
+  :returns (ks erl-klst-p)
+  (b* ((klst (erl-klst-fix klst))
        (n (nfix n))
        ((if (endp klst)) nil))
       (cons (make-erl-k :kont (erl-k->kont (car klst))
                         :fuel (+ n (erl-k->fuel (car klst))))
             (increase-fuel (cdr klst) n))))
 
-;; A continuation that did not cause an error in eval-k will provide the
-;; same result if its fuel is increased.
-(defrule more-fuel-is-good-for-eval
-  (implies 
-    (and (erl-value-p val)
-         (erl-k-p k)
-         (natp z)
-         (not (equal (erl-val-klst->v (eval-k k val)) (make-erl-value-fault))))
-    (equal (erl-val-klst->v (eval-k (erl-k (+ z (erl-k->fuel k))
-                                           (erl-k->kont k)) 
-                            val))
-           (erl-val-klst->v (eval-k k val))))
-  :enable (eval-k))
-
-
-(defrule increase-fuel-is-distributive
+; increase-fuel is distributive over append
+(defrule increase-fuel-is-distributive-over-append
   (implies
-    (and (erl-value-p val)
-         (erl-k-list-p rest)
+    (and (erl-val-p val)
+         (erl-klst-p rest)
          (erl-k-p k)
-         (natp z)
-         (not (equal (erl-val-klst->v (eval-k k val)) (make-erl-value-fault))))
-    (equal (increase-fuel (append (erl-val-klst->klst (eval-k k val)) rest) z)
-           (append (erl-val-klst->klst (eval-k (erl-k (+ z (erl-k->fuel k))
+         (natp n)
+         (not (equal (erl-val-klst->v (eval-k k val)) (make-erl-val-fault))))
+    (equal (increase-fuel (append (erl-val-klst->klst (eval-k k val)) rest) n)
+           (append (erl-val-klst->klst (eval-k (erl-k (+ n (erl-k->fuel k))
                                                            (erl-k->kont k))
                                                val))
-                   (increase-fuel rest z))))
+                   (increase-fuel rest n))))
   :in-theory (enable increase-fuel eval-k))
 
+; A continuation that did not cause an error in eval-k will produce the same result
+; if its fuel is increased.
+(defrule more-fuel-is-good-for-eval
+  (implies 
+    (and (erl-val-p val)
+         (erl-k-p k)
+         (natp n)
+         (not (equal (erl-val-klst->v (eval-k k val)) (make-erl-val-fault))))
+    (equal (erl-val-klst->v (eval-k (erl-k (+ n (erl-k->fuel k))
+                                           (erl-k->kont k)) 
+                                    val))
+           (erl-val-klst->v (eval-k k val))))
+  :enable eval-k)
 
+; A continuation that did not cause an error in apply-k will produce the same result
+; if its fuel is increased.
 (defrule more-fuel-is-good-for-apply
   (implies 
-    (and (erl-value-p val)
-         (erl-k-list-p klst)
-         (not (equal (apply-k val klst) (make-erl-value-fault)))
-         (natp z))
-    (equal (apply-k val (increase-fuel klst z))
+    (and (erl-val-p val)
+         (erl-klst-p klst)
+         (not (equal (apply-k val klst) (make-erl-val-fault)))
+         (natp n))
+    (equal (apply-k val (increase-fuel klst n))
            (apply-k val klst)))
   :enable (apply-k increase-fuel)
-  :hints (("Subgoal *1/7'''" 
-    :expand (apply-k val
-                    (cons (erl-k (+ z (erl-k->fuel (car klst)))
-                                (erl-k->kont (car klst)))
-                          (increase-fuel (cdr klst) z))))))
+  :expand (apply-k val
+                  (cons (erl-k (+ n (erl-k->fuel (car klst)))
+                              (erl-k->kont (car klst)))
+                        (increase-fuel (cdr klst) n))))
