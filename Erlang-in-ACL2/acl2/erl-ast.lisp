@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "std/util/top" :DIR :SYSTEM)
+(include-book "std/util/top" :dir :system)
 (include-book "centaur/fty/top" :DIR :SYSTEM)
 (include-book "kestrel/fty/defsubtype" :DIR :SYSTEM)
 
@@ -161,7 +161,7 @@
 ;; Pattern is a subtype of Expression
 (defrule pattern-is-subtype-of-expr
   (implies (pattern-p x) (expr-p x))
-  :expand ((expr-p x) (pattern-p x)))
+  :enable (expr-p pattern-p))
 
 (defrule expr-is-subtype-of-node
   (implies (expr-p x) (node-p x))

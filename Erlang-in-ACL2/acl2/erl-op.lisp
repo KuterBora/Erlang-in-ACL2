@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "std/util/top" :DIR :SYSTEM)
+(include-book "erl-ast")
 (include-book "erl-value")
 
 ; Erlang Operations ------------------------------------------------------------

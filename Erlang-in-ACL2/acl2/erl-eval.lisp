@@ -1,7 +1,6 @@
 (in-package "ACL2")
-(include-book "erl-op")
 (include-book "ast-theorems")
-(include-book "erl-kont")
+(include-book "erl-op")
 (include-book "termination")
 
 ; Erlang Evaluator -------------------------------------------------------------
@@ -35,12 +34,12 @@
             (make-erl-val-klst 
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.left))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-binop-expr1 :op x.op :right x.right))))))))
-      ;; Evaluate the second operand of a binop, save the operator and value of the first operand                                                    
+      ; Evaluate the second operand of a binop, save the operator and value of the first operand                                                    
       (:binop-expr1 
         (make-erl-val-klst 
           :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.right))
                       (make-erl-k :fuel (1- fuel) :kont (make-kont-binop-expr2 :op k.op :val val)))))
-      ;; apply the binop to the evaluated operands
+      ; apply the binop to the evaluated operands
       (:binop-expr2 (make-erl-val-klst :v (apply-erl-binop k.op k.val val))))))
 
 ; calls to eval-k either return a tuple of two contunuations, or an empty list
@@ -109,6 +108,14 @@
            (equal (apply-k val klst) (make-erl-val-fault)))
   :enable apply-k)
 
+(defrule apply-k-of-fault-direct
+  (equal (apply-k '(:fault) rest) '(:fault))
+  :enable apply-k)
+
+; Calling apply-k with a nil klst returns val
+(defrule apply-k-of-nil
+  (implies (erl-val-p val) (equal (apply-k val nil) val))
+  :enable apply-k)
 
 ; The following theorems show that if evaluating a value and klst terminates
 ; without fault, then increasing the fuel of the continuations will not change the result.

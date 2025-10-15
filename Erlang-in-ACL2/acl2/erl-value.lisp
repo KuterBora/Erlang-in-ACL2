@@ -1,6 +1,5 @@
 (in-package "ACL2")
 (include-book "centaur/fty/top" :DIR :SYSTEM)
-(include-book "std/util/top" :DIR :SYSTEM)
 
 ; Erlang Values ----------------------------------------------------------------
 

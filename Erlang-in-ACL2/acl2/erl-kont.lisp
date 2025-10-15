@@ -1,6 +1,4 @@
 (in-package "ACL2")
-(include-book "centaur/fty/top" :DIR :SYSTEM)
-(include-book "std/util/top" :DIR :SYSTEM)
 (include-book "erl-ast")
 (include-book "erl-value")
 
@@ -31,6 +29,7 @@
     ((fuel natp)
      (kont kont-p)))
 
+; List of erl-k
 (fty::deflist erl-klst
   :elt-type erl-k
   :true-listp t)

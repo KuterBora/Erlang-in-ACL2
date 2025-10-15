@@ -1,6 +1,4 @@
 (in-package "ACL2")
-(include-book "centaur/fty/top" :DIR :SYSTEM)
-(include-book "std/util/top" :DIR :SYSTEM)
 (include-book "erl-ast")
 (include-book "erl-value")
 
