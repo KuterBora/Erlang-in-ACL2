@@ -9,11 +9,13 @@
 (set-well-founded-relation l<)
 
 ; Term comparison operations
+; Does not include term equivalence/non-equivalence
 (define comp-binop-p ((x symbolp))
   (b* ((x (symbol-fix x)))
-      (not (null (member x '())))))
+      (not (null (member x '(== /= =< < >= >))))))
 
 ; Arithmetic binary operations
+; Does not include / or the bitwise operations
 (define arithm-binop-p ((x symbolp))
   (b* ((x (symbol-fix x)))
       (not (null (member x '(+ - * div))))))
@@ -26,22 +28,22 @@
 ; Binary boolean operations
 (define bool-binop-p ((x symbolp))
   (b* ((x (symbol-fix x)))
-      (not (null (member x '())))))
+      (not (null (member x '(and or xor))))))
 
 ; Unary boolean operations
 (define bool-unop-p ((x symbolp))
   (b* ((x (symbol-fix x)))
-      (not (member x '()))))
+      (not (member x '(not)))))
 
 ; Short-circuit operations
 (define short-circ-op-p ((x symbolp))
   (b* ((x (symbol-fix x)))
-      (not (member x '()))))
+      (not (member x '(orelse andalso)))))
 
 ; List operations
 (define list-op-p ((x symbolp))
   (b* ((x (symbol-fix x)))
-      (not (member x '()))))
+      (not (member x '(++ --)))))
 
 ; Erlang binary operators
 (fty::defsubtype erl-binop
@@ -55,12 +57,6 @@
           (list-op-p x)))
   :fix-value '+)
 
-; Erlang binary arithmetic operators
-(fty::defsubtype erl-numeric-binop
-  :supertype erl-binop-p
-  :restriction (lambda (x) (arithm-binop-p x))
-  :fix-value '+)
-
 ; Erlang unary operators
 (fty::defsubtype erl-unop
   :supertype symbolp
@@ -71,6 +67,12 @@
   :fix-value '+)
 
 ; Erlang binary arithmetic operators
+(fty::defsubtype erl-numeric-binop
+  :supertype erl-binop-p
+  :restriction (lambda (x) (arithm-binop-p x))
+  :fix-value '+)
+
+; Erlang unary arithmetic operators
 (fty::defsubtype erl-numeric-unnop
   :supertype erl-unop-p
   :restriction (lambda (x) (arithm-unop-p x))
@@ -82,6 +84,7 @@
     (:integer ((val integerp)))
     (:atom ((val symbolp)))
     (:string ((val stringp)))
+    (:var ((id symbolp)))
     (:binop ((op erl-binop-p)
 		         (left node-p)
              (right node-p)))
@@ -106,12 +109,12 @@
   (and (node-p x)
        (case (node-kind x)
          (:integer t)
-         (:atom t)
-         (:string t)
+         (:atom nil)
+         (:string nil)
+         (:var nil)
          (:binop (and (erl-numeric-binop-p (node-binop->op x))
                       (arithm-expr-p (node-binop->left x))
                       (arithm-expr-p (node-binop->right x)))))))
-
 
 ; Erlang Pattern ---------------------------------------------------------------
 
@@ -129,11 +132,20 @@
               (:integer t)
               (:atom t)
               (:string t)
+              (:var t)
               (:binop
-                ;; TODO: I could enforce erl-list-p
-                (and (equal (node-binop->op x) '++)
+                ;; TODO: I need to enforce more things here
+                (or (equal (node-binop->op x) '++)
                     (pattern-p (node-binop->left x))
                     (pattern-p (node-binop->right x))))))))
+
+; List of Erlang patterns
+(define pattern-list-p ((x acl2::any-p))
+  :returns (ok booleanp)
+  :measure (node-list-count x)
+  (if (consp x)
+      (and (pattern-p (car x)) (pattern-list-p (cdr x)))
+      (null x)))
 
 
 ; Erlang Expression ------------------------------------------------------------
@@ -147,8 +159,17 @@
           (:integer t)
           (:atom t)
           (:string t)
+          (:var t)
           (:binop (and (expr-p (node-binop->left x))
                        (expr-p (node-binop->right x)))))))
+
+; List of Erlang Expressions
+(define expr-list-p ((x acl2::any-p))
+    :returns (ok booleanp)
+    :measure (node-list-count x)
+    (if (consp x)
+        (and (expr-p (car x)) (expr-list-p (cdr x)))
+        (null x)))
 
 
 ; Theorems ---------------------------------------------------------------------
@@ -233,6 +254,11 @@
   :define t
   :forward t)
 
+(fty::deflist pattern-list
+  :elt-type pattern-p
+  :true-listp t
+  :pred pattern-list-p)
+
 ; Erlang Expression
 (fty::deffixtype expr
   :pred   expr-p
@@ -240,3 +266,8 @@
   :equiv  expr-equiv
   :define t
   :forward t)
+
+(fty::deflist expr-list
+  :elt-type expr-p
+  :true-listp t
+  :pred expr-list-p)
