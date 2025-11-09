@@ -86,6 +86,7 @@
                                                               :car-bind s.bind)))))
       ; When both the car and cdr of the list are evaluated, merge the results.
       (:cons-merge
+        ; TODO: Erlang allows non-cons values here, but the docs claim them to be of little practical use.
         (if (equal (erl-val-kind s.in) :cons)
             (if (omap::compatiblep s.bind k.car-bind)
                 (make-erl-s-klst :s (make-erl-state :in (make-erl-val-cons :lst (cons k.car-val (erl-val-cons->lst s.in)))

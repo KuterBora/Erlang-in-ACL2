@@ -20,7 +20,7 @@
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-exit)
+          :err (make-erl-err :class (make-err-class-error)
                              :reason (make-exit-reason-badarith)))))
       (make-erl-val-integer :val (+ (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
@@ -46,7 +46,7 @@
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-exit)
+          :err (make-erl-err :class (make-err-class-error)
                              :reason (make-exit-reason-badarith)))))
       (make-erl-val-integer :val (- (erl-val-integer->val left)
                                     (erl-val-integer->val right)))))
@@ -64,7 +64,7 @@
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-exit)
+          :err (make-erl-err :class (make-err-class-error)
                              :reason (make-exit-reason-badarith)))))
       (make-erl-val-integer :val (* (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
@@ -94,7 +94,7 @@
                (equal (erl-val-kind right) :integer)
                (not (equal (erl-val-integer->val right) 0))))
         (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-exit)
+          :err (make-erl-err :class (make-err-class-error)
                              :reason (make-exit-reason-badarith))))
        (left-val (erl-val-integer->val left))
        (right-val (erl-val-integer->val right)))

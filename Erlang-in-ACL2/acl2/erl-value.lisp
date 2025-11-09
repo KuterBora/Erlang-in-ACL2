@@ -25,7 +25,6 @@
     (:integer ((val integerp)))
     (:atom ((val symbolp)))
     (:string ((val stringp)))
-    (:nil ())
     (:cons ((lst erl-vlst-p)))
     (:tuple ((tuple erl-vlst-p)))
     (:excpt ((err erl-err-p)))
