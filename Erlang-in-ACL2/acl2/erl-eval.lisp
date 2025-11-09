@@ -49,7 +49,7 @@
           ; if the tuple is empty, return its value.
           (:tuple
             (if (null x.lst)
-                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :tuple nil) :bind s.bind))
+                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :lst nil) :bind s.bind))
                 (make-erl-s-klst 
                   :s (make-erl-state :bind s.bind)
                   :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car x.lst)))
@@ -109,7 +109,7 @@
       (:tuple-merge
         (if (equal (erl-val-kind s.in) :tuple)
             (if (omap::compatiblep s.bind k.t-bind)
-                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :tuple (cons k.t-hd (erl-val-tuple->tuple s.in)))
+                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :lst (cons k.t-hd (erl-val-tuple->lst s.in)))
                                                     :bind (omap::update* s.bind k.t-bind)))
                 ; TODO: This is supposed to return the value that failed to match. However, there is no easy way to figure this out.
                 (make-erl-s-klst

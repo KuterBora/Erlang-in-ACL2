@@ -26,7 +26,7 @@
     (:atom ((val symbolp)))
     (:string ((val stringp)))
     (:cons ((lst erl-vlst-p)))
-    (:tuple ((tuple erl-vlst-p)))
+    (:tuple ((lst erl-vlst-p)))
     (:excpt ((err erl-err-p)))
 
     ; Internal return values

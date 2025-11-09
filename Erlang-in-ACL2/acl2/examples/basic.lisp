@@ -1,7 +1,6 @@
 (include-book "erl-eval")
 (include-book "std/testing/assert-equal" :DIR :SYSTEM)
 
-
 ; Terms ------------------------------------------------------------------------
 
 ; Make atomic term
@@ -84,7 +83,7 @@
                              (:cons (:integer 1) (:cons (:integer 2) (:nil)))))))))
   (make-erl-state 
     :in (make-erl-val-tuple 
-          :tuple (list '(:integer 1)
+          :lst (list '(:integer 1)
                        '(:string "a") 
                        '(:cons ((:integer 1) (:integer 2)))))))
 
