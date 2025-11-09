@@ -73,7 +73,7 @@
   :fix-value '+)
 
 ; Erlang unary arithmetic operators
-(fty::defsubtype erl-numeric-unnop
+(fty::defsubtype erl-numeric-unop
   :supertype erl-unop-p
   :restriction (lambda (x) (arithm-unop-p x))
   :fix-value '+)
@@ -84,7 +84,12 @@
     (:integer ((val integerp)))
     (:atom ((val symbolp)))
     (:string ((val stringp)))
+    (:nil ())
+    (:cons ((hd node-p)
+            (tl node-p)))
+    (:tuple ((lst node-list-p)))
     (:var ((id symbolp)))
+    (:unop ((op erl-unop-p) (expr node-p)))
     (:binop ((op erl-binop-p)
 		         (left node-p)
              (right node-p)))
@@ -94,7 +99,6 @@
     :elt-type node-p
     :true-listp t
     :measure (list (acl2-count x) 0)))
-
 
 ; Arithmetic Expression --------------------------------------------------------
 
@@ -111,10 +115,48 @@
          (:integer t)
          (:atom nil)
          (:string nil)
+         (:nil nil)
+         (:cons nil)
+         (:tuple nil)
          (:var nil)
+         (:unop (and (erl-numeric-unop-p (node-unop->op x))
+                     (arithm-expr-p (node-unop->expr x))))
          (:binop (and (erl-numeric-binop-p (node-binop->op x))
                       (arithm-expr-p (node-binop->left x))
                       (arithm-expr-p (node-binop->right x)))))))
+
+
+; Constant Expression  ---------------------------------------------------------
+
+(defines const
+  :flag-local nil
+  (define const-p ((x acl2::any-p))
+    :returns (ok booleanp)
+    :measure (node-count x)
+    :flag const
+    (and (node-p x)
+         (case (node-kind x)
+          (:integer t)
+          (:atom t)
+          (:string t)
+          (:nil t)
+          (:cons (and (const-p (node-cons->hd x))
+                      (const-p (node-cons->tl x))))
+          (:tuple (const-list-p (node-tuple->lst x)))
+          (:var nil)
+          (:unop (and (erl-unop-p (node-unop->op x))
+                      (const-p (node-unop->expr x))))
+          (:binop (and (erl-binop-p (node-binop->op x))
+                      (const-p (node-binop->left x))
+                      (const-p (node-binop->right x)))))))
+  (define const-list-p ((x acl2::any-p))
+    :returns (ok booleanp)
+    :measure (node-list-count x)
+    :flag const-lst
+    (if (consp x)
+        (and (const-p (car x)) (const-list-p (cdr x)))
+        (null x))))
+
 
 ; Erlang Pattern ---------------------------------------------------------------
 
@@ -122,54 +164,89 @@
 ; - The match operator is allowed if both operands are valid patterns.
 ; - Arithmetic expressions are allowed.
 ; - List concatenation is allowed, but not list substraction.
-(define pattern-p ((x acl2::any-p))
-  :returns (ok booleanp)
-  :measure (node-count x)
-  (and 
-    (node-p x)
-    (or (arithm-expr-p x)
-        (case (node-kind x)
-              (:integer t)
-              (:atom t)
-              (:string t)
-              (:var t)
-              (:binop
-                ;; TODO: I need to enforce more things here
-                (or (equal (node-binop->op x) '++)
-                    (pattern-p (node-binop->left x))
-                    (pattern-p (node-binop->right x))))))))
-
-; List of Erlang patterns
-(define pattern-list-p ((x acl2::any-p))
-  :returns (ok booleanp)
-  :measure (node-list-count x)
-  (if (consp x)
-      (and (pattern-p (car x)) (pattern-list-p (cdr x)))
-      (null x)))
+(defines pattern
+  :flag-local nil
+  (define pattern-p ((x acl2::any-p))
+    :returns (ok booleanp)
+    :measure (node-count x)
+    :flag pattern
+    (and 
+      (node-p x)
+      (or (arithm-expr-p x)
+          (case (node-kind x)
+                (:integer t)
+                (:atom t)
+                (:string t)
+                (:nil t)
+                (:cons
+                  (and (pattern-p (node-cons->hd x))
+                       (pattern-p (node-cons->tl x))))
+                (:tuple (pattern-list-p (node-tuple->lst x)))
+                (:var t)
+                (:unop nil)
+                (:binop
+                  (or (equal (node-binop->op x) '++)
+                      (and
+                        (const-p (node-binop->left x))
+                        (or (equal (node-kind (node-binop->left x)) :string)
+                            (equal (node-kind (node-binop->left x)) :cons))
+                        (pattern-p (node-binop->right x))
+                        (or (equal (node-kind (node-binop->right x)) :string)
+                            (equal (node-kind (node-binop->right x)) :cons)))))))))
+  (define pattern-list-p ((x acl2::any-p))
+    :returns (ok booleanp)
+    :measure (node-list-count x)
+    :flag pattern-list
+    (if (consp x)
+        (and (pattern-p (car x)) (pattern-list-p (cdr x)))
+        (null x))))
 
 
 ; Erlang Expression ------------------------------------------------------------
 
 ; All Erlang expression types supported by the evaluator.
-(define expr-p ((x acl2::any-p))
+(defines expr
+  :flag-local nil
+  (define expr-p ((x acl2::any-p))
     :returns (ok booleanp)
     :measure (node-count x)
+    :flag expr
     (and (node-p x)
-         (case (node-kind x)
+        (case (node-kind x)
           (:integer t)
           (:atom t)
           (:string t)
+          (:nil t)
+          (:cons 
+            (and (expr-p (node-cons->hd x))
+                 (expr-p (node-cons->tl x))))
+          (:tuple (expr-list-p (node-tuple->lst x)))
           (:var t)
+          (:unop (expr-p (node-unop->expr x)))
           (:binop (and (expr-p (node-binop->left x))
                        (expr-p (node-binop->right x)))))))
 
-; List of Erlang Expressions
-(define expr-list-p ((x acl2::any-p))
-    :returns (ok booleanp)
-    :measure (node-list-count x)
-    (if (consp x)
-        (and (expr-p (car x)) (expr-list-p (cdr x)))
-        (null x)))
+  ; List of Erlang Expressions
+  (define expr-list-p ((x acl2::any-p))
+      :returns (ok booleanp)
+      :measure (node-list-count x)
+      :flag expr-list
+      (if (consp x)
+          (and (expr-p (car x)) (expr-list-p (cdr x)))
+          (null x)))
+    
+    ///
+    (std::deflist expr-list-p (x)
+        (expr-p x)
+        :already-definedp t
+        :true-listp t)
+    (defthm-expr-flag
+      (defthm expr-list-is-node-list
+        (implies (expr-list-p x) (node-list-p x))
+        :flag expr-list)
+      (defthm expr-is-node
+        (implies (expr-p x) (node-p x))
+        :flag expr)))
 
 
 ; Theorems ---------------------------------------------------------------------
@@ -178,6 +255,11 @@
 (defrule arithm-expr-is-subtype-of-expr
   (implies (arithm-expr-p x) (expr-p x))
   :enable (arithm-expr-p expr-p))
+
+;; Constant is a subtype of Expression
+(defrule const-is-subtype-of-expr
+  (implies (const-p x) (expr-p x))
+  :enable (const-p expr-p const-list-p expr-list-p))
 
 ;; Pattern is a subtype of Expression
 (defrule pattern-is-subtype-of-expr
@@ -188,6 +270,10 @@
   (implies (expr-p x) (node-p x))
   :expand (expr-p x))
 
+(defrule expr-list-is-subtype-of-node-list
+  (implies (expr-list-p x) (node-list-p x))
+  :expand (expr-list-p x))
+
 (set-well-founded-relation o<)
 
 
@@ -195,7 +281,7 @@
 
 (define arithm-expr-fix ((x arithm-expr-p))
   :inline t
-  (mbe :logic (if (arithm-expr-p x) x (make-node-atom :val 'oops))
+  (mbe :logic (if (arithm-expr-p x) x (make-node-integer :val 0))
        :exec x))
 
 (defrule arithm-expr-fix-produces-arithm-expr
@@ -206,6 +292,20 @@
   (implies (arithm-expr-p x)
            (equal (arithm-expr-fix x) x))
   :expand (arithm-expr-fix x))
+
+(define const-fix ((x const-p))
+  :inline t
+  (mbe :logic (if (const-p x) x (make-node-atom :val 'oops))
+       :exec x))
+
+(defrule const-fix-produces-const
+  (const-p (const-fix x))
+  :expand (const-fix x))
+
+(defrule const-fix-is-the-identity-on-const
+  (implies (const-p x)
+           (equal (const-fix x) x))
+  :expand (const-fix x))
 
 (define pattern-fix ((x pattern-p))
   :inline t
@@ -245,6 +345,19 @@
   :equiv  arithm-expr-equiv
   :define t
   :forward t)
+
+; Erlang Constant
+(fty::deffixtype const
+  :pred   const-p
+  :fix    const-fix
+  :equiv  const-equiv
+  :define t
+  :forward t)
+
+(fty::deflist const-list
+  :elt-type const-p
+  :true-listp t
+  :pred const-list-p)
 
 ; Erlang Pattern
 (fty::deffixtype pattern

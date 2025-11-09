@@ -36,38 +36,117 @@
                                                         :bind s.bind)))
           (:string  (make-erl-s-klst :s (make-erl-state :in (make-erl-val-string :val x.val)
                                                         :bind s.bind)))
-          ; if x is a var, lookup its value. If the AST is well-formed, x shoudl be bound.
+          (:nil     (make-erl-s-klst :s (make-erl-state :in (make-erl-val-cons :lst nil)
+                                                        :bind s.bind)))
+          ; if x is a list, evaluate car and save cdr in a continuation.
+          (:cons 
+            (make-erl-s-klst
+              :s (make-erl-state :bind s.bind)
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.hd))
+                          (make-erl-k :fuel (1- fuel)
+                                      :kont (make-kont-cons :cdr-expr x.tl :bind-0 s.bind)))))
+          ; if x is a tuple, evaluate the first element and save the rest in a continuation.
+          ; if the tuple is empty, return its value.
+          (:tuple
+            (if (null x.lst)
+                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :tuple nil) :bind s.bind))
+                (make-erl-s-klst 
+                  :s (make-erl-state :bind s.bind)
+                  :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car x.lst)))
+                              (make-erl-k :fuel (1- fuel)
+                                          :kont (make-kont-tuple :t-rem (make-node-tuple :lst (cdr x.lst)) 
+                                                                 :bind-0 s.bind))))))
+          ; if x is a var, lookup its value. If the AST is well-formed, x should be bound.
           (:var
             (if (omap::assoc x.id s.bind)
-                (make-erl-s-klst :s (make-erl-state :in (omap::lookup x.id s.bind) 
-                                                    :bind s.bind))
-                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-error :err "unbound variable")))))
-          ; if x is a binop, evaluate the first operand, save the operator and the second operand 
+                (make-erl-s-klst :s (make-erl-state :in (omap::lookup x.id s.bind) :bind s.bind))
+                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-reject :err "unbound variable")))))
+          (:unop
+            (make-erl-s-klst
+              :s (make-erl-state :bind s.bind)
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.expr))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-unop :op x.op)))))
+          ; if x is a binop, evaluate the first operand, save the operator and the second operand
           (:binop
             (make-erl-s-klst
               :s (make-erl-state :bind s.bind)
-              :klst (list (make-erl-k :fuel (1- fuel) 
-                                      :kont (make-kont-expr :expr x.left))
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.left))
                           (make-erl-k :fuel (1- fuel) 
                                       :kont (make-kont-binop-expr1 :op x.op 
                                                                    :right x.right
-                                                                   :bind0 s.bind))))))))
+                                                                   :bind-0 s.bind))))))))
+      
+      ; Evaluate the cdr of the list, save the result of the car in a contunation
+      (:cons
+        (make-erl-s-klst
+          :s (make-erl-state :bind k.bind-0)
+          :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.cdr-expr))
+                      (make-erl-k :fuel (1- fuel)
+                                  :kont (make-kont-cons-merge :car-val s.in 
+                                                              :car-bind s.bind)))))
+      ; When both the car and cdr of the list are evaluated, merge the results.
+      (:cons-merge
+        (if (equal (erl-val-kind s.in) :cons)
+            (if (omap::compatiblep s.bind k.car-bind)
+                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-cons :lst (cons k.car-val (erl-val-cons->lst s.in)))
+                                                    :bind (omap::update* s.bind k.car-bind)))
+                ; TODO: This is supposed to return the value that failed to match. However, there is no easy way to figure this out.
+                (make-erl-s-klst
+                  :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                                                :reason (make-exit-reason-badmatch :val s.in))))))
+            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-reject :err "cons-merge expects list")))))
+      
+      ; Evaluate the rest of the tuple, save the previous element in a continuation. 
+      (:tuple
+        (make-erl-s-klst
+          :s (make-erl-state :bind k.bind-0)
+          :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.t-rem))
+                      (make-erl-k :fuel (1- fuel)
+                                  :kont (make-kont-tuple-merge :t-hd s.in 
+                                                               :t-bind s.bind)))))
+      ; When every element of a tuple has been evaluated, start merging the results.
+      (:tuple-merge
+        (if (equal (erl-val-kind s.in) :tuple)
+            (if (omap::compatiblep s.bind k.t-bind)
+                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :tuple (cons k.t-hd (erl-val-tuple->tuple s.in)))
+                                                    :bind (omap::update* s.bind k.t-bind)))
+                ; TODO: This is supposed to return the value that failed to match. However, there is no easy way to figure this out.
+                (make-erl-s-klst
+                  :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                                                :reason (make-exit-reason-badmatch :val s.in))))))
+            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-reject :err "tuple-merge expects tuple")))))
+
+      ; Apply unop to the evalutaed operand.
+      (:unop (make-erl-s-klst :s (make-erl-state :in (apply-erl-unop k.op s.in) :bind s.bind)))
+
       ; Evaluate the second operand of a binop, save the operator and value of the first operand                                                    
       (:binop-expr1 
         (make-erl-s-klst
-          :s (make-erl-state :bind k.bind0)
-          :klst (list (make-erl-k :fuel (1- fuel) 
-                                  :kont (make-kont-expr :expr k.right))
+          :s (make-erl-state :bind k.bind-0)
+          :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.right))
                       (make-erl-k :fuel (1- fuel) 
                                   :kont (make-kont-binop-expr2 :op k.op 
                                                                :val s.in
-                                                               :bindL s.bind)))))
-      ; apply the binop to the evaluated operands
+                                                               :left-bind s.bind)))))
+      ; Apply the binop to the evaluated operands
       (:binop-expr2
-        (if (omap::compatiblep s.bind k.bindL)
+        (if (omap::compatiblep s.bind k.left-bind)
             (make-erl-s-klst :s (make-erl-state :in (apply-erl-binop k.op k.val s.in)
-                                                :bind (omap::update* s.bind k.bindL)))
-            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-excpt :err 'badmatch))))))))
+                             :bind (omap::update* s.bind k.left-bind)))
+            ; TODO: This is supposed to return the value that failed to match. However, there is no easy way to figure this out.
+                (make-erl-s-klst
+                  :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                                                :reason (make-exit-reason-badmatch :val s.in)))))))
+      
+      ; Move to the next expression to be evaluated.
+      (:exprs
+        (if (null k.exprs)
+            (make-erl-s-klst :s s)
+            (make-erl-s-klst 
+              :s s 
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car k.exprs)))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr k.exprs))))))))))
+
 
 ; calls to eval-k either return a tuple of two contunuations, or an empty list
 (defrule eval-k-decreases-fuel
@@ -82,6 +161,7 @@
               (equal (cdr (erl-s-klst->klst (eval-k k s))) 
                     (cons (cadr (erl-s-klst->klst (eval-k k s))) nil)))))
   :enable eval-k)
+
 
 ; Eval-op decreases the klst-measure
 (defrule eval-k-decreases-klst-measure
@@ -98,6 +178,7 @@
       (eval-result->klst erl-s-klst->klst)
       (erl-result-p erl-state-p)
       (erl-result-fix erl-state-fix))) 
+
 
 ; Recursively apply the next continuation to the state produced by the previous.
 (define apply-k ((s erl-state-p) (klst erl-klst-p))
