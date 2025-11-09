@@ -189,13 +189,11 @@
        (klst (erl-klst-fix klst))
        (s.in (erl-val-fix (erl-state->in s)))
        ; The evaluator has run out of fuel
-       ((if (equal (erl-val-kind s.in) :flimit)) 
-        (make-erl-state :in (make-erl-val-flimit)))
+       ((if (equal (erl-val-kind s.in) :flimit)) s)
        ; The evaluator has encountered an internal error
-       ((if (equal (erl-val-kind s.in) :error)) s)
+       ((if (equal (erl-val-kind s.in) :rejct)) s)
        ; TODO: exception handling
-       ((if (equal (erl-val-kind s.in) :excpt))
-        (make-erl-state :in (make-erl-val-excpt)))
+       ((if (equal (erl-val-kind s.in) :excpt)) s)
        ((if (endp klst)) s)
        ((cons khd ktl) klst)
        ((erl-s-klst ks) (eval-k khd s)))
@@ -218,22 +216,26 @@
       (apply-k (apply-k s klst1) klst2)))
   :in-theory (enable apply-k))
 
+; When no continuations are left, apply-k returns the state
+(defrule apply-k-of-nil
+  (implies (erl-state-p s)
+           (equal (apply-k s nil) s))
+  :enable apply-k)
 
-; TODO: admit these rules after the congruence theorems are complete
-; ; Calling apply-k with an flimit will return flimit
-; (defrule apply-k-of-flimit
-;   (implies  (and (erl-state-p s) (equal (erl-val-kind (erl-state->in s)) :flimit))
-;             (equal (apply-k s klst) (make-erl-state :in (make-erl-val-flimit))))
-;   :enable apply-k)
+; If the state is flimit, apply-k terminates and returns the state
+(defrule apply-k-of-flimit
+  (implies (and (erl-state-p s) (erl-klst-p klst)
+                (equal (erl-val-kind (erl-state->in s)) :flimit))
+           (equal (apply-k s klst) s))
+  :enable apply-k)
 
-; (defrule apply-k-of-fault-direct
-;   (equal (apply-k '(:fault) rest) '(:fault))
-;   :enable apply-k)
+; If apply-k did not return flimit, then s was not an flimit either.
+(defrule apply-k-of-not-flimit
+  (implies (and (erl-state-p s) (erl-klst-p klst)
+                (not (equal (erl-val-kind (erl-state->in (apply-k s klst))) :flimit)))
+           (not (equal (erl-val-kind (erl-state->in s)) :flimit)))
+  :enable apply-k)
 
-; Calling apply-k with a nil klst returns val
-; (defrule apply-k-of-nil
-;   (implies (erl-state-p s) (equal (apply-k s nil) s))
-;   :enable apply-k)
 
 ; The following theorems show that if evaluating a value and klst terminates
 ; without fault, then increasing the fuel of the continuations will not change the result.
@@ -259,7 +261,7 @@
          (erl-klst-p rest)
          (erl-k-p k)
          (natp n)
-         (not (equal (erl-state->in (erl-s-klst->s (eval-k k s))) (make-erl-val-flimit))))
+         (not (equal (erl-val-kind (erl-state->in (erl-s-klst->s (eval-k k s)))) :flimit)))
     (equal (increase-fuel (append (erl-s-klst->klst (eval-k k s)) rest) n)
            (append (erl-s-klst->klst (eval-k (erl-k (+ n (erl-k->fuel k))
                                                     (erl-k->kont k))
@@ -271,29 +273,39 @@
 ; if its fuel is increased.
 (defrule more-fuel-is-good-for-eval
   (implies 
-    (and (erl-val-p val)
+    (and (erl-state-p s)
          (erl-k-p k)
          (natp n)
-         (not (equal (erl-state->in (erl-s-klst->s (eval-k k s))) (make-erl-val-flimit))))
+         (not (equal (erl-val-kind (erl-state->in (erl-s-klst->s (eval-k k s)))) :flimit)))
     (equal (erl-s-klst->s (eval-k (erl-k (+ n (erl-k->fuel k))
                                          (erl-k->kont k)) 
                                   s))
            (erl-s-klst->s (eval-k k s))))
   :enable eval-k)
 
-; ; A continuation that did not cause an error in apply-k will produce the same result
-; ; if its fuel is increased.
-; (defrule more-fuel-is-good-for-apply
-;   (implies
-;     (and (erl-state-p s)
-;          (erl-klst-p klst)
-;          (not (equal (erl-state->in (erl-s-klst->s (eval-k k s))) (make-erl-val-flimit)))
-;          (natp n))
-;     (equal (apply-k s (increase-fuel klst n))
-;            (apply-k s klst)))
-;   :enable (apply-k increase-fuel)
-;   :expand ((apply-k s klst)
-;            (apply-k s
-;                     (cons (erl-k (+ n (erl-k->fuel (car klst)))
-;                                  (erl-k->kont (car klst)))
-;                           (increase-fuel (cdr klst) n)))))
+; A continuation that did not cause an error in apply-k will produce the same result
+; if its fuel is increased.
+(defrule more-fuel-is-good-for-apply
+  (implies
+    (and (erl-state-p s)
+         (erl-klst-p klst)
+         (not (equal (erl-val-kind (erl-state->in (apply-k s klst))) :flimit))
+         (natp n))
+    (equal (apply-k s (increase-fuel klst n))
+           (apply-k s klst)))
+  :enable (apply-k increase-fuel)
+  :disable (apply-k-of-not-flimit  increase-fuel-is-distributive-over-append more-fuel-is-good-for-eval)
+  :expand (apply-k s (cons (erl-k (+ n (erl-k->fuel (car klst)))
+                                   (erl-k->kont (car klst)))
+                            (increase-fuel (cdr klst) n)))
+  :hints (("Subgoal *1/8'''"
+      :use ((:instance apply-k-of-not-flimit (s s) (klst klst))
+            (:instance increase-fuel-is-distributive-over-append
+              (s s)
+              (rest (cdr klst))
+              (k (car klst))
+              (n n))
+            (:instance more-fuel-is-good-for-eval
+              (s s)
+              (k (car klst))
+              (n n))))))

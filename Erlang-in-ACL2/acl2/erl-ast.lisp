@@ -152,10 +152,16 @@
   (define const-list-p ((x acl2::any-p))
     :returns (ok booleanp)
     :measure (node-list-count x)
-    :flag const-lst
+    :flag const-list
     (if (consp x)
         (and (const-p (car x)) (const-list-p (cdr x)))
-        (null x))))
+        (null x)))
+    
+    ///
+    (std::deflist const-list-p (x)
+        (const-p x)
+        :already-definedp t
+        :true-listp t))
 
 
 ; Erlang Pattern ---------------------------------------------------------------
@@ -185,21 +191,26 @@
                 (:var t)
                 (:unop nil)
                 (:binop
-                  (or (equal (node-binop->op x) '++)
-                      (and
-                        (const-p (node-binop->left x))
-                        (or (equal (node-kind (node-binop->left x)) :string)
-                            (equal (node-kind (node-binop->left x)) :cons))
-                        (pattern-p (node-binop->right x))
-                        (or (equal (node-kind (node-binop->right x)) :string)
-                            (equal (node-kind (node-binop->right x)) :cons)))))))))
+                  (and (equal (node-binop->op x) '++)
+                       (const-p (node-binop->left x))
+                       (or (equal (node-kind (node-binop->left x)) :string)
+                           (equal (node-kind (node-binop->left x)) :cons))
+                       (pattern-p (node-binop->right x))
+                       (or (equal (node-kind (node-binop->right x)) :string)
+                           (equal (node-kind (node-binop->right x)) :cons))))))))
   (define pattern-list-p ((x acl2::any-p))
     :returns (ok booleanp)
     :measure (node-list-count x)
     :flag pattern-list
     (if (consp x)
         (and (pattern-p (car x)) (pattern-list-p (cdr x)))
-        (null x))))
+        (null x)))
+    
+    ///
+    (std::deflist pattern-list-p (x)
+        (pattern-p x)
+        :already-definedp t
+        :true-listp t))
 
 
 ; Erlang Expression ------------------------------------------------------------
@@ -239,40 +250,48 @@
     (std::deflist expr-list-p (x)
         (expr-p x)
         :already-definedp t
-        :true-listp t)
-    (defthm-expr-flag
-      (defthm expr-list-is-node-list
-        (implies (expr-list-p x) (node-list-p x))
-        :flag expr-list)
-      (defthm expr-is-node
-        (implies (expr-p x) (node-p x))
-        :flag expr)))
+        :true-listp t))
 
 
 ; Theorems ---------------------------------------------------------------------
 
-;; Arithmetic Expression is a subtype of Expression
+(defthm-expr-flag
+  ; Expression list is a subtype of Node list
+  (defthm expr-list-is-subtype-of-node-list
+    (implies (expr-list-p x) (node-list-p x))
+    :flag expr-list)
+  ; Expression is a subtype of Node
+  (defthm expr-is-subtype-of-node
+    (implies (expr-p x) (node-p x))
+    :flag expr)
+  :hints (("Goal" :in-theory (enable expr-p))))
+
+; Arithmetic Expression is a subtype of Expression
 (defrule arithm-expr-is-subtype-of-expr
   (implies (arithm-expr-p x) (expr-p x))
   :enable (arithm-expr-p expr-p))
 
-;; Constant is a subtype of Expression
-(defrule const-is-subtype-of-expr
-  (implies (const-p x) (expr-p x))
-  :enable (const-p expr-p const-list-p expr-list-p))
+(defthm-const-flag
+  ; Const list is a subtype of Expression list
+  (defthm const-list-is-subtype-of-expr-list
+    (implies (const-list-p x) (expr-list-p x))
+    :flag const-list)
+  ; Const is a subtype of Expression
+  (defthm const-is-subtype-of-expr
+    (implies (const-p x) (expr-p x))
+    :flag const)
+  :hints (("Goal" :in-theory (enable expr-p const-p))))
 
-;; Pattern is a subtype of Expression
-(defrule pattern-is-subtype-of-expr
-  (implies (pattern-p x) (expr-p x))
-  :enable (expr-p pattern-p))
-
-(defrule expr-is-subtype-of-node
-  (implies (expr-p x) (node-p x))
-  :expand (expr-p x))
-
-(defrule expr-list-is-subtype-of-node-list
-  (implies (expr-list-p x) (node-list-p x))
-  :expand (expr-list-p x))
+(defthm-pattern-flag
+  ; Pattern list is a subtype of Expression list
+  (defthm pattern-list-is-subtype-of-expr-list
+    (implies (pattern-list-p x) (expr-list-p x))
+    :flag pattern-list)
+  ; Pattern is a subtype of Expression
+  (defthm pattern-is-subtype-of-expr
+    (implies (pattern-p x) (expr-p x))
+    :flag pattern)
+  :hints (("Goal" :in-theory (enable pattern-p expr-p))))
 
 (set-well-founded-relation o<)
 
