@@ -88,7 +88,7 @@
                 (make-erl-s-klst
                   :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
                                                                                 :reason (make-exit-reason-badmatch :val s.in))))))
-            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-reject :err "cons-merge expects list")))))
+            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-reject :err "cons-merge expects list, pairs are not supported")))))
       
       ; Evaluate the rest of the tuple, save the previous element in a continuation. 
       (:tuple

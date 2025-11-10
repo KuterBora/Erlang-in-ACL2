@@ -15,10 +15,10 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((if (equal (erl-val-kind left) :flimit)) left)
        ((if (equal (erl-val-kind right) :flimit)) right)
+       ((if (equal (erl-val-kind left) :reject)) left)
+       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (equal (erl-val-kind left) :integer)
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
@@ -41,10 +41,10 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((if (equal (erl-val-kind left) :flimit)) left)
        ((if (equal (erl-val-kind right) :flimit)) right)
+       ((if (equal (erl-val-kind left) :reject)) left)
+       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
@@ -59,10 +59,10 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((if (equal (erl-val-kind left) :flimit)) left)
        ((if (equal (erl-val-kind right) :flimit)) right)
+       ((if (equal (erl-val-kind left) :reject)) left)
+       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
@@ -87,10 +87,10 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((if (equal (erl-val-kind left) :flimit)) left)
        ((if (equal (erl-val-kind right) :flimit)) right)
+       ((if (equal (erl-val-kind left) :reject)) left)
+       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :integer) 
                (equal (erl-val-kind right) :integer)
@@ -108,10 +108,10 @@
   (b* ((op (erl-binop-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right))
+       ((if (equal (erl-val-kind right) :flimit)) right)
+       ((if (equal (erl-val-kind left) :reject)) left)
+       ((if (equal (erl-val-kind right) :reject)) right))
       (case op
         (+ (erl-add left right))
         (- (erl-sub left right))
@@ -122,9 +122,9 @@
   (defrule apply-erl-binop-of-flimit
     (implies
       (and (erl-val-p left) (erl-val-p right)) 
-      (iff (not (equal (apply-erl-binop op left right) (make-erl-val-flimit)))
-            (and (not (equal left (make-erl-val-flimit)))
-                (not (equal right (make-erl-val-flimit))))))
+      (iff (not (equal (erl-val-kind (apply-erl-binop op left right)) :flimit))
+            (and (not (equal (erl-val-kind left) :flimit))
+                 (not (equal (erl-val-kind right) :flimit)))))
     :enable (erl-add erl-sub erl-mul erl-div)))
 
 
@@ -156,6 +156,6 @@
   (defrule apply-erl-unop-of-flimit
     (implies
       (erl-val-p val) 
-      (iff (not (equal (apply-erl-unop op val) (make-erl-val-flimit)))
-           (not (equal val (make-erl-val-flimit)))))
+      (iff (not (equal (erl-val-kind (apply-erl-unop op val)) :flimit))
+           (not (equal (erl-val-kind val) :flimit))))
     :enable (erl-minus)))
