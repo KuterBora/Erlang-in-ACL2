@@ -4,6 +4,8 @@
 
 (set-induction-depth-limit 1)
 
+; TODO: This file is way behind, it needs to be updated.
+
 ; Commutativity of Erlang Addition ---------------------------------------------
 
 ; Apply-binop of erl-addition is commutative.
