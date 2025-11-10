@@ -192,7 +192,7 @@
        ; The evaluator has run out of fuel
        ((if (equal (erl-val-kind s.in) :flimit)) s)
        ; The evaluator has encountered an internal error
-       ((if (equal (erl-val-kind s.in) :rejct)) s)
+       ((if (equal (erl-val-kind s.in) :reject)) s)
        ; TODO: exception handling
        ((if (equal (erl-val-kind s.in) :excpt)) s)
        ((if (endp klst)) s)
@@ -223,7 +223,7 @@
            (equal (apply-k s nil) s))
   :enable apply-k)
 
-; If the state is flimit, apply-k terminates and returns the state
+; If the state is flimit, apply-k terminates and returns the state.
 (defrule apply-k-of-flimit
   (implies (and (erl-state-p s) (erl-klst-p klst)
                 (equal (erl-val-kind (erl-state->in s)) :flimit))
@@ -237,6 +237,38 @@
            (not (equal (erl-val-kind (erl-state->in s)) :flimit)))
   :enable apply-k)
 
+; If the state is rejected, apply-k terminates and returns the state.
+(defrule apply-k-of-reject
+  (implies (and (erl-state-p s) (erl-klst-p klst)
+                (equal (erl-val-kind (erl-state->in s)) :reject))
+           (equal (apply-k s klst) s))
+  :enable apply-k)
+
+; If apply-k did not get rejected, then s was not rejected either.
+(defrule apply-k-of-not-reject
+  (implies (and (erl-state-p s) (erl-klst-p klst)
+                (not (equal (erl-val-kind (erl-state->in (apply-k s klst))) :reject)))
+           (not (equal (erl-val-kind (erl-state->in s)) :reject)))
+  :enable apply-k)
+
+; If the state is excpt, and the exception is not caught, 
+; apply-k terminates and returns the state.
+(defrule apply-k-of-excpt
+  (implies (and (erl-state-p s) (erl-klst-p klst)
+                (equal (erl-val-kind (erl-state->in s)) :excpt))
+           (equal (apply-k s klst) s))
+  :enable apply-k)
+
+; If apply-k did not return excpt, then s was not an excpt either,
+; or the exception was caught.
+(defrule apply-k-of-not-excpt
+  (implies (and (erl-state-p s) (erl-klst-p klst)
+                (not (equal (erl-val-kind (erl-state->in (apply-k s klst))) :excpt)))
+           (not (equal (erl-val-kind (erl-state->in s)) :excpt)))
+  :enable apply-k)
+
+
+; Fuel Theorems ----------------------------------------------------------------
 
 ; The following theorems show that if evaluating a value and klst terminates
 ; without fault, then increasing the fuel of the continuations will not change the result.
@@ -310,3 +342,18 @@
               (s s)
               (k (car klst))
               (n n))))))
+
+
+; Erl-State Theorems -----------------------------------------------------------
+
+; Erl-states are equal if their field are equal
+(defruled erl-states-are-equal-if-fields-are-equal
+  (implies 
+    (and (erl-state-p x)
+         (erl-state-p y)
+         (erl-klst-p klst)
+         (equal (erl-state->in x) (erl-state->in y))
+         (equal (erl-state->bind x) (erl-state->bind y)))
+    (equal (apply-k x klst) (apply-k y klst)))
+  :expand ((apply-k x klst) (apply-k y klst))
+  :enable (erl-state->in erl-state->bind erl-state-p))

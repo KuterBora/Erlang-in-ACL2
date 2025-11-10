@@ -132,8 +132,8 @@
 (define erl-minus ((val erl-val-p))
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
-       ((if (equal (erl-val-kind val) :reject)) val)
        ((if (equal (erl-val-kind val) :flimit)) val)
+       ((if (equal (erl-val-kind val) :reject)) val)
        ((unless (equal (erl-val-kind val) :integer))
         (make-erl-val-excpt 
           :err (make-erl-err :class (make-err-class-error)
@@ -145,8 +145,8 @@
   :returns (v erl-val-p)
   (b* ((op (erl-unop-fix op))
        (val (erl-val-fix val))
-       ((if (equal (erl-val-kind val) :reject)) val)
-       ((if (equal (erl-val-kind val) :flimit)) val))
+       ((if (equal (erl-val-kind val) :flimit)) val)
+       ((if (equal (erl-val-kind val) :reject)) val))
       (case op
         (- (erl-minus val))
         (otherwise (make-erl-val-reject :err "bad op"))))

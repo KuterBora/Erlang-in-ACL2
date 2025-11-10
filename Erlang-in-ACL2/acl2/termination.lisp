@@ -138,12 +138,12 @@
 
 ; Eval-op decreases the klst-measure
 (defrule eval-op-decreases-klst-measure
-    (b* ((klst (erl-klst-fix klst))
-          (x (erl-result-fix x))
-         ((if (null klst)) t))
-      (l< (klst-measure (append (eval-result->klst (eval-op (car klst) x))
-                                (cdr klst)))
-          (klst-measure klst)))
+  (b* ((klst (erl-klst-fix klst))
+        (x (erl-result-fix x))
+        ((if (null klst)) t))
+    (l< (klst-measure (append (eval-result->klst (eval-op (car klst) x))
+                              (cdr klst)))
+        (klst-measure klst)))
   :enable klst-measure
   :use((:instance fuel-of-car-when-eval-op-returns-list 
     (klst (erl-klst-fix klst)) 

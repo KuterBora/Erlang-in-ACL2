@@ -115,7 +115,7 @@
 
 ; Binop ------------------------------------------------------------------------
 
-(assert-equal (make-node-binop :op '+ :left '(:integer 2) :right (:integer 3))
+(assert-equal (make-node-binop :op '+ :left '(:integer 2) :right '(:integer 3))
               '(:binop + (:integer 2) (:integer 3)))
 
 (assert-equal
