@@ -1,5 +1,4 @@
 (in-package "ACL2")
-(include-book "../erl-eval")
 (include-book "erl-baisc")
 
 (set-induction-depth-limit 1)

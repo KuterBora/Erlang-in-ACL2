@@ -73,12 +73,6 @@
   :key-type symbol
   :val-type erl-val)
 
-; Representation of the current State of the Erlang program under evaluation
-; TODO: World and Out to represent the admitted forms and sent messages
-(fty::defprod erl-state
-  ((in erl-val-p :default (make-erl-val-none))
-   (bind bind-p :default nil)))
-
 ; Erlang Equivalence
 ; Checks if two Erlang values are equivalent. If one of the values is a rejection,
 ; the other value is also checked to be a rejection, regardless of its type.

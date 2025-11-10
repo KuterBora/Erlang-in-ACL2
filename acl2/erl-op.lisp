@@ -1,7 +1,9 @@
 (in-package "ACL2")
 (include-book "erl-ast")
 (include-book "erl-value")
-(include-book "kestrel/utilities/strings/strings-codes" :dir :system)
+
+; Will need this for some of the string operations
+; (include-book "kestrel/utilities/strings/strings-codes" :dir :system)
 
 (set-induction-depth-limit 1)
 

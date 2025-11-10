@@ -1,6 +1,5 @@
 (in-package "ACL2")
 (include-book "erl-ast")
-(include-book "erl-value")
 
 ; AST Theorems -----------------------------------------------------------------
 
