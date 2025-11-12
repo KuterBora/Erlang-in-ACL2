@@ -145,12 +145,12 @@
         (b* ((ms (eval-match k.lhs s))
              (ms.in (erl-state->in ms))
              ((if (and (equal (erl-val-kind ms.in) :excpt)
-                       (equal (exit-reason-kind (erl-val-excpt->reason ms.in)) :badmatch)))
+                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err ms.in))) :badmatch)))
               (make-erl-s-klst
                 :s (make-erl-state 
                     :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
                                                                :reason (make-exit-reason-badmatch :val s.in)))))))
-            s))
+            (make-erl-s-klst :s ms)))
       ; Move to the next expression to be evaluated.
       (:exprs
         (if (null k.exprs)

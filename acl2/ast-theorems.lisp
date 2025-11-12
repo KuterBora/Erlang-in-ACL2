@@ -75,8 +75,15 @@
 
 ; Sub-nodes of a match expression are expressions, and lhs is a pattern.
 (defrule expr-match-ensures
-  (implies (and (expr-p x) (equal (node-kind x) :matcg))
+  (implies (and (expr-p x) (equal (node-kind x) :match))
            (and (expr-p (node-match->rhs x))
                 (expr-p (node-match->lhs x))
                 (pattern-p (node-match->lhs x))))
   :enable expr-p)
+
+; Sub-nodes of a match pattern are patterns.
+(defrule pattern-match-ensures
+  (implies (and (pattern-p x) (equal (node-kind x) :match))
+           (and (pattern-p (node-match->rhs x))
+                (pattern-p (node-match->lhs x))))
+  :enable (arithm-expr-p pattern-p))
