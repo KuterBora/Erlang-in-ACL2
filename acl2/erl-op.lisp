@@ -26,14 +26,14 @@
                              :reason (make-exit-reason-badarith)))))
       (make-erl-val-integer :val (+ (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
-  ///
-  (defrule commutativity-of-erl-add
-    (erl-equiv (erl-add x y)
-               (erl-add y x))
-    :enable erl-equiv)
-  (defrule associativity-of-erl-add
-    (erl-equiv (erl-add (erl-add x y) z)
-               (erl-add x (erl-add y z)))))
+    ///
+      (defrule commutativity-of-erl-add
+        (erl-equiv (erl-add x y)
+                   (erl-add y x))
+        :enable erl-equiv)
+      (defrule associativity-of-erl-add
+        (erl-equiv (erl-add (erl-add x y) z)
+                   (erl-add x (erl-add y z)))))
 
 ; Representation of Erlang substraction in ACL2.
 ; - Returns badarith if arguments are not integers.
@@ -70,15 +70,15 @@
                              :reason (make-exit-reason-badarith)))))
       (make-erl-val-integer :val (* (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
-  ///
-  (defrule commutativity-of-erl-mul
-    (erl-equiv (erl-mul x y)
-               (erl-mul y x))
-      :enable erl-equiv)
-  (defrule associativity-of-erl-mul
-    (erl-equiv (erl-mul (erl-mul x y) z)
-               (erl-mul z (erl-mul y x)))
-    :enable erl-equiv))
+    ///
+      (defrule commutativity-of-erl-mul
+        (erl-equiv (erl-mul x y)
+                   (erl-mul y x))
+          :enable erl-equiv)
+      (defrule associativity-of-erl-mul
+        (erl-equiv (erl-mul (erl-mul x y) z)
+                   (erl-mul z (erl-mul y x)))
+        :enable erl-equiv))
 
 ; Representation of Erlang integer division (div) in ACL2.
 ; - The result is rounded down to the largest integer less than the result.
@@ -118,14 +118,14 @@
         (* (erl-mul left right))
         (div (erl-div left right))
         (otherwise (make-erl-val-reject :err "bad op"))))
-  ///
-  (defrule apply-erl-binop-of-flimit
-    (implies
-      (and (erl-val-p left) (erl-val-p right)) 
-      (iff (not (equal (erl-val-kind (apply-erl-binop op left right)) :flimit))
-            (and (not (equal (erl-val-kind left) :flimit))
-                 (not (equal (erl-val-kind right) :flimit)))))
-    :enable (erl-add erl-sub erl-mul erl-div)))
+    ///
+      (defrule apply-erl-binop-of-flimit
+        (implies
+          (and (erl-val-p left) (erl-val-p right)) 
+          (iff (not (equal (erl-val-kind (apply-erl-binop op left right)) :flimit))
+               (and (not (equal (erl-val-kind left) :flimit))
+                    (not (equal (erl-val-kind right) :flimit)))))
+        :enable (erl-add erl-sub erl-mul erl-div)))
 
 
 ; Erlang Unary Operations ------------------------------------------------------
@@ -152,10 +152,10 @@
       (case op
         (- (erl-minus val))
         (otherwise (make-erl-val-reject :err "bad op"))))
-  ///
-  (defrule apply-erl-unop-of-flimit
-    (implies
-      (erl-val-p val) 
-      (iff (not (equal (erl-val-kind (apply-erl-unop op val)) :flimit))
-           (not (equal (erl-val-kind val) :flimit))))
-    :enable (erl-minus)))
+    ///
+      (defrule apply-erl-unop-of-flimit
+        (implies
+          (erl-val-p val) 
+          (iff (not (equal (erl-val-kind (apply-erl-unop op val)) :flimit))
+               (not (equal (erl-val-kind val) :flimit))))
+        :enable (erl-minus)))

@@ -3,6 +3,7 @@
 (include-book "erl-op")
 (include-book "termination")
 (include-book "erl-state")
+(include-book "eval-match")
 
 (set-induction-depth-limit 1)
 
@@ -67,7 +68,13 @@
                           (make-erl-k :fuel (1- fuel) 
                                       :kont (make-kont-binop-expr1 :op x.op 
                                                                    :right x.right
-                                                                   :bind-0 s.bind))))))))
+                                                                   :bind-0 s.bind)))))
+          ; if x is match, evaluate the rhs a, save the lhs in a continuation.
+          (:match
+            (make-erl-s-klst
+              :s (make-erl-state :bind s.bind)
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.rhs))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs))))))))
       
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
@@ -129,9 +136,21 @@
                              :bind (omap::update* s.bind k.left-bind)))
             ; TODO: This is supposed to return the value that failed to match. However, there is no easy way to figure this out.
                 (make-erl-s-klst
-                  :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                                                :reason (make-exit-reason-badmatch :val s.in)))))))
+                  :s (make-erl-state 
+                      :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                                 :reason (make-exit-reason-badmatch :val s.in)))))))
       
+      ; Once rhs is evaluated, match it to lhs
+      (:match
+        (b* ((ms (eval-match k.lhs s))
+             (ms.in (erl-state->in ms))
+             ((if (and (equal (erl-val-kind ms.in) :excpt)
+                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err ms.in))) :badmatch)))
+              (make-erl-s-klst
+                :s (make-erl-state 
+                    :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                               :reason (make-exit-reason-badmatch :val s.in)))))))
+            (make-erl-s-klst :s ms)))
       ; Move to the next expression to be evaluated.
       (:exprs
         (if (null k.exprs)

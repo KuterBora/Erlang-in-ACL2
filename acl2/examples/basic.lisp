@@ -171,4 +171,142 @@
 
 ; Match ------------------------------------------------------------------------
 
-; TODO
+; Match Coonstructor 
+
+; var = int.
+(assert-equal (make-node-match :lhs '(:var X) :rhs '(:integer 1))
+              '(:match (:var X) (:integer 1)))                
+
+; [X, Y, Z] = [int,int,int].
+(assert-equal 
+  (make-node-match 
+    :lhs '(:cons (:var X) (:cons (:var Y) (:cons (:var Z) (:nil)))) 
+    :rhs '(:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))))
+  '(:match (:cons (:var X) (:cons (:var Y) (:cons (:var Z) (:nil)))) 
+           (:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))))) 
+
+; {X, Y, Z} = {int,int,int}.
+(assert-equal 
+  (make-node-match 
+    :lhs '(:tuple ((:var X) (:var Y) (:var Z))) 
+    :rhs '(:tuple ((:integer 1) (:integer 2) (:integer 3))))
+  '(:match (:tuple ((:var X) (:var Y) (:var Z)))
+           (:tuple ((:integer 1) (:integer 2) (:integer 3))))) 
+
+; {int + int, X} = {int, string}.
+(assert-equal 
+  (make-node-match 
+    :lhs '(:tuple ((:binop + (:integer 1) (:integer 2)) (:var X))) 
+    :rhs '(:tuple ((:integer 3) (:string "abc"))))
+  '(:match (:tuple ((:binop + (:integer 1) (:integer 2)) (:var X)))
+           (:tuple ((:integer 3) (:string "abc"))))) 
+
+; {[int, int, X], Y = int} = {Z, int} = {[int, int, int], int}.
+(assert-equal 
+  (make-node-match 
+    :lhs '(:match (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:var X) (:nil)))) 
+                           (:match (:var Y) (:integer 3))))
+                  (:tuple ((:var Z) (:integer 3)))) 
+    
+    :rhs '(:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))) 
+                   (:integer 3))))
+  '(:match (:match (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:var X) (:nil)))) 
+                            (:match (:var Y) (:integer 3))))
+                   (:tuple ((:var Z) (:integer 3))))
+           (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))) 
+                    (:integer 3))))) 
+
+
+; Match Evaluation
+
+; var = int.
+(assert-equal
+  (apply-k 
+    (make-erl-state)
+    (list (make-erl-k 
+            :fuel 10000 
+            :kont (make-kont-expr :expr '(:match (:var X) (:integer 1))))))
+  (make-erl-state :in '(:integer 1) :bind '((X :integer 1))))
+
+; [X, Y, Z] = [int,int,int].
+(assert-equal
+  (apply-k 
+    (make-erl-state)
+    (list 
+      (make-erl-k 
+        :fuel 10000 
+        :kont (make-kont-expr 
+                :expr '(:match (:cons (:var X) (:cons (:var Y) (:cons (:var Z) (:nil)))) 
+                               (:cons (:integer 1) 
+                                      (:cons (:integer 2) 
+                                             (:cons (:integer 3) (:nil)))))))))
+  (make-erl-state :in '(:cons ((:integer 1) (:integer 2) (:integer 3))) 
+                  :bind '((X :integer 1) (Y :integer 2) (Z :integer 3))))
+
+; {X, Y, Z} = {int,int,int}.
+(assert-equal
+  (apply-k 
+    (make-erl-state)
+    (list 
+      (make-erl-k 
+        :fuel 10000 
+        :kont (make-kont-expr 
+                :expr '(:match (:tuple ((:var X) (:var Y) (:var Z)))
+                               (:tuple ((:integer 1) (:integer 2) (:integer 3))))))))
+  (make-erl-state :in '(:tuple ((:integer 1) (:integer 2) (:integer 3))) 
+                  :bind '((X :integer 1) (Y :integer 2) (Z :integer 3))))
+
+; {int + int, X} = {int, string}.
+(assert-equal
+  (apply-k 
+    (make-erl-state)
+    (list 
+      (make-erl-k 
+        :fuel 10000 
+        :kont (make-kont-expr 
+                :expr '(:match (:tuple ((:binop + (:integer 1) (:integer 2)) (:var X)))
+                                (:tuple ((:integer 3) (:string "abc"))))))))
+  (make-erl-state :in '(:tuple ((:integer 3) (:string "abc"))) 
+                  :bind '((X :string "abc"))))
+
+; {[int, int, X], Y = int} = {Z, int} = {[int, int, int], int}.
+(assert-equal
+  (apply-k 
+    (make-erl-state)
+    (list 
+      (make-erl-k 
+        :fuel 10000 
+        :kont 
+          (make-kont-expr 
+            :expr 
+              '(:match 
+                  (:match (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:var X) (:nil)))) 
+                                   (:match (:var Y) (:integer 4))))
+                                           (:tuple ((:var Z) (:integer 4))))
+                  (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))) 
+                           (:integer 4))))))))
+  (make-erl-state :in '(:tuple ((:cons ((:integer 1) (:integer 2) (:integer 3))) (:integer 4))) 
+                  :bind '((X :integer 3) 
+                          (Y :integer 4) 
+                          (Z :cons ((:integer 1) (:integer 2) (:integer 3))))))
+
+
+
+; Series of Match
+
+; X = int, Y = X + int, Y + int.
+(assert-equal
+  (apply-k 
+    (make-erl-state)
+    (list 
+      (make-erl-k 
+        :fuel 10000 
+        :kont (make-kont-exprs
+                :exprs '((:match (:var X) (:integer 3))
+                         (:match (:var Y) (:binop + (:var X) (:integer 2)))
+                         (:binop * (:var Y) (:var X)))))))
+  (make-erl-state :in '(:integer 15) 
+                  :bind '((X :integer 3) (Y :integer 5))))
+
+; TODO: Bad Match
+; TODO: Illegal Pattern

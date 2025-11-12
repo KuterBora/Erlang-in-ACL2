@@ -47,7 +47,10 @@
     (:binop-expr2 
       ((op erl-binop-p)
        (val erl-val-p)
-       (left-bind bind-p))))
+       (left-bind bind-p)))
+    
+    ; Continue after the rhs of the match has been evaluated.
+    (:match ((lhs pattern-p))))
 
 ; A continutaion that is paired with a fuel that limits how many times
 ; the continuation can expand during evaluation.
