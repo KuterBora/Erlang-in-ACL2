@@ -217,3 +217,9 @@
                                   (erl-state->bind (apply-k (erl-state '(:none) (erl-state->bind s))
                                                             (list (erl-k (+ -1 (erl-k->fuel k))
                                                                          (kont-expr (node-binop->left (kont-expr->expr (erl-k->kont k))))))))))))))))
+
+
+
+; TODO: apply-k-of-list
+; TODO: apply-k-of-tuple
+; TODO: apply-k-of-match

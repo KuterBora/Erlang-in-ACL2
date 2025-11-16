@@ -1,3 +1,4 @@
+(in-package "ACL2")
 (include-book "erl-eval")
 (include-book "std/testing/assert-equal" :DIR :SYSTEM)
 

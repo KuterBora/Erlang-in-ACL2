@@ -50,7 +50,10 @@
        (left-bind bind-p)))
     
     ; Continue after the rhs of the match has been evaluated.
-    (:match ((lhs pattern-p))))
+    (:match ((lhs pattern-p)))
+
+    ; Continue after the expr of the case had been evaluated.
+    (:case-of ((clauses erl-clause-list-p))))
 
 ; A continutaion that is paired with a fuel that limits how many times
 ; the continuation can expand during evaluation.
