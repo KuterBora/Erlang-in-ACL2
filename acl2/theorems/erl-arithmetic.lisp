@@ -3,7 +3,7 @@
 
 (set-induction-depth-limit 1)
 
-; TODO: This file is way behind, it needs to be updated.
+; TODO: This file is outdated, it needs to be updated.
 
 ; Commutativity of Erlang Addition ---------------------------------------------
 

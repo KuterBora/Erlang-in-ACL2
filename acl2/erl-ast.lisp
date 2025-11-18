@@ -94,10 +94,23 @@
 		         (left node-p)
              (right node-p)))
     (:match ((lhs node-p) (rhs node-p)))
+    (:if ((clauses node-clause-list)))
+    (:case-of ((expr node-p) (clauses node-clause-list)))
     :measure (list (acl2-count x) 1))
 
   (fty::deflist node-list
     :elt-type node-p
+    :true-listp t
+    :measure (list (acl2-count x) 0))
+  
+  (fty::defprod node-clause
+    ((cases node-list-p :default nil)
+     (guards node-list-p :default nil)
+     (body node-list-p :default nil))
+    :measure (list (acl2-count x) 2))
+
+  (fty::deflist node-clause-list
+    :elt-type node-clause-p
     :true-listp t
     :measure (list (acl2-count x) 0)))
 
@@ -125,7 +138,9 @@
          (:binop (and (erl-numeric-binop-p (node-binop->op x))
                       (arithm-expr-p (node-binop->left x))
                       (arithm-expr-p (node-binop->right x))))
-         (:match nil))))
+         (:match nil)
+         (:if nil)
+         (:case-of nil))))
 
 ; Erlang Pattern ---------------------------------------------------------------
 
@@ -156,7 +171,9 @@
                 ; TODO: strings concat is allowed
                 (:binop nil)
                 (:match (and (pattern-p (node-match->lhs x))
-                             (pattern-p (node-match->rhs x))))))))
+                             (pattern-p (node-match->rhs x))))
+                (:if nil)
+                (:case-of nil)))))
   (define pattern-list-p ((x acl2::any-p))
     :returns (ok booleanp)
     :measure (node-list-count x)
@@ -168,6 +185,52 @@
     ///
     (std::deflist pattern-list-p (x)
         (pattern-p x)
+        :already-definedp t
+        :true-listp t))
+
+
+; Erlang Guard Expression ------------------------------------------------------
+
+; The Erlang Docs state: The set of valid guard expressions is a subset of the 
+; set of valid Erlang expressions. The reason for restricting the set of valid 
+; expressions is that evaluation of a guard expression must be guaranteed to be
+; free of side effects.
+(defines guard-expr
+  :flag-local nil
+  (define guard-expr-p ((x acl2::any-p))
+    :returns (ok booleanp)
+    :measure (node-count x)
+    :flag guard-expr
+    (and (node-p x)
+        (case (node-kind x)
+          (:integer t)
+          (:atom t)
+          (:string t)
+          (:nil t)
+          (:cons
+            (and (guard-expr-p (node-cons->hd x))
+                 (guard-expr-p (node-cons->tl x))))
+          (:tuple (guard-expr-list-p (node-tuple->lst x)))
+          (:var t)
+          (:unop (guard-expr-p (node-unop->expr x)))
+          (:binop (and (guard-expr-p (node-binop->left x))
+                       (guard-expr-p (node-binop->right x))))
+          (:match nil)
+          (:if nil)
+          (:case-of nil))))
+
+  ; List of Erlang Expressions
+  (define guard-expr-list-p ((x acl2::any-p))
+      :returns (ok booleanp)
+      :measure (node-list-count x)
+      :flag guard-expr-list
+      (if (consp x)
+          (and (guard-expr-p (car x)) (guard-expr-list-p (cdr x)))
+          (null x)))
+    
+    ///
+    (std::deflist guard-expr-list-p (x)
+        (guard-expr-p x)
         :already-definedp t
         :true-listp t))
 
@@ -196,7 +259,11 @@
           (:binop (and (expr-p (node-binop->left x))
                        (expr-p (node-binop->right x))))
           (:match (and (pattern-p (node-match->lhs x))
-                       (expr-p (node-match->rhs x)))))))
+                       (expr-p (node-match->rhs x))))
+          (:if (erl-clause-list-p (node-if->clauses x)))
+          (:case-of 
+            (and (expr-p (node-case-of->expr x))
+                 (erl-clause-list-p (node-case-of->clauses x)))))))
 
   ; List of Erlang Expressions
   (define expr-list-p ((x acl2::any-p))
@@ -206,10 +273,32 @@
       (if (consp x)
           (and (expr-p (car x)) (expr-list-p (cdr x)))
           (null x)))
-    
+  
+  ; Erlang Clause
+  (define erl-clause-p ((x acl2::any-p))
+    :returns (ok booleanp)
+    :measure (node-clause-count x)
+    :flag clause
+    (and (node-clause-p x) 
+         (pattern-list-p (node-clause->cases x))
+         (guard-expr-list-p (node-clause->guards x))
+         (expr-list-p (node-clause->body x))))
+
+  ; List of Clauses
+  (define erl-clause-list-p ((x acl2::any-p))
+    :returns (ok booleanp)
+    :measure (node-clause-list-count x)
+    :flag clause-list
+    (if (consp x)
+        (and (erl-clause-p (car x)) (erl-clause-list-p (cdr x)))
+        (null x)))
     ///
     (std::deflist expr-list-p (x)
         (expr-p x)
+        :already-definedp t
+        :true-listp t)
+    (std::deflist erl-clause-list-p (x)
+        (erl-clause-p x)
         :already-definedp t
         :true-listp t))
 
@@ -225,7 +314,15 @@
   (defthm expr-is-subtype-of-node
     (implies (expr-p x) (node-p x))
     :flag expr)
-  :hints (("Goal" :in-theory (enable expr-p))))
+  ; Erl-Clause is a subtype of Node-Clause
+  (defthm erl-clause-is-subtype-of-node-clause
+    (implies (erl-clause-p x) (node-clause-p x))
+    :flag clause)
+  ; Erl-Clause-List is a subtype of Node-Clause-List
+  (defthm erl-clause-list-is-subtype-of-node-clause-list
+    (implies (erl-clause-list-p x) (node-clause-list-p x))
+    :flag clause-list)
+  :hints (("Goal" :in-theory (enable expr-p erl-clause-p))))
 
 ; Arithmetic Expression is a subtype of Expression
 (defrule arithm-expr-is-subtype-of-expr
@@ -247,6 +344,17 @@
     (implies (pattern-p x) (expr-p x))
     :flag pattern)
   :hints (("Goal" :in-theory (enable pattern-p expr-p))))
+
+(defthm-guard-expr-flag
+  ; Guard list is a subtype of Expression list
+  (defthm guard-expr-list-is-subtype-of-expr-list
+    (implies (guard-expr-list-p x) (expr-list-p x))
+    :flag guard-expr-list)
+  ; Guard Expression is a subtype of Expression
+  (defthm guard-expr-is-subtype-of-expr
+    (implies (guard-expr-p x) (expr-p x))
+    :flag guard-expr)
+  :hints (("Goal" :in-theory (enable guard-expr-p expr-p))))
 
 (set-well-founded-relation o<)
 
@@ -281,6 +389,20 @@
            (equal (pattern-fix x) x))
   :expand (pattern-fix x))
 
+(define guard-expr-fix ((x guard-expr-p))
+  :inline t
+  (mbe :logic (if (guard-expr-p x) x (make-node-atom :val 'oops))
+       :exec x))
+
+(defrule guard-expr-fix-produces-guard-expr
+  (guard-expr-p (guard-expr-fix x))
+  :expand (guard-expr-fix x))
+
+(defrule guard-expr-fix-is-the-identity-on-guard-expr
+  (implies (guard-expr-p x)
+           (equal (guard-expr-fix x) x))
+  :expand (guard-expr-fix x))
+
 (define expr-fix ((x expr-p))
   :inline t
   (mbe :logic (if (expr-p x) x (make-node-atom :val 'oops))
@@ -294,6 +416,20 @@
   (implies (expr-p x)
            (equal (expr-fix x) x))
   :expand (expr-fix x))
+
+(define erl-clause-fix ((x erl-clause-p))
+  :inline t
+  (mbe :logic (if (erl-clause-p x) x (make-node-clause))
+       :exec x))
+
+(defrule erl-clause-fix-produces-erl-clause
+  (erl-clause-p (erl-clause-fix x))
+  :expand (erl-clause-fix x))
+
+(defrule erl-clause-fix-is-the-identity-on-erl-clause
+  (implies (erl-clause-p x)
+           (equal (erl-clause-fix x) x))
+  :expand (erl-clause-fix x))
 
 
 ; FTY Types --------------------------------------------------------------------
@@ -319,6 +455,19 @@
   :true-listp t
   :pred pattern-list-p)
 
+; Erlang Guard Expression
+(fty::deffixtype guard-expr
+  :pred   guard-expr-p
+  :fix    guard-expr-fix
+  :equiv  guard-expr-equiv
+  :define t
+  :forward t)
+
+(fty::deflist guard-expr-list
+  :elt-type guard-expr-p
+  :true-listp t
+  :pred guard-expr-list-p)
+
 ; Erlang Expression
 (fty::deffixtype expr
   :pred   expr-p
@@ -331,3 +480,15 @@
   :elt-type expr-p
   :true-listp t
   :pred expr-list-p)
+
+(fty::deffixtype erl-clause
+  :pred   erl-clause-p
+  :fix    erl-clause-fix
+  :equiv  erl-clause-equiv
+  :define t
+  :forward t)
+
+(fty::deflist erl-clause-list
+  :elt-type erl-clause-p
+  :true-listp t
+  :pred erl-clause-list-p)

@@ -4,6 +4,7 @@
 (include-book "termination")
 (include-book "erl-state")
 (include-book "eval-match")
+(include-book "eval-clauses")
 
 (set-induction-depth-limit 1)
 
@@ -74,7 +75,27 @@
             (make-erl-s-klst
               :s (make-erl-state :bind s.bind)
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.rhs))
-                          (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs))))))))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs)))))
+          ; if x is an if clause, evaluate the guard sequence to find which clause body to execute
+          (:if
+            (b* (((mv v b body) (eval-clauses nil x.clauses s.bind))
+                 ((if (equal (erl-val-kind v) :reject))
+                  (make-erl-s-klst :s (make-erl-state :in v)))
+                 ((if (null body))
+                  (make-erl-s-klst
+                    :s (make-erl-state 
+                        :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error)
+                                                                   :reason (make-exit-reason-if-clause)))))))
+                (make-erl-s-klst
+                  :s (make-erl-state :bind b)
+                  :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
+                              (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
+          ; if x is a case, evaluate the expression and save the clauses
+          (:case-of
+            (make-erl-s-klst
+              :s (make-erl-state :bind s.bind)
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.expr))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-case-of :clauses x.clauses))))))))
       
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
@@ -142,15 +163,31 @@
       
       ; Once rhs is evaluated, match it to lhs
       (:match
-        (b* ((ms (eval-match k.lhs s))
-             (ms.in (erl-state->in ms))
-             ((if (and (equal (erl-val-kind ms.in) :excpt)
-                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err ms.in))) :badmatch)))
+        (b* (((mv match-result match-bind) (eval-match k.lhs s.in s.bind))
+             
+             ((if (and (equal (erl-val-kind match-result) :excpt)
+                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err match-result))) :badmatch)))
               (make-erl-s-klst
                 :s (make-erl-state 
                     :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
                                                                :reason (make-exit-reason-badmatch :val s.in)))))))
-            (make-erl-s-klst :s ms)))
+            (make-erl-s-klst :s (make-erl-state :in match-result :bind match-bind))))
+      
+      ; Once the expression is evaluated, find which case clause to exectute.
+      (:case-of
+        (b* (((mv v b body) (eval-clauses (list s.in) k.clauses s.bind))
+             ((if (equal (erl-val-kind v) :reject))
+              (make-erl-s-klst :s (make-erl-state :in v)))
+             ((if (null body))
+              (make-erl-s-klst
+                :s (make-erl-state 
+                  :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error)
+                                                             :reason (make-exit-reason-case-clause :val s.in)))))))
+            (make-erl-s-klst
+              :s (make-erl-state :bind b)
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
+      
       ; Move to the next expression to be evaluated.
       (:exprs
         (if (null k.exprs)
