@@ -160,6 +160,53 @@
 
 ; Erlang Case ------------------------------------------------------------------
 
+; case X of
+;    -> 
+;     A = 2,
+;     A - 1;
+;   X ->
+;     A = 2;
+;   Y ->
+;     A = 6,
+;     A div 2;
+;   true -> A = 4
+; end.
+(assert-equal
+  (make-node-if 
+    :clauses 
+      (list
+        (make-node-clause 
+          :cases nil 
+          :guards (list '(:var X) '(:var Y))
+          :body (list '(:match (:var A) (:integer 2))
+                      '(:binop - (:var A) (:integer 1))))
+        (make-node-clause
+          :cases nil 
+          :guards (list '(:var X))
+          :body (list '(:match (:var A) (:integer 2))))
+        (make-node-clause 
+          :cases nil 
+          :guards (list '(:var Y))
+          :body (list '(:match (:var A) (:integer 6))
+                      '(:binop div (:var A) (:integer 2))))
+        (make-node-clause 
+          :cases nil                 
+          :guards (list '(:atom true)) 
+          :body (list '(:match (:var A) (:integer 3))))))
+    '(:if (((cases)
+            (guards (:var X) (:var Y))
+            (body (:match (:var A) (:integer 2))
+                  (:binop - (:var A) (:integer 1))))
+            ((cases)
+            (guards (:var X))
+            (body (:match (:var A) (:integer 2))))
+            ((cases)
+            (guards (:var Y))
+            (body (:match (:var A) (:integer 6))
+                  (:binop div (:var A) (:integer 2))))
+            ((cases)
+            (guards (:atom true))
+            (body (:match (:var A) (:integer 4)))))))
 
 ; Erlang Catch -----------------------------------------------------------------
 
