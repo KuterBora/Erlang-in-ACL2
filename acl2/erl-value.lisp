@@ -1,5 +1,6 @@
 (in-package "ACL2")
 (include-book "centaur/fty/top" :DIR :SYSTEM)
+(include-book "kestrel/utilities/strings/strings-codes" :dir :system)
 
 (set-induction-depth-limit 1)
 (set-well-founded-relation l<)
@@ -17,6 +18,10 @@
   (:throw ()))
 
 ; Representation of the Erlang values returned by the evaluator.
+; Remarks:
+; - Strings are represented as lists of integer
+; - Pairs are not supported
+; - TODO: pid and fun
 (fty::deftypes erl-val
   
   ; Erlang Values
@@ -24,7 +29,6 @@
     ; Erlang return values
     (:integer ((val integerp)))
     (:atom ((val symbolp)))
-    (:string ((val stringp)))
     (:cons ((lst erl-vlst-p)))
     (:tuple ((lst erl-vlst-p)))
     (:excpt ((err erl-err-p)))
@@ -73,7 +77,58 @@
   :key-type symbol
   :val-type erl-val)
 
-; Erlang Equivalence
+
+; Utility Functions/Structures -------------------------------------------------
+
+; TODO: Another subtype could be erl-numberp
+
+; Erlang boolean, defined for utility reasons only
+(fty::defsubtype erl-boolean
+  :supertype erl-val-p
+  :restriction 
+    (lambda (x) 
+      (and (equal (erl-val-kind x) :atom)
+           (or (equal (erl-val-atom->val x) 'true)
+              (equal (erl-val-atom->val x) 'false))))
+  :fix-value (make-erl-val-atom :val 'false))
+
+
+; Helper for implementing list substraction
+; For each element in the first argument, the first occurrence of this element 
+; (if any) is removed from the second argument.
+(define remove-first-of-each ((x erl-vlst-p) (lst erl-vlst-p))
+  :returns (vlst erl-vlst-p)
+  :measure (erl-vlst-count x)
+  (b* ((x (erl-vlst-fix x))
+       (lst (erl-vlst-fix lst)))      
+      (if (endp x)
+          lst
+          (remove-first-of-each (cdr x) (remove1 (car x) lst :test 'equal)))))
+
+; Turns a list of integers to a list of Erlang integers.
+(define ints-to-erl-ints ((x integer-listp))
+  :returns (vlst erl-vlst-p)
+  :measure (len x)
+  (b* ((x (integer-list-fix x))
+       ((if (null x)) nil))
+      (cons (make-erl-val-integer :val (car x))
+            (ints-to-erl-ints (cdr x)))))
+
+; Turns a string to its correponding Erlang list.
+(define string=>erl-cons ((x stringp))
+  :returns (v erl-val-p)
+  (b* ((x (string x))
+       (lst (string=>nats x))
+       (erl-lst (ints-to-erl-ints lst)))
+      (make-erl-val-cons :lst erl-lst))
+  ///
+    (more-returns
+      (v (equal (erl-val-kind v) :cons)
+      :name erl-val-kind-of-string=>erl-cons)))
+
+
+; Erlang Equivalence -----------------------------------------------------------
+
 ; Checks if two Erlang values are equivalent. If one of the values is a rejection,
 ; the other value is also checked to be a rejection, regardless of its type.
 ; This is useful for simplifying theorems which have the hypothesis that the 

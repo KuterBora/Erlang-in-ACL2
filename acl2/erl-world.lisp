@@ -1,0 +1,177 @@
+(in-package "ACL2")
+(include-book "erl-ast")
+
+(set-induction-depth-limit 1)
+(set-well-founded-relation l<)
+
+; Erlang World -----------------------------------------------------------------
+
+; Representation of the Erlang modules known by the interpreter. For now, the
+; world is static -- it cannot be dynamically modified during interpretation.
+; Future work could consider how to reason about changing worlds.
+
+; A function declaration consists of a name and arirty, mappped to a
+; sequence of function clauses.
+;
+; A function clause is an erl-clause-p where the patterns are the parameters,
+; guard-lists are the guards, and the body is the function body to be evaluated.
+; - Each function clause in the same sequence must have the same 
+;   number of parameters.
+;
+; The function name is an atom. 
+
+; Pair of function name and arity
+(fty::defprod fn
+  ((name symbolp)
+   (arity natp)))
+(fty::deflist fn-list
+  :elt-type fn-p
+  :true-listp t)
+
+; A map from function name and arity to function definition
+(fty::defomap fn-map
+  :key-type fn
+  :val-type erl-clause-list)
+
+; Module attributes. Currently, only the following three are supported.
+(fty::deftagsum attr
+  (:module ((name symbolp)))
+  (:export ((fn fn-list-p)))
+  (:import ((module symbolp) (fns fn-list-p))))
+(fty::deflist attr-list
+  :elt-type attr-p
+  :true-listp t)
+
+; Erlang code is divided into modules. A module consists of a sequence of 
+; attributes and function declarations
+(fty::defprod module
+  ((attr attr-list-p :default nil)
+   (fn-defns fn-map-p)))
+
+; World is a map from module names to a lists of forms
+(fty::defomap world
+  :key-type symbol
+  :val-type module)
+
+(set-well-founded-relation o<)
+
+
+; Erlang BIFs ------------------------------------------------------------------
+
+; Built-In Functions (BIFs) of Erlang. BIFs are found in multiple packages,
+; though mostly in 'erlang'. Most BIFs are auto-imported.
+; 
+; Since none of the Erlang packages are implemented, the following frequently
+; used BIFs are added to the world directly.
+;
+; All of these BIFs can be used in guards.
+(define erl-bif-p ((x acl2::any-p))
+  :returns (ok booleanp)
+  (and (fn-p x)
+       (or 
+        (and (equal (fn->name x) 'is_atom) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'is_boolean) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'is_integer) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'is_list) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'is_number) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'is_tuple) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'abs) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'element) (equal (fn->arity x) 2))
+        (and (equal (fn->name x) 'hd) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'length) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'max) (equal (fn->arity x) 2))
+        (and (equal (fn->name x) 'min) (equal (fn->arity x) 2))
+        (and (equal (fn->name x) 'tl) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'tuple_size) (equal (fn->arity x) 1))))
+    ///
+      (defrule fn-of-erl-bif
+        (implies (erl-bif-p x) (fn-p x))))
+
+
+; Evaluate BIF Calls -----------------------------------------------------------
+
+(define eval-bif ((fn erl-bif-p) (args erl-vlst-p))
+  :returns (v erl-val-p)
+  (b* ((fn (fn-fix fn))
+       (args (erl-vlst-fix args))
+       ((if (not (equal (len args) (fn->arity fn)))) 
+        (make-erl-val-reject :err "eval-bif: bad arity")))
+      (fty::case*-equal fn
+        ((make-fn :name 'is_atom :arity 1)
+         (if (equal (erl-val-kind (car args)) :atom)
+             (make-erl-val-atom :val 'true)
+             (make-erl-val-atom :val 'false)))
+        ((make-fn :name 'is_boolean :arity 1)
+         (if (erl-boolean-p (car args))
+             (make-erl-val-atom :val 'true)
+             (make-erl-val-atom :val 'false)))
+        ((make-fn :name 'is_integer :arity 1)
+         (if (equal (erl-val-kind (car args)) :integer)
+             (make-erl-val-atom :val 'true)
+             (make-erl-val-atom :val 'false)))
+        ((make-fn :name 'is_list :arity 1)
+         (if (equal (erl-val-kind (car args)) :cons)
+             (make-erl-val-atom :val 'true)
+             (make-erl-val-atom :val 'false)))
+        ((make-fn :name 'is_number :arity 1)
+         (if (equal (erl-val-kind (car args)) :integer)
+             (make-erl-val-atom :val 'true)
+             (make-erl-val-atom :val 'false)))
+        ((make-fn :name 'is_tuple :arity 1)
+         (if (equal (erl-val-kind (car args)) :tuple)
+             (make-erl-val-atom :val 'true)
+             (make-erl-val-atom :val 'false)))
+        ((make-fn :name 'element :arity 2)
+         (b* ((n (erl-val-integer->val (car args)))
+              ((unless 
+                (and (equal (erl-val-kind (car args)) :integer)
+                     (> n 0)
+                     (equal (erl-val-kind (cadr args)) :tuple)
+                     (< n (len (erl-val-tuple->lst (cadr args))))))
+                (make-erl-val-excpt 
+                  :err (make-erl-err :class (make-err-class-error)
+                                     :reason (make-exit-reason-badarg)))))
+              (nth (1- n) (erl-val-tuple->lst (cadr args)))))
+        ((make-fn :name 'hd :arity 1)
+         (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
+                            (consp (erl-val-cons->lst (car args)))))
+               (make-erl-val-excpt
+                 :err (make-erl-err :class (make-err-class-error)
+                                    :reason (make-exit-reason-badarg)))))
+             (car (erl-val-cons->lst (car args)))))
+        ((make-fn :name 'length :arity 1)
+         (b* (((unless (equal (erl-val-kind (car args)) :cons))
+               (make-erl-val-excpt
+                 :err (make-erl-err :class (make-err-class-error)
+                                    :reason (make-exit-reason-badarg))))
+              (l (len (erl-val-cons->lst (car args)))))
+             (make-erl-val-integer :val l)))
+        ((make-fn :name 'max :arity 2)
+         (b* ((left (car args))
+              (right (cadr args))
+              (cmp (erl-compare left right)))
+             (if (or (equal cmp 0) (equal cmp 1))
+                 left
+                 right)))
+        ((make-fn :name 'min :arity 2)
+         (b* ((left (car args))
+              (right (cadr args))
+              (cmp (erl-compare left right)))
+             (if (or (equal cmp 0) (equal cmp -1))
+                 left
+                 right)))
+        ((make-fn :name 'tuple_size :arity 1)
+         (b* (((unless (equal (erl-val-kind (car args)) :tuple))
+               (make-erl-val-excpt
+                 :err (make-erl-err :class (make-err-class-error)
+                                    :reason (make-exit-reason-badarg))))
+              (l (len (erl-val-tuple->lst (car args)))))
+             (make-erl-val-integer :val l)))
+        ((make-fn :name 'tl :arity 1)
+         (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
+                            (consp (erl-val-cons->lst (car args)))))
+               (make-erl-val-excpt
+                 :err (make-erl-err :class (make-err-class-error)
+                                    :reason (make-exit-reason-badarg)))))
+             (cdr (erl-val-cons->lst (car args)))))
+        (otherwise (make-erl-val-reject :err "eval-bif: bad op")))))

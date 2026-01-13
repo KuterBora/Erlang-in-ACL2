@@ -60,7 +60,9 @@
             val))
       (:match (make-erl-val-reject :err "Numeric expressions cannot have match."))
       (:if (make-erl-val-reject :err "Numeric expressions cannot have if clauses."))
-      (:case-of (make-erl-val-reject :err "Numeric expressions cannot have case clauses."))))
+      (:case-of (make-erl-val-reject :err "Numeric expressions cannot have case clauses."))
+      (:remote-call (make-erl-val-reject :err "Numeric expressions cannot have case calls."))
+      (:call (make-erl-val-reject :err "Numeric expressions cannot have case calls."))))
 
   ///
     (verify-guards eval-numeric)

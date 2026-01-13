@@ -135,11 +135,33 @@
                 (erl-clause-list-p (node-case-of->clauses x))))
   :enable expr-p)
 
+; The args of a remote function call expression are expressions
+(defrule expr-remote-call-ensures
+  (implies (and (expr-p x) (equal (node-kind x) :remote-call))
+           (and (symbolp (node-remote-call->module x))
+                (symbolp (node-remote-call->fn x))  
+                (expr-list-p (node-remote-call->args x))))
+  :enable expr-p)
+
+; The args of a function call expression are expressions
+(defrule expr-call-ensures
+  (implies (and (expr-p x) (equal (node-kind x) :call))
+           (and (symbolp (node-call->fn x))  
+                (expr-list-p (node-call->args x))))
+  :enable expr-p)
+
+; The args of a bif call guard are guards
+(defrule guard-expr-call-ensures
+  (implies (and (guard-expr-p x) (equal (node-kind x) :call))
+           (and (symbolp (node-call->fn x))  
+                (guard-expr-list-p (node-call->args x))))
+  :enable guard-expr-p)
+
 ; Clauses consist of pattern, guards, and a list of expressions.
 (defrule clause-ensures
   (implies (erl-clause-p x)
            (and (pattern-list-p (node-clause->cases x))
-                (guard-expr-list-p (node-clause->guards x))
+                (guard-expr-lists-p (node-clause->guards x))
                 (expr-list-p (node-clause->body x))))
   :enable erl-clause-p)
 
