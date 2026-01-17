@@ -12,7 +12,7 @@
 (fty::defprod erl-state
   ((in erl-val-p :default (make-erl-val-none))
    (bind bind-p :default nil)
-   (world world-p)
+   (world world-p :default nil)
    (module symbolp)))
 
 ; Each step of the evaluator returns an erl-s-klst where

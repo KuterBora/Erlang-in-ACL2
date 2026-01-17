@@ -1,6 +1,8 @@
 (in-package "ACL2")
 (include-book "erl-ast")
 
+(include-book "centaur/fty/multicase" :DIR :SYSTEM)
+
 (set-induction-depth-limit 1)
 (set-well-founded-relation l<)
 
@@ -64,7 +66,10 @@
 ; Since none of the Erlang packages are implemented, the following frequently
 ; used BIFs are added to the world directly.
 ;
-; All of these BIFs can be used in guards.
+; Remark: All of these BIFs can be used in guards. If more BIFs are addded in
+; the future, a distinction might be needed for guards with side effects which
+; are not allowed to be called by guard expressions.
+;
 (define erl-bif-p ((x acl2::any-p))
   :returns (ok booleanp)
   (and (fn-p x)

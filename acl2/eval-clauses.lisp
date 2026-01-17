@@ -1,12 +1,14 @@
 (in-package "ACL2")
-(include-book "eval-guards")
 (include-book "eval-match")
+(include-book "eval-guards")
+
 
 ; Evaluate Erlang Clauses ------------------------------------------------------
 
-; Returns the body of the first clause which has patterns that match args,
-; and guards that evaluate to true. If no clauses match, nil is returned,
+; Returns the body of the first clause which has patterns that can match the args,
+; and a guard sequence that is satisfied. If no clauses match, nil is returned,
 ; and the caller can decide on the appropiate clause error.
+
 (define eval-clauses ((args erl-vlst-p) (cs erl-clause-list-p) (bind bind-p))
   :returns (mv (v erl-val-p) (b bind-p) (body expr-list-p))
   :measure (len (erl-clause-list-fix cs))

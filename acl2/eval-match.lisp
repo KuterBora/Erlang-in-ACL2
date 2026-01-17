@@ -65,8 +65,8 @@
 
 ; Evaluate Erlang Pattern Matching ---------------------------------------------
 
-; Erlang reference explains: In pattern matching, a left-hand side pattern is 
-; matched against a right-hand side term. If the matching succeeds, any unbound 
+; Erlang reference manual explains: In pattern matching, a left-hand side pattern 
+; is matched against a right-hand side term. If the matching succeeds, any unbound 
 ; variables in the pattern become bound. If the matching fails, an exception 
 ; is raised.
 ;
@@ -86,7 +86,9 @@
 ;
 ; Implementation:
 ; - If there is an arithmetic expression, evaluate it and then 
-;   check if the result is equal to the right-hand side value.
+;   check if the result is equal to the right-hand side value. The arithmetic
+;   expression should have been evaluated at compile time, so the AST will be
+;   rejected if there is an exception raised.
 ; - If the pattern is a term or bound variable, check if it is equal
 ;   to the right-hand side value. Lists and tuples are checked element by element.
 ; - If there is an unbound variable, bind the variable to the right-hand side 
@@ -249,8 +251,8 @@
           :name erl-val-kind-of-eval-match->in)))
 
 ; Match each pattern to the corresponding argument, accumulate the bindings.
-; - WHen callfed by 'if' or 'case-of' clauses, this is simply a wrapper 
-;   around eval-matcg
+; - When callfed by 'if' or 'case-of' clauses, this is simply a wrapper 
+;   around eval-match
 (define match-args ((ps pattern-list-p) (vs erl-vlst-p) (bind bind-p))
   :returns (mv (v erl-val-p) (b bind-p))
   :measure (len (pattern-list-fix ps))

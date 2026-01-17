@@ -3,6 +3,7 @@
 (include-book "erl-op")
 (include-book "termination")
 (include-book "erl-state")
+(include-book "erl-world")
 (include-book "eval-match")
 (include-book "eval-clauses")
 
