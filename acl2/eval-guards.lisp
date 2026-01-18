@@ -12,36 +12,36 @@
 (local (defrule node-count-of-guard-cons->tl
   (implies (equal (node-kind (guard-expr-fix x))
                 :cons)
-         (< (node-count (node-cons->tl (guard-expr-fix x)))
-            (node-count x)))
+           (< (node-count (node-cons->tl (guard-expr-fix x)))
+              (node-count x)))
   :enable guard-expr-fix))
 
 (local (defrule node-count-of-guard-cons->hd
   (implies (equal (node-kind (guard-expr-fix x))
                 :cons)
-         (< (node-count (node-cons->hd (guard-expr-fix x)))
-            (node-count x)))
+           (< (node-count (node-cons->hd (guard-expr-fix x)))
+              (node-count x)))
   :enable guard-expr-fix))
 
 (local (defrule node-count-of-guard-binop->left
   (implies (equal (node-kind (guard-expr-fix x))
-                :binop)
-         (< (node-count (node-binop->left (guard-expr-fix x)))
-            (node-count x)))
+                  :binop)
+           (< (node-count (node-binop->left (guard-expr-fix x)))
+              (node-count x)))
   :enable guard-expr-fix))
 
 (local (defrule node-count-of-guard-binop->right
   (implies (equal (node-kind (guard-expr-fix x))
-                :binop)
-         (< (node-count (node-binop->right (guard-expr-fix x)))
-            (node-count x)))
+                  :binop)
+           (< (node-count (node-binop->right (guard-expr-fix x)))
+              (node-count x)))
   :enable guard-expr-fix))
 
 (local (defrule node-count-of-guard-unop
   (implies (equal (node-kind (guard-expr-fix x))
-                :unop)
-         (< (node-count (node-unop->expr (guard-expr-fix x)))
-            (node-count x)))
+                  :unop)
+           (< (node-count (node-unop->expr (guard-expr-fix x)))
+              (node-count x)))
   :enable guard-expr-fix))
 
 (local (defrule node-count-of-guard-tuple-cdr
@@ -55,10 +55,17 @@
 
 (local (defrule node-count-of-guard-tuple-car
   (implies (and (equal (node-kind (guard-expr-fix x))
-                     :tuple)
-              (node-tuple->lst (guard-expr-fix x)))
-         (< (node-count (car (node-tuple->lst (guard-expr-fix x))))
-            (node-count x)))
+                      :tuple)
+                (node-tuple->lst (guard-expr-fix x)))
+           (< (node-count (car (node-tuple->lst (guard-expr-fix x))))
+              (node-count x)))
+  :enable guard-expr-fix))
+
+(local (defrule node-count-of-guard-call
+  (implies (equal (node-kind (guard-expr-fix x))
+                  :call)
+           (< (node-list-count (node-call->args (guard-expr-fix x)))
+              (node-count x)))
   :enable guard-expr-fix))
 
 
@@ -92,17 +99,19 @@
 ; - Expressions that update a map
 ; - The record expressions Expr#Name.Field and #Name.Field
 (defines erl-guards
+  :verify-guards nil
+  :flag-local nil
   ; Evaluate the guard expressions 'x' with the bindings 'bind'. Return the
   ; erl-value produced.  
   (define eval-guard-expr ((x guard-expr-p) (bind bind-p))
     :returns (v erl-val-p)
     :measure (node-count x)
-    :verify-guards nil
     (b* ((x (guard-expr-fix x))
          (bind (bind-fix bind)))
       (node-case x
         (:integer (make-erl-val-integer :val x.val))
         (:atom (make-erl-val-atom :val x.val))
+        (:string (string=>erl-cons x.val))
         (:nil (make-erl-val-cons :lst nil))
         (:cons (b* ((hd (eval-guard-expr x.hd bind))
                     (tl (eval-guard-expr x.tl bind))
@@ -139,34 +148,55 @@
         (:call
           (b* ((fn (make-fn :name x.fn :arity (len x.args)))
                ((unless (erl-bif-p fn)) 
-                (make-erl-reject :err "Guard expressions can only have calls to BIFs."))
+                (make-erl-val-reject :err "Guard expressions can only have calls to BIFs."))
                (vlst (eval-guard-expr-list x.args bind))
                ((if (erl-val-p vlst)) vlst))
-              (eval-bif fn args)))))
-    ///
-      (verify-guards eval-guard-expr))
+              (eval-bif fn vlst))))))
   
   ; Evaluate each guard expression in the list, return the list of results.
-  ; However, if any expression causes a rejecetion, stop evaluation and return its value.
+  ; However, if any expression causes a rejecetion or exception, stop evaluation 
+  ; and return its value.
   (define eval-guard-expr-list ((x guard-expr-list-p) (bind bind-p))
-    :returns (or (vlst erl-vlst-p) (r erl-val-p))
-    :measure (node-list-clause (guard-expr-list-fix x))
-    :verify-guards nil
+    :returns r
+    :measure (node-list-count (guard-expr-list-fix x))
     (b* ((x (guard-expr-list-fix x))
          (bind (bind-fix bind))
-         ((if (erl-val-p x)) x)
          ((if (null x)) nil)
          (hd (eval-guard-expr (car x) bind))
-         ((if (equal (erl-val-kind hd) :reject)) hd)
+         (tl (eval-guard-expr-list (cdr x) bind))
+         ((if (equal (erl-val-kind hd) :reject)) hd) 
+         ((if (and (erl-val-p tl) (equal (erl-val-kind tl) :reject))) tl)
          ((if (equal (erl-val-kind hd) :excpt)) hd)
-         (tl (eval-guard-expr-list (cdr x) bind)))
+         ((if (erl-val-p tl)) tl))
         (cons hd tl)))
-    ///
-      (verify-guards eval-guard-expr-list)
-      (more-returns
-        (r (implies (erl-val-p r) (or (equal (erl-val-kind r) :reject)
-                                      (equal (erl-val-kind r) :excpt)))
-          :name val-kind-of-eval-guard-expr-list)))
+  ///
+    (std::defret-mutual returns-of-erl-guards
+      (defret erl-val-p-of-eval-guard-expr
+        (erl-val-p v)
+        :fn eval-guard-expr)
+      (defret returns-of-eval-guard-expr-list
+        (or (erl-val-p r) (erl-vlst-p r))
+        :fn eval-guard-expr-list
+        )
+      :mutual-recursion erl-guards
+      :hints (("Goal" :expand (eval-guard-expr-list x bind))))
+    
+    (std::defret-mutual returns-of-eval-guard-expr-list
+      (defret val-kind-of-eval-guard-expr-list
+        (implies (erl-val-p r) (or (equal (erl-val-kind r) :reject)
+                                   (equal (erl-val-kind r) :excpt)))
+        :fn eval-guard-expr-list)
+      :mutual-recursion erl-guards
+      :skip-others t
+      :hints (("Goal" :expand (eval-guard-expr-list x bind))))
+
+    (verify-guards eval-guard-expr
+      :hints (("Goal" :use 
+        (:instance returns-of-eval-guard-expr-list
+          (x (node-call->args x))
+          (bind bind)
+          ))))
+    (verify-guards eval-guard-expr-list))
 
 
 ; Evaluate Guard Sequences -----------------------------------------------------
@@ -190,12 +220,12 @@
 ; cases like these. 
 
 ; Return '(:atom true) if every guard expression in the sequence evaluates 
-; to '(:atom true). If any guard expressions evaluates to a different value,
-; including rejection, return that value.
+; to '(:atom true). If there are rejections, retun the first rejection 
+; encounetered. If any guard expressions evaluates to a different value,
+; return that value.
 (define eval-guard ((x guard-expr-list-p) (bind bind-p))
   :returns (result erl-val-p)
   :measure (len (guard-expr-list-fix x))
-  :verify-guards nil
   (b* ((x (guard-expr-list-fix x))
        (bind (bind-fix bind))
        ((if (null x)) (make-erl-val-atom :val 'true))
@@ -206,17 +236,14 @@
        ((unless (and (equal (erl-val-kind hd) :atom) 
                      (equal (erl-val-atom->val hd) 'true)))
         hd))
-      tl)
-    ///
-      (verify-guards eval-guard))
+      tl))
 
 ; Return '(:atom true) if any guard expression in the sequence evaluates 
 ; to '(:atom true). If any guard expressions evaluates to a rejection
 ; return that rejection. Otherwise, return '(:atom false).
-(define eval-guard-seq-when-consp ((x guard-expr-lists-p) (bind bindp))
+(define eval-guard-seq-when-consp ((x guard-expr-lists-p) (bind bind-p))
   :returns (result erl-val-p)
   :measure (len (guard-expr-lists-fix x))
-  :verify-guards nil
   (b* ((x (guard-expr-lists-fix x))
        (bind (bind-fix bind))
        ((if (null x)) (make-erl-val-atom :val 'false))
@@ -227,22 +254,16 @@
        ((if (and (equal (erl-val-kind hd) :atom) 
                  (equal (erl-val-atom->val hd) 'true)))
         hd))
-      tl)
-    ///
-      (verify-guards eval-guard-seq))
+      tl))
 
 ; If x is nil, return '(:atom true), otherwise evaluate the guard sequence.
 ; This distinction is needed because an empty guard sequence should be evaluted 
-; to true, which is not reflected by the base case of eval-guard-seq-when-consp
-; which checks if at least one of the guards in a non-empty sequence evaluate 
+; to true. This is not reflected by the base case of eval-guard-seq-when-consp
+; which checks if at least one of the guards in a sequence evaluates 
 ; to true.
-(define eval-guard-seq ((x guard-expr-lists-p) (bind bindp))
+(define eval-guard-seq ((x guard-expr-lists-p) (bind bind-p))
   :returns (result erl-val-p)
-  :measure (len (guard-expr-lists-fix x))
-  :verify-guards nil
   (b* ((x (guard-expr-lists-fix x))
        (bind (bind-fix bind))
        ((if (null x)) (make-erl-val-atom :val 'true)))
-      (eval-guard-seq-when-consp x bind))
-    ///
-      (verify-guards eval-guard-seq))
+      (eval-guard-seq-when-consp x bind)))

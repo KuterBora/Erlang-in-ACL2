@@ -150,3 +150,10 @@
 (defrule consp-of-cdr-of-erl-vlst
   (implies (and (erl-vlst-p x) (> (len x) 1))
            (consp (cdr x))))
+
+; A cons pair of two erl-vals is not an erl-val.
+; This can be useful in a few places.
+(defrule cons-of-erl-val-p
+  (implies (erl-val-p v)
+           (not (erl-val-p (cons v x))))
+  :expand ((erl-val-p v) (erl-val-p (cons v x))))
