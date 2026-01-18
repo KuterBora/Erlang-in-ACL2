@@ -126,7 +126,6 @@
       (v (equal (erl-val-kind v) :cons)
       :name erl-val-kind-of-string=>erl-cons)))
 
-
 ; Erlang Equivalence -----------------------------------------------------------
 
 ; Checks if two Erlang values are equivalent. If one of the values is a rejection,
@@ -142,3 +141,12 @@
   :hints (("Goal" :in-theory (enable erl-equiv))))
 
 (set-well-founded-relation o<)
+
+
+
+; Theorems ---------------------------------------------------------------------
+
+; If a vlst has len > 2, its cdr is not nil.
+(defrule consp-of-cdr-of-erl-vlst
+  (implies (and (erl-vlst-p x) (> (len x) 1))
+           (consp (cdr x))))

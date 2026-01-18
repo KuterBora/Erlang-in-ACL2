@@ -1,10 +1,9 @@
 (in-package "ACL2")
 (include-book "erl-ast")
-
-(include-book "centaur/fty/multicase" :DIR :SYSTEM)
+(include-book "erl-value")
+(include-book "erl-op")
 
 (set-induction-depth-limit 1)
-(set-well-founded-relation l<)
 
 ; Erlang World -----------------------------------------------------------------
 
@@ -20,7 +19,9 @@
 ; - Each function clause in the same sequence must have the same 
 ;   number of parameters.
 ;
-; The function name is an atom. 
+; A function name is an atom. 
+
+(set-well-founded-relation l<)
 
 ; Pair of function name and arity
 (fty::defprod fn
@@ -101,82 +102,85 @@
        (args (erl-vlst-fix args))
        ((if (not (equal (len args) (fn->arity fn)))) 
         (make-erl-val-reject :err "eval-bif: bad arity")))
-      (fty::case*-equal fn
-        ((make-fn :name 'is_atom :arity 1)
+      (cond
+        ((equal fn (make-fn :name 'is_atom :arity 1))
          (if (equal (erl-val-kind (car args)) :atom)
              (make-erl-val-atom :val 'true)
              (make-erl-val-atom :val 'false)))
-        ((make-fn :name 'is_boolean :arity 1)
+        ((equal fn (make-fn :name 'is_boolean :arity 1))
          (if (erl-boolean-p (car args))
              (make-erl-val-atom :val 'true)
              (make-erl-val-atom :val 'false)))
-        ((make-fn :name 'is_integer :arity 1)
+        ((equal fn (make-fn :name 'is_integer :arity 1))
          (if (equal (erl-val-kind (car args)) :integer)
              (make-erl-val-atom :val 'true)
              (make-erl-val-atom :val 'false)))
-        ((make-fn :name 'is_list :arity 1)
+        ((equal fn (make-fn :name 'is_list :arity 1))
          (if (equal (erl-val-kind (car args)) :cons)
              (make-erl-val-atom :val 'true)
              (make-erl-val-atom :val 'false)))
-        ((make-fn :name 'is_number :arity 1)
+        ((equal fn (make-fn :name 'is_number :arity 1))
          (if (equal (erl-val-kind (car args)) :integer)
              (make-erl-val-atom :val 'true)
              (make-erl-val-atom :val 'false)))
-        ((make-fn :name 'is_tuple :arity 1)
+        ((equal fn (make-fn :name 'is_tuple :arity 1))
          (if (equal (erl-val-kind (car args)) :tuple)
              (make-erl-val-atom :val 'true)
              (make-erl-val-atom :val 'false)))
-        ((make-fn :name 'element :arity 2)
-         (b* ((n (erl-val-integer->val (car args)))
+        ((equal fn (make-fn :name 'element :arity 2))
+         (b* (((unless (equal (erl-val-kind (car args)) :integer))
+               (make-erl-val-excpt 
+                  :err (make-erl-err :class (make-err-class-error)
+                                     :reason (make-exit-reason-badarg))))
+              (n (erl-val-integer->val (car args)))
               ((unless 
-                (and (equal (erl-val-kind (car args)) :integer)
+                (and (equal (erl-val-kind (cadr args)) :tuple)
                      (> n 0)
-                     (equal (erl-val-kind (cadr args)) :tuple)
                      (< n (len (erl-val-tuple->lst (cadr args))))))
                 (make-erl-val-excpt 
                   :err (make-erl-err :class (make-err-class-error)
                                      :reason (make-exit-reason-badarg)))))
               (nth (1- n) (erl-val-tuple->lst (cadr args)))))
-        ((make-fn :name 'hd :arity 1)
+        ((equal fn (make-fn :name 'hd :arity 1))
          (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
                             (consp (erl-val-cons->lst (car args)))))
                (make-erl-val-excpt
                  :err (make-erl-err :class (make-err-class-error)
                                     :reason (make-exit-reason-badarg)))))
              (car (erl-val-cons->lst (car args)))))
-        ((make-fn :name 'length :arity 1)
+        ((equal fn (make-fn :name 'length :arity 1))
          (b* (((unless (equal (erl-val-kind (car args)) :cons))
                (make-erl-val-excpt
                  :err (make-erl-err :class (make-err-class-error)
                                     :reason (make-exit-reason-badarg))))
               (l (len (erl-val-cons->lst (car args)))))
              (make-erl-val-integer :val l)))
-        ((make-fn :name 'max :arity 2)
+        ((equal fn (make-fn :name 'max :arity 2))
          (b* ((left (car args))
               (right (cadr args))
               (cmp (erl-compare left right)))
              (if (or (equal cmp 0) (equal cmp 1))
                  left
                  right)))
-        ((make-fn :name 'min :arity 2)
+        ((equal fn (make-fn :name 'min :arity 2))
          (b* ((left (car args))
               (right (cadr args))
               (cmp (erl-compare left right)))
              (if (or (equal cmp 0) (equal cmp -1))
                  left
                  right)))
-        ((make-fn :name 'tuple_size :arity 1)
+        ((equal fn (make-fn :name 'tuple_size :arity 1))
          (b* (((unless (equal (erl-val-kind (car args)) :tuple))
                (make-erl-val-excpt
                  :err (make-erl-err :class (make-err-class-error)
                                     :reason (make-exit-reason-badarg))))
               (l (len (erl-val-tuple->lst (car args)))))
              (make-erl-val-integer :val l)))
-        ((make-fn :name 'tl :arity 1)
+        ((equal fn (make-fn :name 'tl :arity 1))
          (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
                             (consp (erl-val-cons->lst (car args)))))
                (make-erl-val-excpt
                  :err (make-erl-err :class (make-err-class-error)
                                     :reason (make-exit-reason-badarg)))))
-             (cdr (erl-val-cons->lst (car args)))))
-        (otherwise (make-erl-val-reject :err "eval-bif: bad op")))))
+             (make-erl-val-cons :lst (cdr (erl-val-cons->lst (car args))))))
+        (t (make-erl-val-reject :err "eval-bif: bad bif")))))
