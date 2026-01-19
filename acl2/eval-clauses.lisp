@@ -5,31 +5,61 @@
 
 ; Evaluate Erlang Clauses ------------------------------------------------------
 
-; Returns the body of the first clause which has patterns that can match the args,
-; and a guard sequence that is satisfied. If no clauses match, nil is returned,
-; and the caller can decide on the appropiate clause error.
-
-(define eval-clauses ((args erl-vlst-p) (cs erl-clause-list-p) (bind bind-p))
+; Returns the body of the first clause which has patterns that can match the 
+; given args, and a has guard sequence that is satisfied. If no clauses match, 
+; nil is returned, and the caller can decide on the appropiate clause error.
+;
+;  Returns:
+; - Rejections propagated, and the return value 'v' is set to keep track of them. 
+;   If there are no rejections, then 'v' is set to :none. Otherwise the returned 
+;   'bind' and 'body' are arbitrary. 
+; - Bindings are accumulated in 'bind'.
+;
+(define eval-clauses ((args erl-vlst-p) (cls erl-clause-list-p) (bind bind-p))
   :returns (mv (v erl-val-p) (b bind-p) (body expr-list-p))
-  :measure (len (erl-clause-list-fix cs))
-  :verify-guards nil
+  :measure (len (erl-clause-list-fix cls))
+  ;verify-guards nil
   (b* ((args (erl-vlst-fix args))
-       (cs (erl-clause-list-fix cs))
+       (cls (erl-clause-list-fix cls))
        (bind (bind-fix bind))
-       ((if (null cs)) (mv (make-erl-val-none) nil nil))
-       (cases (node-clause->cases (car cs)))
-       (guards (node-clause->guards (car cs)))
+       
+       ; No clauses matched -- the caller can return the appropiate clause error.
+       ((if (null cls)) (mv (make-erl-val-none) nil nil))
+
+       ; Pick the first clause, get its cases and guards.
+       (cases (node-clause->cases (car cls)))
+       (guards (node-clause->guards (car cls)))
+
+       ; Obtain the result of evaluating rest of the clauses.
+       ; - This will be useful!
+       ((mv rv rb rbody) (eval-clauses args (cdr cls) bind))
+       
+       ; Attempt to match cases to args.
        ((mv match-result match-bind) (match-args cases args bind))
+       
+       ; Propagate rejections.
        ((if (equal (erl-val-kind match-result) :reject)) 
         (mv match-result nil nil))
-       ((if (equal (erl-val-kind match-result) :excpt)) 
-        (eval-clauses args (cdr cs) bind))
-       (guard-result (eval-guards guards match-bind))
+       
+       ; If a case fails to match, try rest of the clauses. 
+       ((if (equal (erl-val-kind match-result) :excpt)) (mv rv rb rbody))
+       
+       ; Evaluate the guard sequence.
+       (guard-result (eval-guard-seq guards match-bind))
+
+       ; Propagate rejections.
        ((if (equal (erl-val-kind guard-result) :reject)) 
         (mv guard-result nil nil))
-       ((unless (equal guard-result (make-erl-val-atom :val 'true))) 
-        (eval-clauses args (cdr cs) bind)))
-      (mv match-result match-bind (node-clause->body (car cs))))
+      
+       ; If no guard in the sequence was satisfied, try rest of the clause.
+       ((unless (equal guard-result (make-erl-val-atom :val 'true))) (mv rv rb rbody))
+      
+      ; Even if the chosen clause satisfies the cases and guards,
+      ; ensure that there will be no rejection in the rest of the clauses.
+      ((if (equal (erl-val-kind rv) :reject)) (mv rv rb rbody)))
+
+      ; The chosen clause satisfied the cases and guards, return its body.
+      (mv (make-erl-val-none) match-bind (node-clause->body (car cls))))
   ///
     (verify-guards eval-clauses)
     (more-returns
@@ -39,13 +69,13 @@
          :hints 
           (("Subgoal *1/5.3'" 
             :use (:instance val-kind-of-match-args
-                    (ps (node-clause->cases (car (erl-clause-list-fix cs))))
+                    (ps (node-clause->cases (car (erl-clause-list-fix cls))))
                     (vs (erl-vlst-fix args))
                     (bind (bind-fix bind)))
             :in-theory  (disable val-kind-of-match-args))
            ("Subgoal *1/6'''" 
             :use (:instance val-kind-of-match-args
-                    (ps (node-clause->cases (car (erl-clause-list-fix cs))))
+                    (ps (node-clause->cases (car (erl-clause-list-fix cls))))
                     (vs (erl-vlst-fix args))
                     (bind (bind-fix bind)))
             :in-theory  (disable val-kind-of-match-args))))))

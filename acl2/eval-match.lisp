@@ -22,8 +22,8 @@
                 (equal (node-kind (pattern-fix p)) :cons)
                 (equal (erl-val-kind val) :cons)
                 (erl-val-cons->lst val))
-         (< (node-count (node-cons->hd (pattern-fix p)))
-            (node-count p)))
+           (< (node-count (node-cons->hd (pattern-fix p)))
+              (node-count p)))
   :enable pattern-fix))
 
 (local (defrule node-count-of-pattern-tuple-car
@@ -33,8 +33,8 @@
               (equal (erl-val-kind val) :tuple)
               (erl-val-tuple->lst val)
               (node-tuple->lst (pattern-fix p)))
-         (< (node-count (car (node-tuple->lst (pattern-fix p))))
-            (node-count p)))
+            (< (node-count (car (node-tuple->lst (pattern-fix p))))
+               (node-count p)))
   :enable pattern-fix))
 
 (local (defrule node-count-of-pattern-tuple-cdr
@@ -44,22 +44,22 @@
                 (equal (erl-val-kind val) :tuple)
                 (node-tuple->lst (pattern-fix p))
                 (erl-val-tuple->lst val))
-          (< (node-count (node-tuple (cdr (node-tuple->lst (pattern-fix p)))))
+           (< (node-count (node-tuple (cdr (node-tuple->lst (pattern-fix p)))))
               (node-count p)))
   :enable (pattern-fix node-count node-list-count)))
 
 (local (defrule node-count-of-pattern-match->lhs
   (implies (and (not (arithm-expr-p (pattern-fix p)))
                 (equal (node-kind (pattern-fix p)) :match))
-          (< (node-count (node-match->lhs (pattern-fix p)))
-             (node-count p)))
+           (< (node-count (node-match->lhs (pattern-fix p)))
+              (node-count p)))
   :enable pattern-fix))
 
 (local (defrule node-count-of-pattern-match->rhs
   (implies (and (not (arithm-expr-p (pattern-fix p)))
                 (equal (node-kind (pattern-fix p)) :match))
-          (< (node-count (node-match->rhs (pattern-fix p)))
-             (node-count p)))
+           (< (node-count (node-match->rhs (pattern-fix p)))
+              (node-count p)))
   :enable pattern-fix))
 
 
@@ -246,9 +246,8 @@
       (more-returns
         (v (or (equal (erl-val-kind v) :reject)
                (equal (erl-val-kind v) :excpt)
-               (equal (erl-val-kind v)
-                      (erl-val-kind val)))
-          :name erl-val-kind-of-eval-match->in)))
+               (equal (erl-val-kind v) (erl-val-kind val)))
+          :name erl-val-kind-of-eval-match)))
 
 ; Match each pattern to the corresponding argument, accumulate the bindings.
 ; - When callfed by 'if' or 'case-of' clauses, this is simply a wrapper 

@@ -98,7 +98,7 @@
 ; - Expressions that construct floats, records, maps and binaries
 ; - Expressions that update a map
 ; - The record expressions Expr#Name.Field and #Name.Field
-(defines erl-guards
+(defines eval-guards
   :verify-guards nil
   :flag-local nil
   ; Evaluate the guard expressions 'x' with the bindings 'bind'. Return the
