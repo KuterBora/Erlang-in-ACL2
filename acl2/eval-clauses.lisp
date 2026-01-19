@@ -15,10 +15,9 @@
 ;   'bind' and 'body' are arbitrary. 
 ; - Bindings are accumulated in 'bind'.
 ;
-(define eval-clauses ((args erl-vlst-p) (cls erl-clause-list-p) (bind bind-p))
+(define eval-clauses-when-consp ((args erl-vlst-p) (cls erl-clause-list-p) (bind bind-p))
   :returns (mv (v erl-val-p) (b bind-p) (body expr-list-p))
   :measure (len (erl-clause-list-fix cls))
-  ;verify-guards nil
   (b* ((args (erl-vlst-fix args))
        (cls (erl-clause-list-fix cls))
        (bind (bind-fix bind))
@@ -32,7 +31,7 @@
 
        ; Obtain the result of evaluating rest of the clauses.
        ; - This will be useful!
-       ((mv rv rb rbody) (eval-clauses args (cdr cls) bind))
+       ((mv rv rb rbody) (eval-clauses-when-consp args (cdr cls) bind))
        
        ; Attempt to match cases to args.
        ((mv match-result match-bind) (match-args cases args bind))
@@ -61,11 +60,10 @@
       ; The chosen clause satisfied the cases and guards, return its body.
       (mv (make-erl-val-none) match-bind (node-clause->body (car cls))))
   ///
-    (verify-guards eval-clauses)
     (more-returns
       (v (or (equal (erl-val-kind v) :reject)
              (equal (erl-val-kind v) :none))
-         :name val-kind-of-eval-clauses
+         :name val-kind-of-eval-clauses-when-consp
          :hints 
           (("Subgoal *1/5.3'" 
             :use (:instance val-kind-of-match-args
@@ -79,3 +77,19 @@
                     (vs (erl-vlst-fix args))
                     (bind (bind-fix bind)))
             :in-theory  (disable val-kind-of-match-args))))))
+
+; This is a wrapper around eval-clauses-when-consp which does not consider the
+; case where no clauses are passed to the evaluator initially. If the evaluator 
+; runs out of clauses to try, it returns nil, and the caller can decide the
+; appropiate exception to throw. However, if, initially, no clauses are given to
+; the evaluator, that is a cause for rejection -- Erlang expects at least one
+; clause in a clause-list.
+
+(define eval-clauses ((args erl-vlst-p) (cls erl-clause-list-p) (bind bind-p))
+  :returns (mv (v erl-val-p) (b bind-p) (body expr-list-p))
+  (b* ((args (erl-vlst-fix args))
+       (cls (erl-clause-list-fix cls))
+       (bind (bind-fix bind))
+       ((if (null cls)) 
+        (mv (make-erl-val-reject :err "eval-clauses: clause list cannot be empty.") nil nil)))
+      (eval-clauses-when-consp args (cdr cls) bind)))

@@ -1,12 +1,23 @@
 (in-package "ACL2")
 (include-book "termination")
 (include-book "eval-clauses")
+(include-book "erl-state")
 
 (set-induction-depth-limit 1)
 
 ; Erlang Evaluator -------------------------------------------------------------
 
 ; Evaluate the current continuation and return the next erl-val-klst
+;
+; Unsupported:
+; - Badmatch exception are supposed to return the value that failed to 
+;   match. However, for certain instances of this, there is no easy way to 
+;   find that value.
+; - The Erlang compiler can find out of different clauses of the same expression
+;   set the same variable to different values. These variables are called
+;   'unsafe' and should not allowed.
+;
+;
 (define eval-k ((k erl-k-p) (s erl-state-p))
   :returns (ks erl-s-klst-p)
   (b* ((k (erl-k-fix k))
@@ -15,7 +26,9 @@
        ((if (zp fuel)) (make-erl-s-klst :s (make-erl-state :in (make-erl-val-flimit))))
        (s (erl-state-fix s))
        (s.in (erl-state->in s))
-       (s.bind (erl-state->bind s)))
+       (s.bind (erl-state->bind s))
+       ; (s.world (erl-state->world s))
+       )
     (kont-case k
       ; Evaluate an expression.
       (:expr (let ((x k.expr))
@@ -25,7 +38,7 @@
                                                         :bind s.bind)))
           (:atom    (make-erl-s-klst :s (make-erl-state :in (make-erl-val-atom :val x.val)
                                                         :bind s.bind)))
-          (:string  (make-erl-s-klst :s (make-erl-state :in (make-erl-val-string :val x.val)
+          (:string  (make-erl-s-klst :s (make-erl-state :in (string=>erl-cons x.val)
                                                         :bind s.bind)))
           (:nil     (make-erl-s-klst :s (make-erl-state :in (make-erl-val-cons :lst nil)
                                                         :bind s.bind)))
@@ -72,7 +85,7 @@
               :s (make-erl-state :bind s.bind)
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.rhs))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs)))))
-          ; if x is an if clause, evaluate the guard sequence to find which clause body to execute
+          ; if x is an if clause, invoke the clause evaluator
           (:if
             (b* (((mv v b body) (eval-clauses nil x.clauses s.bind))
                  ((if (equal (erl-val-kind v) :reject))
@@ -86,12 +99,28 @@
                   :s (make-erl-state :bind b)
                   :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
                               (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
-          ; if x is a case, evaluate the expression and save the clauses
+          ; if x is a case, evaluate the expression and save the clauses in a continuation.
           (:case-of
             (make-erl-s-klst
               :s (make-erl-state :bind s.bind)
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.expr))
-                          (make-erl-k :fuel (1- fuel) :kont (make-kont-case-of :clauses x.clauses))))))))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-case-of :clauses x.clauses)))))
+
+          ; if x is remote call
+          ; - invoke the remote call evaluator, which will then invoke the clause evaluator
+          ; - set the module and the imports
+          ; - set a continuation for the function body
+          ; - set a continuation for the return from the call
+          (:remote-call 
+            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-atom :val 'todo)
+                                                :bind s.bind)))
+          ; if x is a local call
+          ; - invoke the call evaluator, which will then invoke the clause evaluator
+          ; - set a continuation for the function body
+          ; - set a continuation for the return from the call
+          (:call 
+            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-atom :val 'todo)
+                                                :bind s.bind))))))
       
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
@@ -103,12 +132,10 @@
                                                               :car-bind s.bind)))))
       ; When both the car and cdr of the list are evaluated, merge the results.
       (:cons-merge
-        ; TODO: Erlang allows non-cons values here, but the docs claim them to be of little practical use.
         (if (equal (erl-val-kind s.in) :cons)
             (if (omap::compatiblep s.bind k.car-bind)
                 (make-erl-s-klst :s (make-erl-state :in (make-erl-val-cons :lst (cons k.car-val (erl-val-cons->lst s.in)))
                                                     :bind (omap::update* s.bind k.car-bind)))
-                ; TODO: This is supposed to return the value that failed to match. However, there is no easy way to figure this out.
                 (make-erl-s-klst
                   :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
                                                                                 :reason (make-exit-reason-badmatch :val s.in))))))
@@ -128,7 +155,6 @@
             (if (omap::compatiblep s.bind k.t-bind)
                 (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :lst (cons k.t-hd (erl-val-tuple->lst s.in)))
                                                     :bind (omap::update* s.bind k.t-bind)))
-                ; TODO: This is supposed to return the value that failed to match. However, there is no easy way to figure this out.
                 (make-erl-s-klst
                   :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
                                                                                 :reason (make-exit-reason-badmatch :val s.in))))))
@@ -151,7 +177,6 @@
         (if (omap::compatiblep s.bind k.left-bind)
             (make-erl-s-klst :s (make-erl-state :in (apply-erl-binop k.op k.val s.in)
                              :bind (omap::update* s.bind k.left-bind)))
-            ; TODO: This is supposed to return the value that failed to match. However, there is no easy way to figure this out.
                 (make-erl-s-klst
                   :s (make-erl-state 
                       :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
@@ -169,7 +194,7 @@
                                                                :reason (make-exit-reason-badmatch :val s.in)))))))
             (make-erl-s-klst :s (make-erl-state :in match-result :bind match-bind))))
       
-      ; Once the expression is evaluated, find which case clause to exectute.
+      ; Once the expression is evaluated, invoke the clause-evaluator.
       (:case-of
         (b* (((mv v b body) (eval-clauses (list s.in) k.clauses s.bind))
              ((if (equal (erl-val-kind v) :reject))
@@ -238,7 +263,7 @@
        ((if (equal (erl-val-kind s.in) :flimit)) s)
        ; The evaluator has encountered an internal error
        ((if (equal (erl-val-kind s.in) :reject)) s)
-       ; TODO: exception handling
+       ; TODO: exception handling (catch, try-catch)
        ((if (equal (erl-val-kind s.in) :excpt)) s)
        ((if (endp klst)) s)
        ((cons khd ktl) klst)
