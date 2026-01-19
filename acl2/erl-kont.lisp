@@ -2,9 +2,10 @@
 (include-book "erl-ast")
 (include-book "erl-value")
 
+(set-induction-depth-limit 1)
+
 ; Continuations ----------------------------------------------------------------
 
-(set-induction-depth-limit 1)
 (set-well-founded-relation l<)
 
 ; Types of continuations that describe the next step of evaluation.
@@ -52,7 +53,8 @@
     ; Continue after the rhs of the match has been evaluated.
     (:match ((lhs pattern-p)))
 
-    ; Continue after the expr of the case had been evaluated.
+    ; Continue after the expression of the case had been evaluated.
+    ; The expression would be `X` in `case X of ... end`
     (:case-of ((clauses erl-clause-list-p))))
 
 ; A continutaion that is paired with a fuel that limits how many times

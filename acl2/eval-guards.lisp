@@ -170,7 +170,7 @@
          ((if (erl-val-p tl)) tl))
         (cons hd tl)))
   ///
-    (std::defret-mutual returns-of-erl-guards
+    (std::defret-mutual returns-of-eval-guards
       (defret erl-val-p-of-eval-guard-expr
         (erl-val-p v)
         :fn eval-guard-expr)
@@ -178,7 +178,7 @@
         (or (erl-val-p r) (erl-vlst-p r))
         :fn eval-guard-expr-list
         )
-      :mutual-recursion erl-guards
+      :mutual-recursion eval-guards
       :hints (("Goal" :expand (eval-guard-expr-list x bind))))
     
     (std::defret-mutual returns-of-eval-guard-expr-list
@@ -186,7 +186,7 @@
         (implies (erl-val-p r) (or (equal (erl-val-kind r) :reject)
                                    (equal (erl-val-kind r) :excpt)))
         :fn eval-guard-expr-list)
-      :mutual-recursion erl-guards
+      :mutual-recursion eval-guards
       :skip-others t
       :hints (("Goal" :expand (eval-guard-expr-list x bind))))
 

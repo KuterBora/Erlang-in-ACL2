@@ -1,10 +1,5 @@
 (in-package "ACL2")
-(include-book "ast-theorems")
-(include-book "erl-op")
 (include-book "termination")
-(include-book "erl-state")
-(include-book "erl-world")
-(include-book "eval-match")
 (include-book "eval-clauses")
 
 (set-induction-depth-limit 1)

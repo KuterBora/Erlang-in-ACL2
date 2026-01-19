@@ -1,5 +1,6 @@
 (in-package "ACL2")
 (include-book "centaur/fty/top" :DIR :SYSTEM)
+(include-book "kestrel/fty/defsubtype" :DIR :SYSTEM)
 (include-book "kestrel/utilities/strings/strings-codes" :dir :system)
 
 (set-induction-depth-limit 1)
@@ -143,13 +144,26 @@
 (set-well-founded-relation o<)
 
 
-
 ; Theorems ---------------------------------------------------------------------
 
 ; If a vlst has len > 2, its cdr is not nil.
 (defrule consp-of-cdr-of-erl-vlst
   (implies (and (erl-vlst-p x) (> (len x) 1))
            (consp (cdr x))))
+
+; Appending two vlst will produce a vlst
+(defrule append-of-erl-vlst
+  (implies (and (erl-vlst-p vlst1) (erl-vlst-p vlst2))
+           (erl-vlst-p (append vlst1 vlst2))))
+
+; nth of an erl-vlst is an erl-val
+(defrule nth-of-erl-vlst
+  (implies 
+    (and (erl-vlst-p vlst) 
+         (integerp n)
+         (>= n 0)
+         (< n (len vlst)))
+    (erl-val-p (nth n vlst))))
 
 ; A cons pair of two erl-vals is not an erl-val.
 ; This can be useful in a few places.

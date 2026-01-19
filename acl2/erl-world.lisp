@@ -136,7 +136,7 @@
               ((unless 
                 (and (equal (erl-val-kind (cadr args)) :tuple)
                      (> n 0)
-                     (< n (len (erl-val-tuple->lst (cadr args))))))
+                     (<= n (len (erl-val-tuple->lst (cadr args))))))
                 (make-erl-val-excpt 
                   :err (make-erl-err :class (make-err-class-error)
                                      :reason (make-exit-reason-badarg)))))
