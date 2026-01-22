@@ -100,7 +100,7 @@
                                                     (erl-k->kont k))
                                              s))
                    (increase-fuel rest n))))
-  :in-theory (enable increase-fuel eval-k))
+  :enable (eval-k increase-fuel update-erl-state->in))
 
 ; A continuation that did not cause an error in eval-k will produce the same result
 ; if its fuel is increased.
@@ -114,7 +114,7 @@
                                          (erl-k->kont k)) 
                                   s))
            (erl-s-klst->s (eval-k k s))))
-  :enable eval-k)
+  :enable (eval-k update-erl-state->in))
 
 ; A continuation that did not cause an error in apply-k will produce the same result
 ; if its fuel is increased.
@@ -147,13 +147,15 @@
 ; Erl-State Theorems -----------------------------------------------------------
 
 ; Erl-states are equal if their field are equal
-(defruled erl-states-are-equal-if-fields-are-equal
+(defruled apply-k-erl-states-are-equal-if-all-fields-are-equal
   (implies 
     (and (erl-state-p x)
          (erl-state-p y)
          (erl-klst-p klst)
          (equal (erl-state->in x) (erl-state->in y))
-         (equal (erl-state->bind x) (erl-state->bind y)))
+         (equal (erl-state->bind x) (erl-state->bind y))
+         (equal (erl-state->world x) (erl-state->world y))
+         (equal (erl-state->module x) (erl-state->module y)))
     (equal (apply-k x klst) (apply-k y klst)))
   :expand ((apply-k x klst) (apply-k y klst))
-  :enable (erl-state->in erl-state->bind erl-state-p))
+  :enable (erl-state->in erl-state->bind erl-state->world erl-state->module erl-state-p))
