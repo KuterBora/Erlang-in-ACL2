@@ -18,7 +18,6 @@
                                                           :tl (make-node-nil))))
   '(:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))))
 
-; TODO: There is no support for pairs currently.
 (assert-equal 
   (make-node-cons :hd (make-node-integer :val 1) 
                   :tl (make-node-integer :val 2))
@@ -26,8 +25,8 @@
 
 ; Make tuple
 (assert-equal
-  (make-node-tuple :lst (list '(:integer 1) '(:string "a") '(:cons (:integer 1) (:cons (:integer 2) (:nil)))))
-  '(:tuple ((:integer 1) (:string "a") (:cons (:integer 1) (:cons (:integer 2) (:nil))))))
+  (make-node-tuple :lst (list '(:integer 1) '(:atom a) '(:cons (:integer 1) (:cons (:integer 2) (:nil)))))
+  '(:tuple ((:integer 1) (:atom a) (:cons (:integer 1) (:cons (:integer 2) (:nil))))))
 
 ; Evaluate terms
 (assert-equal
@@ -39,7 +38,7 @@
   (apply-k 
     (make-erl-state) 
     (list (make-erl-k :fuel 10000 :kont (make-kont-expr :expr '(:string "abc")))))
-  (make-erl-state :in (make-erl-val-string :val "abc")))
+  (make-erl-state :in (make-erl-val-cons :lst '((:integer 97) (:integer 98) (:integer 99)))))
 (assert-equal
   (apply-k 
     (make-erl-state) 
@@ -62,15 +61,6 @@
                                              (:cons (:integer 3) (:nil))))))))
   (make-erl-state :in (make-erl-val-cons :lst (list '(:integer 1) '(:integer 2) '(:integer 3)))))
 
-; TODO: Currenlty pairs are not allowed
-; (assert-equal
-;   (apply-k 
-;     (make-erl-state)
-;     (list (make-erl-k :fuel 10000 
-;                       :kont (make-kont-expr 
-;                         :expr '(:cons (:integer 1) (:integer 2))))))
-;   (make-erl-state :in (make-erl-val-cons :lst (list '(:integer 1) '(:integer 2)))))
-
 ; Evaluate tuples
 (assert-equal
   (apply-k 
@@ -80,12 +70,12 @@
             :kont (make-kont-expr 
                     :expr '(:tuple 
                             ((:integer 1) 
-                             (:string "a") 
+                             (:atom a) 
                              (:cons (:integer 1) (:cons (:integer 2) (:nil)))))))))
   (make-erl-state 
     :in (make-erl-val-tuple 
           :lst (list '(:integer 1)
-                       '(:string "a") 
+                       '(:atom a) 
                        '(:cons ((:integer 1) (:integer 2)))))))
 
 
@@ -108,7 +98,7 @@
     (make-erl-state)
     (list (make-erl-k 
             :fuel 10000 
-            :kont (make-kont-expr :expr '(:unop - (:string "a"))))))
+            :kont (make-kont-expr :expr '(:unop - (:atom a))))))
   (make-erl-state :in (make-erl-val-excpt 
                         :err (make-erl-err :class (make-err-class-error)
                                            :reason (make-exit-reason-badarith)))))
@@ -132,7 +122,7 @@
     (make-erl-state)
     (list (make-erl-k 
             :fuel 10000 
-            :kont (make-kont-expr :expr '(:binop + (:string "a") (:integer 3))))))
+            :kont (make-kont-expr :expr '(:binop + (:atom a) (:integer 3))))))
   (make-erl-state :in (make-erl-val-excpt 
                         :err (make-erl-err :class (make-err-class-error)
                                            :reason (make-exit-reason-badarith)))))
@@ -194,13 +184,13 @@
   '(:match (:tuple ((:var X) (:var Y) (:var Z)))
            (:tuple ((:integer 1) (:integer 2) (:integer 3))))) 
 
-; {int + int, X} = {int, string}.
+; {int + int, X} = {int, atom}.
 (assert-equal 
   (make-node-match 
     :lhs '(:tuple ((:binop + (:integer 1) (:integer 2)) (:var X))) 
-    :rhs '(:tuple ((:integer 3) (:string "abc"))))
+    :rhs '(:tuple ((:integer 3) (:atom abc))))
   '(:match (:tuple ((:binop + (:integer 1) (:integer 2)) (:var X)))
-           (:tuple ((:integer 3) (:string "abc"))))) 
+           (:tuple ((:integer 3) (:atom abc))))) 
 
 ; {[int, int, X], Y = int} = {Z, int} = {[int, int, int], int}.
 (assert-equal 
@@ -257,7 +247,7 @@
   (make-erl-state :in '(:tuple ((:integer 1) (:integer 2) (:integer 3))) 
                   :bind '((X :integer 1) (Y :integer 2) (Z :integer 3))))
 
-; {int + int, X} = {int, string}.
+; {int + int, X} = {int, atom}.
 (assert-equal
   (apply-k 
     (make-erl-state)
@@ -266,9 +256,9 @@
         :fuel 10000 
         :kont (make-kont-expr 
                 :expr '(:match (:tuple ((:binop + (:integer 1) (:integer 2)) (:var X)))
-                                (:tuple ((:integer 3) (:string "abc"))))))))
-  (make-erl-state :in '(:tuple ((:integer 3) (:string "abc"))) 
-                  :bind '((X :string "abc"))))
+                                (:tuple ((:integer 3) (:atom abc))))))))
+  (make-erl-state :in '(:tuple ((:integer 3) (:atom abc))) 
+                  :bind '((X :atom abc))))
 
 ; {[int, int, X], Y = int} = {Z, int} = {[int, int, int], int}.
 (assert-equal

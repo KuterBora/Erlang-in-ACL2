@@ -25,4 +25,49 @@
 ;
 ;
 
-; Evaluate Function Calls ------------------------------------------------------
+
+; Evaluate Local Function Calls ------------------------------------------------
+
+(define eval-local-call ((s erl-state-p) (call symbolp) (args erl-vlst-p))
+  :returns ((mv rs body))
+
+  (b* ((s (erl-state-fix s))
+       (call (symbol-fix call))
+       (args (erl-vlst-fix args))
+       (s.bind (erl-state->bind s))
+       (s.module (erl-state->module s))
+       (s.world (erl-state-world s))
+       ((unless (omap::assoc s.module s.world))
+        (mv (make-erl-state 
+              :in (make-erl-value-excpt :class (make-err-class-error)
+                                        :reason (make-exit-reason-fun-clause)
+                                        :stack TODO)
+              TODO)
+            nil))
+       (module (omap::lookup s.module s.world))
+       
+       (arity (len args))
+       
+        
+       )
+      
+    
+    
+    
+    ))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+; Evaluate Remote Function Calls -----------------------------------------------

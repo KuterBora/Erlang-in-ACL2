@@ -8,7 +8,7 @@
 ; Erlang State ----------------------------------------------------------------
 
 ; Representation of the current State of the Erlang program under evaluation
-; TODO: Out sent messages
+; TODO: Outbox, self
 (fty::defprod erl-state
   ((in erl-val-p :default (make-erl-val-none))
    (bind bind-p :default nil)
@@ -22,3 +22,42 @@
 (fty::defprod erl-s-klst
   ((s erl-state-p :default (make-erl-state))
    (klst erl-klst-p :default nil)))
+
+; Helpers ---------------------------------------------------------------------
+
+(define update-erl-state->in ((s erl-state-p) (in erl-val-p))
+  :returns (rs erl-state-p)
+  (b* ((s (erl-state-fix s))
+       (in (erl-val-fix in)))
+      (make-erl-state :in in
+                      :bind (erl-state->bind s)
+                      :world (erl-state->world s)
+                      :module (erl-state->module s))))
+
+(define update-erl-state->bind ((s erl-state-p) (bind bind-p))
+  :returns (rs erl-state-p)
+  (b* ((s (erl-state-fix s))
+       (bind (bind-fix bind)))
+      (make-erl-state :in (erl-state->in s)
+                      :bind bind
+                      :world (erl-state->world s)
+                      :module (erl-state->module s))))
+
+(define update-erl-state->in-and-bind ((s erl-state-p) (in erl-val-p) (bind bind-p))
+  :returns (rs erl-state-p)
+  (b* ((s (erl-state-fix s))
+       (in (erl-val-fix in))
+       (bind (bind-fix bind)))
+      (make-erl-state :in in
+                      :bind bind
+                      :world (erl-state->world s)
+                      :module (erl-state->module s))))
+
+(define update-erl-state->module ((s erl-state-p) (module symbolp))
+  :returns (rs erl-state-p)
+  (b* ((s (erl-state-fix s))
+       (module (symbol-fix module)))
+      (make-erl-state :in (erl-state->in s)
+                      :bind (erl-state->bind s)
+                      :world (erl-state->world s)
+                      :module module)))

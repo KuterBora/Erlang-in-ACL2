@@ -92,4 +92,4 @@
        (bind (bind-fix bind))
        ((if (null cls)) 
         (mv (make-erl-val-reject :err "eval-clauses: clause list cannot be empty.") nil nil)))
-      (eval-clauses-when-consp args (cdr cls) bind)))
+      (eval-clauses-when-consp args cls bind)))

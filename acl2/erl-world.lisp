@@ -51,7 +51,7 @@
   ((attr attr-list-p :default nil)
    (fn-defns fn-map-p)))
 
-; World is a map from module names to a lists of forms
+; World is a map from module name to module
 (fty::defomap world
   :key-type symbol
   :val-type module)

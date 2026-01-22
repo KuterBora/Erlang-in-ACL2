@@ -23,7 +23,7 @@
   (b* ((k (erl-k-fix k))
        (fuel (erl-k->fuel k))
        (k (erl-k->kont k))
-       ((if (zp fuel)) (make-erl-s-klst :s (make-erl-state :in (make-erl-val-flimit))))
+       ((if (zp fuel)) (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit))))
        (s (erl-state-fix s))
        (s.in (erl-state->in s))
        (s.bind (erl-state->bind s))
@@ -34,18 +34,14 @@
       (:expr (let ((x k.expr))
         (node-case x
           ; if x is an atomic term, simply return its value 
-          (:integer (make-erl-s-klst :s (make-erl-state :in (make-erl-val-integer :val x.val)
-                                                        :bind s.bind)))
-          (:atom    (make-erl-s-klst :s (make-erl-state :in (make-erl-val-atom :val x.val)
-                                                        :bind s.bind)))
-          (:string  (make-erl-s-klst :s (make-erl-state :in (string=>erl-cons x.val)
-                                                        :bind s.bind)))
-          (:nil     (make-erl-s-klst :s (make-erl-state :in (make-erl-val-cons :lst nil)
-                                                        :bind s.bind)))
+          (:integer (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-integer :val x.val))))
+          (:atom    (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-atom :val x.val))))
+          (:string  (make-erl-s-klst :s (update-erl-state->in s (string=>erl-cons x.val))))
+          (:nil     (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-cons :lst nil))))
           ; if x is a list, evaluate car and save cdr in a continuation.
           (:cons 
             (make-erl-s-klst
-              :s (make-erl-state :bind s.bind)
+              :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.hd))
                           (make-erl-k :fuel (1- fuel)
                                       :kont (make-kont-cons :cdr-expr x.tl :bind-0 s.bind)))))
@@ -53,9 +49,9 @@
           ; if the tuple is empty, return its value.
           (:tuple
             (if (null x.lst)
-                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :lst nil) :bind s.bind))
+                (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-tuple :lst nil)))
                 (make-erl-s-klst 
-                  :s (make-erl-state :bind s.bind)
+                  :s (update-erl-state->in s (make-erl-val-none))
                   :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car x.lst)))
                               (make-erl-k :fuel (1- fuel)
                                           :kont (make-kont-tuple :t-rem (make-node-tuple :lst (cdr x.lst)) 
@@ -63,17 +59,17 @@
           ; if x is a var, lookup its value. If the AST is well-formed, x should be bound.
           (:var
             (if (omap::assoc x.id s.bind)
-                (make-erl-s-klst :s (make-erl-state :in (omap::lookup x.id s.bind) :bind s.bind))
-                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-reject :err "unbound variable")))))
+                (make-erl-s-klst :s (update-erl-state->in s (omap::lookup x.id s.bind)))
+                (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-reject :err "unbound variable")))))
           (:unop
             (make-erl-s-klst
-              :s (make-erl-state :bind s.bind)
+              :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.expr))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-unop :op x.op)))))
           ; if x is a binop, evaluate the first operand, save the operator and the second operand
           (:binop
             (make-erl-s-klst
-              :s (make-erl-state :bind s.bind)
+              :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.left))
                           (make-erl-k :fuel (1- fuel) 
                                       :kont (make-kont-binop-expr1 :op x.op 
@@ -82,27 +78,27 @@
           ; if x is match, evaluate the rhs a, save the lhs in a continuation.
           (:match
             (make-erl-s-klst
-              :s (make-erl-state :bind s.bind)
+              :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.rhs))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs)))))
           ; if x is an if clause, invoke the clause evaluator
           (:if
-            (b* (((mv v b body) (eval-clauses nil x.clauses s.bind))
+            (b* (((mv v & body) (eval-clauses nil x.clauses s.bind))
                  ((if (equal (erl-val-kind v) :reject))
-                  (make-erl-s-klst :s (make-erl-state :in v)))
+                  (make-erl-s-klst :s (update-erl-state->in s v)))
                  ((if (null body))
                   (make-erl-s-klst
                     :s (make-erl-state 
                         :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error)
                                                                    :reason (make-exit-reason-if-clause)))))))
                 (make-erl-s-klst
-                  :s (make-erl-state :bind b)
+                  :s (update-erl-state->in s (make-erl-val-none))
                   :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
                               (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
           ; if x is a case, evaluate the expression and save the clauses in a continuation.
           (:case-of
             (make-erl-s-klst
-              :s (make-erl-state :bind s.bind)
+              :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.expr))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-case-of :clauses x.clauses)))))
 
@@ -125,7 +121,7 @@
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
         (make-erl-s-klst
-          :s (make-erl-state :bind k.bind-0)
+          :s (update-erl-state->bind s k.bind-0)
           :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.cdr-expr))
                       (make-erl-k :fuel (1- fuel)
                                   :kont (make-kont-cons-merge :car-val s.in 
@@ -134,17 +130,22 @@
       (:cons-merge
         (if (equal (erl-val-kind s.in) :cons)
             (if (omap::compatiblep s.bind k.car-bind)
-                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-cons :lst (cons k.car-val (erl-val-cons->lst s.in)))
-                                                    :bind (omap::update* s.bind k.car-bind)))
+                (make-erl-s-klst 
+                  :s (update-erl-state->in-and-bind 
+                        s 
+                        (make-erl-val-cons :lst (cons k.car-val (erl-val-cons->lst s.in)))
+                        (omap::update* s.bind k.car-bind)))
                 (make-erl-s-klst
-                  :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                                                :reason (make-exit-reason-badmatch :val s.in))))))
-            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-reject :err "cons-merge expects list, pairs are not supported")))))
+                  :s (update-erl-state->in
+                       s
+                       (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                              :reason (make-exit-reason-badmatch :val s.in))))))
+            (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-reject :err "cons-merge expects list, pairs are not supported")))))
       
       ; Evaluate the rest of the tuple, save the previous element in a continuation. 
       (:tuple
         (make-erl-s-klst
-          :s (make-erl-state :bind k.bind-0)
+          :s (update-erl-state->bind s k.bind-0)
           :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.t-rem))
                       (make-erl-k :fuel (1- fuel)
                                   :kont (make-kont-tuple-merge :t-hd s.in 
@@ -153,20 +154,24 @@
       (:tuple-merge
         (if (equal (erl-val-kind s.in) :tuple)
             (if (omap::compatiblep s.bind k.t-bind)
-                (make-erl-s-klst :s (make-erl-state :in (make-erl-val-tuple :lst (cons k.t-hd (erl-val-tuple->lst s.in)))
-                                                    :bind (omap::update* s.bind k.t-bind)))
+                (make-erl-s-klst 
+                  :s (update-erl-state->in-and-bind 
+                        s
+                        (make-erl-val-tuple :lst (cons k.t-hd (erl-val-tuple->lst s.in)))
+                        (omap::update* s.bind k.t-bind)))
                 (make-erl-s-klst
-                  :s (make-erl-state :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                                                :reason (make-exit-reason-badmatch :val s.in))))))
-            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-reject :err "tuple-merge expects tuple")))))
+                  :s (update-erl-state->in 
+                       s (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                                :reason (make-exit-reason-badmatch :val s.in))))))
+            (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-reject :err "tuple-merge expects tuple")))))
 
       ; Apply unop to the evalutaed operand.
-      (:unop (make-erl-s-klst :s (make-erl-state :in (apply-erl-unop k.op s.in) :bind s.bind)))
+      (:unop (make-erl-s-klst :s (update-erl-state->in s (apply-erl-unop k.op s.in))))
 
       ; Evaluate the second operand of a binop, save the operator and value of the first operand                                                    
       (:binop-expr1 
         (make-erl-s-klst
-          :s (make-erl-state :bind k.bind-0)
+          :s (update-erl-state->bind s k.bind-0)
           :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.right))
                       (make-erl-k :fuel (1- fuel) 
                                   :kont (make-kont-binop-expr2 :op k.op 
@@ -175,12 +180,16 @@
       ; Apply the binop to the evaluated operands
       (:binop-expr2
         (if (omap::compatiblep s.bind k.left-bind)
-            (make-erl-s-klst :s (make-erl-state :in (apply-erl-binop k.op k.val s.in)
-                             :bind (omap::update* s.bind k.left-bind)))
+            (make-erl-s-klst 
+              :s (update-erl-state->in-and-bind
+                   s
+                   (apply-erl-binop k.op k.val s.in)
+                   (omap::update* s.bind k.left-bind)))
                 (make-erl-s-klst
-                  :s (make-erl-state 
-                      :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                                 :reason (make-exit-reason-badmatch :val s.in)))))))
+                  :s (update-erl-state->in
+                      s 
+                      (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                             :reason (make-exit-reason-badmatch :val s.in)))))))
       
       ; Once rhs is evaluated, match it to lhs
       (:match
@@ -189,23 +198,25 @@
              ((if (and (equal (erl-val-kind match-result) :excpt)
                        (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err match-result))) :badmatch)))
               (make-erl-s-klst
-                :s (make-erl-state 
-                    :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                               :reason (make-exit-reason-badmatch :val s.in)))))))
-            (make-erl-s-klst :s (make-erl-state :in match-result :bind match-bind))))
+                :s (update-erl-state->in
+                    s 
+                    (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
+                                                           :reason (make-exit-reason-badmatch :val s.in)))))))
+            (make-erl-s-klst :s (update-erl-state->in-and-bind s match-result match-bind))))
       
       ; Once the expression is evaluated, invoke the clause-evaluator.
       (:case-of
         (b* (((mv v b body) (eval-clauses (list s.in) k.clauses s.bind))
              ((if (equal (erl-val-kind v) :reject))
-              (make-erl-s-klst :s (make-erl-state :in v)))
+              (make-erl-s-klst :s (update-erl-state->in s v)))
              ((if (null body))
               (make-erl-s-klst
-                :s (make-erl-state 
-                  :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error)
-                                                             :reason (make-exit-reason-case-clause :val s.in)))))))
+                :s (update-erl-state->in
+                    s
+                    (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error)
+                                                           :reason (make-exit-reason-case-clause :val s.in)))))))
             (make-erl-s-klst
-              :s (make-erl-state :bind b)
+              :s (update-erl-state->bind s b)
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
       
