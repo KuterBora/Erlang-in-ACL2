@@ -43,7 +43,7 @@
                       :world (erl-state->world s)
                       :module (erl-state->module s))))
 
-(define update-erl-state->in-and-bind ((s erl-state-p) (in erl-val-p) (bind bind-p))
+(define update-erl-state->in-bind ((s erl-state-p) (in erl-val-p) (bind bind-p))
   :returns (rs erl-state-p)
   (b* ((s (erl-state-fix s))
        (in (erl-val-fix in))
@@ -53,11 +53,22 @@
                       :world (erl-state->world s)
                       :module (erl-state->module s))))
 
-(define update-erl-state->module ((s erl-state-p) (module symbolp))
+(define update-erl-state->mod ((s erl-state-p) (mod symbolp))
   :returns (rs erl-state-p)
   (b* ((s (erl-state-fix s))
-       (module (symbol-fix module)))
+       (mod (symbol-fix mod)))
       (make-erl-state :in (erl-state->in s)
                       :bind (erl-state->bind s)
                       :world (erl-state->world s)
-                      :module module)))
+                      :module mod)))
+
+(define update-erl-state->in-bind-mod ((s erl-state-p) (in erl-val-p) (bind bind-p) (mod symbolp))
+  :returns (rs erl-state-p)
+  (b* ((s (erl-state-fix s))
+       (in (erl-val-fix in))
+       (bind (bind-fix bind))
+       (mod (symbol-fix mod)))
+      (make-erl-state :in in
+                      :bind bind
+                      :world (erl-state->world s)
+                      :module mod)))

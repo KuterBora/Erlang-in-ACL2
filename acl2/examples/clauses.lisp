@@ -195,7 +195,7 @@
 
 ; case X of
 ;   {One, 2} when One == 1 -> One + 2;
-;   {Two, 1 + 1} when Two == 2 -> Two * Two = 4;
+;   {Two, 1 + 1} when Two == 2 -> Two * Two;
 ;   {Nat, _} when is_integer(Nat), Nat >= 0 -> 'at_least_it_is_nat;
 ;   {Int, _} when is_integer(Int) -> 'at_least_it_is_int;
 ;   _ -> 'no_match

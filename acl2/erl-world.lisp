@@ -36,19 +36,24 @@
   :key-type fn
   :val-type erl-clause-list)
 
+; A map from fn to module. This is for looking up module imports.
+(fty::defomap fn-mod-map
+  :key-type fn
+  :val-type symbol)
+
 ; Module attributes. Currently, only the following three are supported.
-(fty::deftagsum attr
-  (:module ((name symbolp)))
-  (:export ((fn fn-list-p)))
-  (:import ((module symbolp) (fns fn-list-p))))
-(fty::deflist attr-list
-  :elt-type attr-p
-  :true-listp t)
+(fty::defprod attrs
+  ; name of the module
+  ((module symbolp)
+  ; exported functions
+   (export fn-list-p :default nil)
+  ; imported functions
+   (import fn-mod-map :default nil)))
 
 ; Erlang code is divided into modules. A module consists of a sequence of 
 ; attributes and function declarations
 (fty::defprod module
-  ((attr attr-list-p :default nil)
+  ((attrs attrs-p)
    (fn-defns fn-map-p)))
 
 ; World is a map from module name to module

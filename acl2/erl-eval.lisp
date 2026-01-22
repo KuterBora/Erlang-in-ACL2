@@ -23,7 +23,8 @@
   (b* ((k (erl-k-fix k))
        (fuel (erl-k->fuel k))
        (k (erl-k->kont k))
-       ((if (zp fuel)) (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit))))
+       ((if (zp fuel)) 
+        (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit))))
        (s (erl-state-fix s))
        (s.in (erl-state->in s))
        (s.bind (erl-state->bind s))
@@ -60,7 +61,10 @@
           (:var
             (if (omap::assoc x.id s.bind)
                 (make-erl-s-klst :s (update-erl-state->in s (omap::lookup x.id s.bind)))
-                (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-reject :err "unbound variable")))))
+                (make-erl-s-klst 
+                  :s (update-erl-state->in 
+                       s
+                       (make-erl-val-reject :err "unbound variable")))))
           (:unop
             (make-erl-s-klst
               :s (update-erl-state->in s (make-erl-val-none))
@@ -89,8 +93,9 @@
                  ((if (null body))
                   (make-erl-s-klst
                     :s (make-erl-state 
-                        :in (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error)
-                                                                   :reason (make-exit-reason-if-clause)))))))
+                        :in (make-erl-val-excpt 
+                              :err (make-erl-err :class (make-err-class-error)
+                                                 :reason (make-exit-reason-if-clause)))))))
                 (make-erl-s-klst
                   :s (update-erl-state->in s (make-erl-val-none))
                   :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
@@ -131,16 +136,20 @@
         (if (equal (erl-val-kind s.in) :cons)
             (if (omap::compatiblep s.bind k.car-bind)
                 (make-erl-s-klst 
-                  :s (update-erl-state->in-and-bind 
+                  :s (update-erl-state->in-bind 
                         s 
                         (make-erl-val-cons :lst (cons k.car-val (erl-val-cons->lst s.in)))
                         (omap::update* s.bind k.car-bind)))
                 (make-erl-s-klst
                   :s (update-erl-state->in
                        s
-                       (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                              :reason (make-exit-reason-badmatch :val s.in))))))
-            (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-reject :err "cons-merge expects list, pairs are not supported")))))
+                       (make-erl-val-excpt 
+                        :err (make-erl-err :class (make-err-class-error) 
+                                           :reason (make-exit-reason-badmatch :val s.in))))))
+            (make-erl-s-klst 
+              :s (update-erl-state->in 
+                   s 
+                   (make-erl-val-reject :err "cons-merge expects list, pairs are not supported")))))
       
       ; Evaluate the rest of the tuple, save the previous element in a continuation. 
       (:tuple
@@ -155,15 +164,20 @@
         (if (equal (erl-val-kind s.in) :tuple)
             (if (omap::compatiblep s.bind k.t-bind)
                 (make-erl-s-klst 
-                  :s (update-erl-state->in-and-bind 
+                  :s (update-erl-state->in-bind 
                         s
                         (make-erl-val-tuple :lst (cons k.t-hd (erl-val-tuple->lst s.in)))
                         (omap::update* s.bind k.t-bind)))
                 (make-erl-s-klst
                   :s (update-erl-state->in 
-                       s (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                                :reason (make-exit-reason-badmatch :val s.in))))))
-            (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-reject :err "tuple-merge expects tuple")))))
+                       s 
+                       (make-erl-val-excpt 
+                        :err (make-erl-err :class (make-err-class-error) 
+                                           :reason (make-exit-reason-badmatch :val s.in))))))
+            (make-erl-s-klst 
+              :s (update-erl-state->in 
+                   s 
+                   (make-erl-val-reject :err "tuple-merge expects tuple")))))
 
       ; Apply unop to the evalutaed operand.
       (:unop (make-erl-s-klst :s (update-erl-state->in s (apply-erl-unop k.op s.in))))
@@ -181,28 +195,31 @@
       (:binop-expr2
         (if (omap::compatiblep s.bind k.left-bind)
             (make-erl-s-klst 
-              :s (update-erl-state->in-and-bind
+              :s (update-erl-state->in-bind
                    s
                    (apply-erl-binop k.op k.val s.in)
                    (omap::update* s.bind k.left-bind)))
                 (make-erl-s-klst
                   :s (update-erl-state->in
                       s 
-                      (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                             :reason (make-exit-reason-badmatch :val s.in)))))))
+                      (make-erl-val-excpt 
+                        :err (make-erl-err :class (make-err-class-error) 
+                                           :reason (make-exit-reason-badmatch :val s.in)))))))
       
       ; Once rhs is evaluated, match it to lhs
       (:match
         (b* (((mv match-result match-bind) (eval-match k.lhs s.in s.bind))
              
              ((if (and (equal (erl-val-kind match-result) :excpt)
-                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err match-result))) :badmatch)))
+                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err match-result))) 
+                              :badmatch)))
               (make-erl-s-klst
                 :s (update-erl-state->in
                     s 
-                    (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error) 
-                                                           :reason (make-exit-reason-badmatch :val s.in)))))))
-            (make-erl-s-klst :s (update-erl-state->in-and-bind s match-result match-bind))))
+                    (make-erl-val-excpt 
+                      :err (make-erl-err :class (make-err-class-error) 
+                                         :reason (make-exit-reason-badmatch :val s.in)))))))
+            (make-erl-s-klst :s (update-erl-state->in-bind s match-result match-bind))))
       
       ; Once the expression is evaluated, invoke the clause-evaluator.
       (:case-of
@@ -213,8 +230,9 @@
               (make-erl-s-klst
                 :s (update-erl-state->in
                     s
-                    (make-erl-val-excpt :err (make-erl-err :class (make-err-class-error)
-                                                           :reason (make-exit-reason-case-clause :val s.in)))))))
+                    (make-erl-val-excpt 
+                      :err (make-erl-err :class (make-err-class-error)
+                                         :reason (make-exit-reason-case-clause :val s.in)))))))
             (make-erl-s-klst
               :s (update-erl-state->bind s b)
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
