@@ -1,0 +1,6 @@
+# ignore files generated during make and book certification
+*.cert
+*.port
+*.lx64fsl
+*.cert.out
+Makefile-tmp
