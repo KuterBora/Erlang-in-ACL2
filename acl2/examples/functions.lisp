@@ -6,7 +6,7 @@
 
 (make-node-call :fn 'is_integer :args '((:integer 1)))
 (make-node-call 
-  :fn 'element 
+  :fn 'element
   :args '((:integer 2) (:tuple ((:atom one) (:atom two) (:atom three)))))
 
 (assert-equal
@@ -36,23 +36,178 @@
 
 ; Simple Local Function --------------------------------------------------------
 
+; Example function: adder(X, Y) -> X + Y.
+'((name . adder) (arity . 2))
 
+; body of adder
+'(((cases (:var X) (:var Y))
+   (guards)
+   (body (:binop + (:var X) (:var Y)))))
+
+; Attrs with adder
+'((module . shell)
+ (export ((name . adder) (arity . 2)))
+ (import))
+
+
+; function map with adder
+'((((name . adder) (arity . 2))
+  ((cases (:var X) (:var Y))
+   (guards)
+   (body (:binop + (:var X) (:var Y))))))
+
+; module with adder
+'((attrs (module . shell)
+         (export ((name . adder) (arity . 2)))
+         (import))
+  (fn-defns 
+    (((name . adder) (arity . 2))
+      ((cases (:var X) (:var Y))
+       (guards)
+       (body (:binop + (:var X) (:var Y)))))))
+
+; Example World
+'((shell 
+  (attrs (module . shell)
+        (export ((name . adder) (arity . 2)))
+        (import))
+  (fn-defns 
+    (((name . adder) (arity . 2))
+      ((cases (:var X) (:var Y))
+      (guards)
+      (body (:binop + (:var X) (:var Y))))))))
 
 
 ; Simple Remote Function -------------------------------------------------------
+
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world 
+        '((shell 
+            (attrs (module . shell)
+                  (export)
+                  (import))
+            (fn-defns 
+              (((name . adder) (arity . 2))
+                ((cases (:var X) (:var Y))
+                 (guards)
+                 (body (:binop + (:var X) (:var Y)))))))))
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:call adder
+                            ((:integer 2)
+                             (:integer 2)))))))
+  (make-erl-state 
+    :in '(:integer 4)
+    :world 
+        '((shell 
+            (attrs (module . shell)
+                  (export)
+                  (import))
+            (fn-defns 
+              (((name . adder) (arity . 2))
+                ((cases (:var X) (:var Y))
+                (guards)
+                (body (:binop + (:var X) (:var Y))))))))))
+
+
 ; Recursive Local Function -----------------------------------------------------
 ; Recursive Remote Function ----------------------------------------------------
 
 
+; Example function: 
+;  sum(0) -> 0;
+;  sum(X) -> X + sum(X - 1).
+;
+'((name . sum) (arity . 1))
+
+; body of sum
+'(((cases (:integer 0))
+   (guards)
+   (body (:integer 0)))
+  ((cases (:var X))
+   (guards)
+   (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1))))))))
+
+; Attrs with sum
+'((module . shell)
+  (export)
+  (import))
+
+; function map with sum
+'((((name . sum) (arity . 1))
+   ((cases (:integer 0))
+    (guards)
+    (body (:integer 0)))
+   ((cases (:var X))
+    (guards)
+    (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1)))))))))
+
+; module with adder
+'((attrs (module . shell)
+         (export)
+         (import))
+  (fn-defns 
+    (((name . sum) (arity . 1))
+     ((cases (:integer 0))
+      (guards)
+      (body (:integer 0)))
+     ((cases (:var X))
+      (guards)
+      (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1))))))))))
+
+; Example World
+'((shell 
+  (attrs (module . shell)
+         (export)
+         (import))
+  (fn-defns 
+    (((name . sum) (arity . 1))
+     ((cases (:integer 0))
+      (guards)
+      (body (:integer 0)))
+     ((cases (:var X))
+      (guards)
+      (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1)))))))))))
+
+
 (assert-equal
   (apply-k 
-    (make-erl-state)
-    (list 
-      (make-erl-k 
-        :fuel 10000 
-        :kont (make-kont-exprs
-                :exprs '((:match (:var X) (:integer 3))
-                         (:match (:var Y) (:binop + (:var X) (:integer 2)))
-                         (:binop * (:var Y) (:var X)))))))
-  (make-erl-state :in '(:integer 15) 
-                  :bind '((X :integer 3) (Y :integer 5))))
+    (make-erl-state
+      :world 
+        '((shell 
+            (attrs (module . shell)
+                  (export)
+                  (import))
+            (fn-defns 
+              (((name . sum) (arity . 1))
+              ((cases (:integer 0))
+                (guards)
+                (body (:integer 0)))
+              ((cases (:var X))
+                (guards)
+                (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1))))))))))))
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:call sum
+                            ((:integer 5)))))))
+  (make-erl-state 
+    :in '(:integer 4)
+    :world 
+        '((shell 
+            (attrs (module . shell)
+                  (export)
+                  (import))
+            (fn-defns 
+              (((name . sum) (arity . 1))
+              ((cases (:integer 0))
+                (guards)
+                (body (:integer 0)))
+              ((cases (:var X))
+                (guards)
+                (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1)))))))))))))
