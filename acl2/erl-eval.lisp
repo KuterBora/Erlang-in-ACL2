@@ -1,7 +1,6 @@
 (in-package "ACL2")
 (include-book "termination")
-(include-book "eval-clauses")
-(include-book "erl-state")
+(include-book "eval-calls")
 
 (set-induction-depth-limit 1)
 
@@ -28,8 +27,7 @@
        (s (erl-state-fix s))
        (s.in (erl-state->in s))
        (s.bind (erl-state->bind s))
-       ; (s.world (erl-state->world s))
-       )
+       (s.module (erl-state->module s)))
     (kont-case k
       ; Evaluate an expression.
       (:expr (let ((x k.expr))
@@ -107,21 +105,28 @@
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.expr))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-case-of :clauses x.clauses)))))
 
-          ; if x is remote call
-          ; - invoke the remote call evaluator, which will then invoke the clause evaluator
-          ; - set the module and the imports
-          ; - set a continuation for the function body
-          ; - set a continuation for the return from the call
+          ; if x is remote call, first evaluate the arguments and then handle the call
           (:remote-call 
-            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-atom :val 'todo)
-                                                :bind s.bind)))
-          ; if x is a local call
-          ; - invoke the call evaluator, which will then invoke the clause evaluator
-          ; - set a continuation for the function body
-          ; - set a continuation for the return from the call
-          (:call 
-            (make-erl-s-klst :s (make-erl-state :in (make-erl-val-atom :val 'todo)
-                                                :bind s.bind))))))
+            (make-erl-s-klst 
+              :s (update-erl-state->in s (make-erl-val-none))
+              :klst
+                (list (make-erl-k 
+                        :fuel (1- fuel) 
+                        :kont (make-kont-function-args-start :args x.args))
+                      (make-erl-k
+                        :fuel (1- fuel)
+                        :kont (make-kont-remote-call :module x.module :call x.fn)))))
+          ; if x is a local call, first evaluate the arguments and then handle the call
+          (:call
+            (make-erl-s-klst 
+              :s (update-erl-state->in s (make-erl-val-none))
+              :klst
+                (list (make-erl-k 
+                        :fuel (1- fuel) 
+                        :kont (make-kont-function-args-start :args x.args))
+                      (make-erl-k
+                        :fuel (1- fuel)
+                        :kont (make-kont-local-call :call x.fn))))))))
       
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
@@ -245,7 +250,96 @@
             (make-erl-s-klst 
               :s s 
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car k.exprs)))
-                          (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr k.exprs))))))))))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr k.exprs)))))))
+      
+      ; Start evaluating function arguments. If there are no arguments, return empty list.
+      (:function-args-start 
+        (if (null k.args)
+            (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-cons :lst nil)))
+            (make-erl-s-klst 
+              :s (update-erl-state->in s (make-erl-val-none))
+              :klst (list (make-erl-k 
+                            :fuel (1- fuel) 
+                            :kont (make-kont-expr :expr (car k.args)))
+                          (make-erl-k
+                            :fuel (1- fuel) 
+                            :kont (make-kont-function-args :done nil :rest (cdr k.args)))))))
+                       
+      ; If all arguments are evaluated, return the list of argument values.
+      ; Otherwise, evaluate the next argument.
+      ; - To return the argument values in an erl-state, wrap them in an erl-val-cons
+      (:function-args
+        (if (null k.rest)
+            (make-erl-s-klst 
+              :s (update-erl-state->in s (make-erl-val-cons :lst (cons s.in k.done))))
+            (make-erl-s-klst 
+              :s (update-erl-state->in s (make-erl-val-none))
+              :klst (list (make-erl-k 
+                            :fuel (1- fuel) 
+                            :kont (make-kont-expr :expr (car k.rest)))
+                          (make-erl-k 
+                            :fuel (1- fuel) 
+                            :kont (make-kont-function-args 
+                                    :done (cons s.in k.done)
+                                    :rest (cdr k.rest)))))))
+      
+      ; Call a local function after the arguments have been evaluated
+      (:local-call
+        (b* (((if (not (equal (erl-val-kind s.in) :cons)))
+              (make-erl-s-klst 
+                :s (update-erl-state->in 
+                     s
+                     (make-erl-val-reject :err "Local call: invalid arg list."))))
+             ; Obtain the args from the state. They are reversed because they are
+             ; evaluated in order and accumulated with cons.
+             (args (rev (erl-val-cons->lst s.in)))
+             ((mv rs body) 
+              (eval-local-call
+                (update-erl-state->in s (make-erl-val-none))
+                k.call 
+                args))
+             ; if the body is nil, return the value produced by call evaluation.
+             ((if (null body)) (make-erl-s-klst :s rs)))
+            ; Otherwise, continue with the function body
+            (make-erl-s-klst
+              :s (update-erl-state->in rs (make-erl-val-none))
+              :klst (list (make-erl-k 
+                            :fuel (1- fuel)
+                            :kont (make-kont-exprs :exprs body))
+                          (make-erl-k
+                            :fuel (1- fuel) 
+                            :kont (make-kont-function-return :bind s.bind :module s.module))))))
+      
+      ; Call a remote function after the arguments have been evaluated
+      (:remote-call
+        (b* (((if (not (equal (erl-val-kind s.in) :cons)))
+              (make-erl-s-klst 
+                :s (update-erl-state->in 
+                     s
+                     (make-erl-val-reject :err "Remote call: invalid arg list."))))
+             ; Obtain the args from the state. They are reversed because they are
+             ; evaluated in order and accumulated with cons.
+             (args (rev (erl-val-cons->lst s.in)))
+             ((mv rs body) 
+              (eval-remote-call
+                (update-erl-state->in s (make-erl-val-none))
+                k.module
+                k.call
+                args))
+             ; if the body is nil, return the value produced by call evaluation.
+             ((if (null body)) (make-erl-s-klst :s rs)))
+            ; Otherwise, continue with the function body
+            (make-erl-s-klst
+              :s (update-erl-state->in rs (make-erl-val-none))
+              :klst (list (make-erl-k 
+                            :fuel (1- fuel)
+                            :kont (make-kont-exprs :exprs body))
+                          (make-erl-k
+                            :fuel (1- fuel) 
+                            :kont (make-kont-function-return :bind s.bind :module s.module))))))
+
+      ; Once a call returns, return to the correct module and scope
+      (:function-return (make-erl-s-klst :s (update-erl-state->bind-mod s k.bind k.module))))))
 
 
 ; calls to eval-k either return a tuple of two contunuations, or an empty list

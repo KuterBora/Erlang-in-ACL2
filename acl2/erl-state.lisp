@@ -12,8 +12,8 @@
 (fty::defprod erl-state
   ((in erl-val-p :default (make-erl-val-none))
    (bind bind-p :default nil)
-   (world world-p :default nil)
-   (module symbolp)))
+   (world world-p :default (omap::from-lists '(SHELL) (list (make-module))))
+   (module symbolp :default 'SHELL)))
 
 ; Each step of the evaluator returns an erl-s-klst where
 ; - s is an erl-state that is the result of evaulation.
@@ -59,6 +59,16 @@
        (mod (symbol-fix mod)))
       (make-erl-state :in (erl-state->in s)
                       :bind (erl-state->bind s)
+                      :world (erl-state->world s)
+                      :module mod)))
+
+(define update-erl-state->bind-mod ((s erl-state-p) (bind bind-p) (mod symbolp))
+  :returns (rs erl-state-p)
+  (b* ((s (erl-state-fix s))
+       (bind (bind-fix bind))
+       (mod (symbol-fix mod)))
+      (make-erl-state :in (erl-state->in s)
+                      :bind bind
                       :world (erl-state->world s)
                       :module mod)))
 

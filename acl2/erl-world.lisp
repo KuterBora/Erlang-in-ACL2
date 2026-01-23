@@ -44,7 +44,7 @@
 ; Module attributes. Currently, only the following three are supported.
 (fty::defprod attrs
   ; name of the module
-  ((module symbolp)
+  ((module symbolp :default 'SHELL)
   ; exported functions
    (export fn-list-p :default nil)
   ; imported functions
@@ -53,8 +53,8 @@
 ; Erlang code is divided into modules. A module consists of a sequence of 
 ; attributes and function declarations
 (fty::defprod module
-  ((attrs attrs-p)
-   (fn-defns fn-map-p)))
+  ((attrs attrs-p :default (make-attrs))
+   (fn-defns fn-map-p :default nil)))
 
 ; World is a map from module name to module
 (fty::defomap world
@@ -144,7 +144,7 @@
                      (<= n (len (erl-val-tuple->lst (cadr args))))))
                 (make-erl-val-excpt 
                   :err (make-erl-err :class (make-err-class-error)
-                                     :reason (make-exit-reason-badarg)))))
+                                     :reason (make-exit-reason-badarg) ))))
               (nth (1- n) (erl-val-tuple->lst (cadr args)))))
         ((equal fn (make-fn :name 'hd :arity 1))
          (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
