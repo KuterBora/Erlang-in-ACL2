@@ -9,41 +9,61 @@
 (set-well-founded-relation l<)
 
 ; Term comparison operations
-; Does not include term equivalence/non-equivalence
-(define comp-binop-p ((x symbolp))
-  (b* ((x (symbol-fix x)))
-      (not (null (member x '(== /= =< < >= >))))))
+; =:= is represented as =-colon-=
+(fty::defsubtype comp-binop
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (not (null (member x '(== /= =< < >= > =-colon-= =/=)))))
+  :fix-value '==)
 
 ; Arithmetic binary operations
-; Does not include / or the bitwise operations
-(define arithm-binop-p ((x symbolp))
-  (b* ((x (symbol-fix x)))
-      (not (null (member x '(+ - * div))))))
+(fty::defsubtype arithm-binop
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (not (null (member x '(+ - * / div rem band bor bxor bsl bsr)))))
+  :fix-value '+)
 
 ; Arithmetic unary operations
-(define arithm-unop-p ((x symbolp))
-  (b* ((x (symbol-fix x)))
-      (not (null (member x '(+ -))))))
+(fty::defsubtype arithm-unop
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (not (null (member x '(+ -)))))
+  :fix-value '+)
 
 ; Binary boolean operations
-(define bool-binop-p ((x symbolp))
-  (b* ((x (symbol-fix x)))
-      (not (null (member x '(and or xor))))))
+(fty::defsubtype bool-binop
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (not (null (member x '(and or xor)))))
+  :fix-value 'and)
 
 ; Unary boolean operations
-(define bool-unop-p ((x symbolp))
-  (b* ((x (symbol-fix x)))
-      (not (member x '(not)))))
+(fty::defsubtype bool-unop
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (not (null (member x '(not)))))
+  :fix-value 'not)
 
 ; Short-circuit operations
-(define short-circ-op-p ((x symbolp))
-  (b* ((x (symbol-fix x)))
-      (not (member x '(orelse andalso)))))
+(fty::defsubtype short-circ-op
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (not (null (member x '(orelse andalso)))))
+  :fix-value 'andalso)
 
 ; List operations
-(define list-op-p ((x symbolp))
-  (b* ((x (symbol-fix x)))
-      (not (member x '(++ --)))))
+(fty::defsubtype list-op
+  :supertype symbolp
+  :restriction 
+    (lambda (x) 
+      (not (null (member x '(++ --)))))
+  :fix-value '++)
 
 ; Erlang binary operators
 (fty::defsubtype erl-binop
@@ -66,18 +86,6 @@
           (bool-unop-p x)))
   :fix-value '+)
 
-; Erlang binary arithmetic operators
-(fty::defsubtype erl-numeric-binop
-  :supertype erl-binop-p
-  :restriction (lambda (x) (arithm-binop-p x))
-  :fix-value '+)
-
-; Erlang unary arithmetic operators
-(fty::defsubtype erl-numeric-unop
-  :supertype erl-unop-p
-  :restriction (lambda (x) (arithm-unop-p x))
-  :fix-value '+)
-
 ; Node represents an Erlang AST without the restrictions of patterns and guards.
 (fty::deftypes node
   (fty::deftagsum node
@@ -96,16 +104,23 @@
     (:match ((lhs node-p) (rhs node-p)))
     (:if ((clauses node-clause-list)))
     (:case-of ((expr node-p) (clauses node-clause-list)))
-    :measure (list (acl2-count x) 1))
+    (:remote-call ((module symbolp) (fn symbolp) (args node-list-p)))
+    (:call ((fn symbolp) (args node-list-p)))
+    :measure (list (acl2-count x) 3))
 
   (fty::deflist node-list
     :elt-type node-p
+    :true-listp t
+    :measure (list (acl2-count x) 1))
+  
+  (fty::deflist node-lists
+    :elt-type node-list
     :true-listp t
     :measure (list (acl2-count x) 0))
   
   (fty::defprod node-clause
     ((cases node-list-p :default nil)
-     (guards node-list-p :default nil)
+     (guards node-lists-p :default nil)
      (body node-list-p :default nil))
     :measure (list (acl2-count x) 2))
 
@@ -133,14 +148,16 @@
          (:cons nil)
          (:tuple nil)
          (:var nil)
-         (:unop (and (erl-numeric-unop-p (node-unop->op x))
+         (:unop (and (arithm-unop-p (node-unop->op x))
                      (arithm-expr-p (node-unop->expr x))))
-         (:binop (and (erl-numeric-binop-p (node-binop->op x))
+         (:binop (and (arithm-binop-p (node-binop->op x))
                       (arithm-expr-p (node-binop->left x))
                       (arithm-expr-p (node-binop->right x))))
          (:match nil)
          (:if nil)
-         (:case-of nil))))
+         (:case-of nil)
+         (:remote-call nil)
+         (:call nil))))
 
 ; Erlang Pattern ---------------------------------------------------------------
 
@@ -173,7 +190,9 @@
                 (:match (and (pattern-p (node-match->lhs x))
                              (pattern-p (node-match->rhs x))))
                 (:if nil)
-                (:case-of nil)))))
+                (:case-of nil)
+                (:remote-call nil)
+                (:call nil)))))
   (define pattern-list-p ((x acl2::any-p))
     :returns (ok booleanp)
     :measure (node-list-count x)
@@ -217,7 +236,9 @@
                        (guard-expr-p (node-binop->right x))))
           (:match nil)
           (:if nil)
-          (:case-of nil))))
+          (:case-of nil)
+          (:remote-call nil)
+          (:call (guard-expr-list-p (node-call->args x))))))
 
   ; List of Erlang Expressions
   (define guard-expr-list-p ((x acl2::any-p))
@@ -227,10 +248,23 @@
       (if (consp x)
           (and (guard-expr-p (car x)) (guard-expr-list-p (cdr x)))
           (null x)))
+  
+  ; List of Lists of Erlang Guards
+  (define guard-expr-lists-p ((x acl2::any-p))
+      :returns (ok booleanp)
+      :measure (node-lists-count x)
+      :flag guard-expr-lists
+      (if (consp x)
+          (and (guard-expr-list-p (car x)) (guard-expr-lists-p (cdr x)))
+          (null x)))
     
     ///
     (std::deflist guard-expr-list-p (x)
         (guard-expr-p x)
+        :already-definedp t
+        :true-listp t)
+    (std::deflist guard-expr-lists-p (x)
+        (guard-expr-list-p x)
         :already-definedp t
         :true-listp t))
 
@@ -263,7 +297,9 @@
           (:if (erl-clause-list-p (node-if->clauses x)))
           (:case-of 
             (and (expr-p (node-case-of->expr x))
-                 (erl-clause-list-p (node-case-of->clauses x)))))))
+                 (erl-clause-list-p (node-case-of->clauses x))))
+          (:remote-call (expr-list-p (node-remote-call->args x)))
+          (:call (expr-list-p (node-call->args x))))))
 
   ; List of Erlang Expressions
   (define expr-list-p ((x acl2::any-p))
@@ -281,7 +317,7 @@
     :flag clause
     (and (node-clause-p x) 
          (pattern-list-p (node-clause->cases x))
-         (guard-expr-list-p (node-clause->guards x))
+         (guard-expr-lists-p (node-clause->guards x))
          (expr-list-p (node-clause->body x))))
 
   ; List of Clauses
@@ -301,7 +337,6 @@
         (erl-clause-p x)
         :already-definedp t
         :true-listp t))
-
 
 ; Theorems ---------------------------------------------------------------------
 
@@ -350,6 +385,10 @@
   (defthm guard-expr-list-is-subtype-of-expr-list
     (implies (guard-expr-list-p x) (expr-list-p x))
     :flag guard-expr-list)
+  ; List of Guard list is a subtype of Node
+  (defthm guard-expr-lists-is-subtype-of-node-lists
+    (implies (guard-expr-lists-p x) (node-lists-p x))
+    :flag guard-expr-lists)
   ; Guard Expression is a subtype of Expression
   (defthm guard-expr-is-subtype-of-expr
     (implies (guard-expr-p x) (expr-p x))
@@ -467,6 +506,11 @@
   :elt-type guard-expr-p
   :true-listp t
   :pred guard-expr-list-p)
+
+(fty::deflist guard-expr-lists
+  :elt-type guard-expr-list-p
+  :true-listp t
+  :pred guard-expr-lists-p)
 
 ; Erlang Expression
 (fty::deffixtype expr

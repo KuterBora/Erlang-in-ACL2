@@ -2,9 +2,10 @@
 (include-book "erl-ast")
 (include-book "erl-value")
 
+(set-induction-depth-limit 1)
+
 ; Continuations ----------------------------------------------------------------
 
-(set-induction-depth-limit 1)
 (set-well-founded-relation l<)
 
 ; Types of continuations that describe the next step of evaluation.
@@ -52,8 +53,23 @@
     ; Continue after the rhs of the match has been evaluated.
     (:match ((lhs pattern-p)))
 
-    ; Continue after the expr of the case had been evaluated.
-    (:case-of ((clauses erl-clause-list-p))))
+    ; Continue after the expression of the case had been evaluated.
+    ; The expression would be `X` in `case X of ... end`
+    (:case-of ((clauses erl-clause-list-p)))
+    
+    ; List of function arguments to be evaluated
+    (:function-args-start ((args expr-list-p)))
+
+    ; Continue function argument evaluation. Each argument in rest needs to be
+    ; evaluated and moved to done.
+    (:function-args ((done erl-vlst-p) (rest expr-list-p)))
+
+    ; Continue after argument evaluation is finished by calling the function.
+    (:local-call ((call symbolp)))
+    (:remote-call ((module symbolp) (call symbolp)))
+
+    ; Continue after the function returns.
+    (:function-return ((bind bind-p) (module symbolp))))
 
 ; A continutaion that is paired with a fuel that limits how many times
 ; the continuation can expand during evaluation.

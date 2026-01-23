@@ -22,8 +22,8 @@
                 (equal (node-kind (pattern-fix p)) :cons)
                 (equal (erl-val-kind val) :cons)
                 (erl-val-cons->lst val))
-         (< (node-count (node-cons->hd (pattern-fix p)))
-            (node-count p)))
+           (< (node-count (node-cons->hd (pattern-fix p)))
+              (node-count p)))
   :enable pattern-fix))
 
 (local (defrule node-count-of-pattern-tuple-car
@@ -33,8 +33,8 @@
               (equal (erl-val-kind val) :tuple)
               (erl-val-tuple->lst val)
               (node-tuple->lst (pattern-fix p)))
-         (< (node-count (car (node-tuple->lst (pattern-fix p))))
-            (node-count p)))
+            (< (node-count (car (node-tuple->lst (pattern-fix p))))
+               (node-count p)))
   :enable pattern-fix))
 
 (local (defrule node-count-of-pattern-tuple-cdr
@@ -44,28 +44,58 @@
                 (equal (erl-val-kind val) :tuple)
                 (node-tuple->lst (pattern-fix p))
                 (erl-val-tuple->lst val))
-          (< (node-count (node-tuple (cdr (node-tuple->lst (pattern-fix p)))))
+           (< (node-count (node-tuple (cdr (node-tuple->lst (pattern-fix p)))))
               (node-count p)))
   :enable (pattern-fix node-count node-list-count)))
 
 (local (defrule node-count-of-pattern-match->lhs
   (implies (and (not (arithm-expr-p (pattern-fix p)))
                 (equal (node-kind (pattern-fix p)) :match))
-          (< (node-count (node-match->lhs (pattern-fix p)))
-             (node-count p)))
+           (< (node-count (node-match->lhs (pattern-fix p)))
+              (node-count p)))
   :enable pattern-fix))
 
 (local (defrule node-count-of-pattern-match->rhs
   (implies (and (not (arithm-expr-p (pattern-fix p)))
                 (equal (node-kind (pattern-fix p)) :match))
-          (< (node-count (node-match->rhs (pattern-fix p)))
-             (node-count p)))
+           (< (node-count (node-match->rhs (pattern-fix p)))
+              (node-count p)))
   :enable pattern-fix))
 
 
 ; Evaluate Erlang Pattern Matching ---------------------------------------------
 
-; TODO: figure out the correct error messages
+; Erlang reference manual explains: In pattern matching, a left-hand side pattern 
+; is matched against a right-hand side term. If the matching succeeds, any unbound 
+; variables in the pattern become bound. If the matching fails, an exception 
+; is raised.
+;
+; Supported patterns:
+; - Any valid Erlang term,
+; - Bound or unbound variables, including the wildcard '_'
+; - Pattern1 = Pattern2
+; - Arithmetic Expressions
+;
+; An arithmetic expressions can be used in patterns if:
+; - It uses only numeric or bitwise operators.
+; - Its value can be evaluated to a constant when complied.
+; which is implemented by the type arithm-expr. 
+;
+; Patterns allowed by Erlang that are not supported:
+; - String Prefix in Patterns, for example: "hello " ++ X = "hello world".
+;
+; Implementation:
+; - If there is an arithmetic expression, evaluate it and then 
+;   check if the result is equal to the right-hand side value. The arithmetic
+;   expression should have been evaluated at compile time, so the AST will be
+;   rejected if there is an exception raised.
+; - If the pattern is a term or bound variable, check if it is equal
+;   to the right-hand side value. Lists and tuples are checked element by element.
+; - If there is an unbound variable, bind the variable to the right-hand side 
+;   value. Ignore this step if the variable is a wildcard, '_'. 
+; - If sucessful, return the right-hand side value and the new bindings,
+;   otherwise a badmatch exception.
+;
 (define eval-match ((p pattern-p) (val erl-val-p) (bind bind-p))
   :returns (mv (v erl-val-p) (b bind-p))
   :measure (node-count p)
@@ -82,7 +112,7 @@
                       :err (make-erl-err :class (make-err-class-error) 
                                          :reason (make-exit-reason-badmatch :val val)))
                     nil)))
-              (mv val bind))
+              (mv val bind)) 
           (node-case p
             (:integer
               (if (and (equal (erl-val-kind val) :integer) 
@@ -92,10 +122,10 @@
                         :err (make-erl-err :class (make-err-class-error) 
                                            :reason (make-exit-reason-badmatch :val val)))
                       nil)))
-            ; TODO: lists and strings can be matched
             (:string
-              (if (and (equal (erl-val-kind val) :string) 
-                       (equal p.val (erl-val-string->val val)))
+              (if (and (equal (erl-val-kind val) :cons) 
+                       (equal (string=>erl-cons p.val)
+                              (erl-val-cons->lst val)))
                   (mv val bind)
                   (mv (make-erl-val-excpt 
                         :err (make-erl-err :class (make-err-class-error) 
@@ -117,7 +147,6 @@
                         :err (make-erl-err :class (make-err-class-error) 
                                            :reason (make-exit-reason-badmatch :val val)))
                       nil)))
-            ; TODO: lists and strings can be matched
             (:cons
               (b* (((unless (equal (erl-val-kind val) :cons))
                     (mv (make-erl-val-excpt 
@@ -186,7 +215,6 @@
                   (mv val bind)))
             (:unop 
               (mv (make-erl-val-reject :err "Illegal pattern.") nil))
-            ; TODO: String concat should be allowed.
             (:binop
               (mv (make-erl-val-reject :err "Illegal pattern.") nil))
             (:match 
@@ -208,18 +236,22 @@
             (:if
               (mv (make-erl-val-reject :err "Illegal pattern.") nil))
             (:case-of
+              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
+            (:remote-call
+              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
+            (:call
               (mv (make-erl-val-reject :err "Illegal pattern.") nil)))))
     /// 
       (verify-guards eval-match)
       (more-returns
         (v (or (equal (erl-val-kind v) :reject)
                (equal (erl-val-kind v) :excpt)
-              (equal (erl-val-kind v)
-                     (erl-val-kind val)))
-          :name erl-val-kind-of-eval-match->in)))
+               (equal (erl-val-kind v) (erl-val-kind val)))
+          :name erl-val-kind-of-eval-match)))
 
-
-; Match each pattern to the corresponding argument, accumulate the bindings
+; Match each pattern to the corresponding argument, accumulate the bindings.
+; - When callfed by 'if' or 'case-of' clauses, this is simply a wrapper 
+;   around eval-match
 (define match-args ((ps pattern-list-p) (vs erl-vlst-p) (bind bind-p))
   :returns (mv (v erl-val-p) (b bind-p))
   :measure (len (pattern-list-fix ps))
