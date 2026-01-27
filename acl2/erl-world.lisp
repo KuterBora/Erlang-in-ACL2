@@ -44,7 +44,7 @@
 ; Module attributes. Currently, only the following three are supported.
 (fty::defprod attrs
   ; name of the module
-  ((module symbolp :default 'SHELL)
+  ((module symbolp :default 'local)
   ; exported functions
    (export fn-list-p :default nil)
   ; imported functions

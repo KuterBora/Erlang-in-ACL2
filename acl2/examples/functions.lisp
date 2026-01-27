@@ -34,48 +34,106 @@
   (make-erl-state :in '(:atom two)))
 
 
-; Simple Local Function --------------------------------------------------------
+; Example World ---------------------------------------------------------------
 
-; Example function: adder(X, Y) -> X + Y.
+; add(X, Y) -> X + Y.
 '((name . adder) (arity . 2))
 
-; body of adder
+; Clauses of add(X, Y)
 '(((cases (:var X) (:var Y))
    (guards)
    (body (:binop + (:var X) (:var Y)))))
 
-; Attrs with adder
-'((module . shell)
- (export ((name . adder) (arity . 2)))
- (import))
+; sum(0) -> 0;
+; sum(X) when is_integer(X), X > 0 -> X + sum(X - 1).
+'((name . sum) (arity . 1))
 
-
-; function map with adder
-'((((name . adder) (arity . 2))
-  ((cases (:var X) (:var Y))
+; Clauses of sum(X)
+'(((cases (:integer 0))
    (guards)
-   (body (:binop + (:var X) (:var Y))))))
+   (body (:integer 0)))
+  ((cases (:var X))
+   (guards ((:call is_integer ((:var X))) (:binop > (:var X) (:integer 0))))
+   (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1))))))))
 
-; module with adder
-'((attrs (module . shell)
-         (export ((name . adder) (arity . 2)))
-         (import))
-  (fn-defns 
-    (((name . adder) (arity . 2))
-      ((cases (:var X) (:var Y))
-       (guards)
-       (body (:binop + (:var X) (:var Y)))))))
+; add*([]) -> 0;
+; add*([Hd | Tl]) when is_integer(Hd) ->
+;   Rest = add*(Tl),
+;   add(Hd, Rest).
+'((name . add) (arity . 1))
+
+; Clauses of add*([Hd | Tl])
+'(((cases (:nil))
+   (guards)
+   (body (:integer 0)))
+  ((cases (:cons (:var Hd) (:var Tl)))
+   (guards ((:call is_integer ((:var Hd)))))
+   (body (:match (:var Rest) (:call add* ((:var Tl))))
+         (:call add ((:var Hd) (:var Rest))))))
 
 ; Example World
-'((shell 
-  (attrs (module . shell)
-        (export ((name . adder) (arity . 2)))
-        (import))
-  (fn-defns 
-    (((name . adder) (arity . 2))
-      ((cases (:var X) (:var Y))
-      (guards)
-      (body (:binop + (:var X) (:var Y))))))))
+(local
+  (define test-world ()
+    :returns (w world-p)
+    '((arithm-1
+        (attrs (module . arithm-1)
+               (export ((name . add) (arity . 2))
+                       ((name . sum) (arity . 1)))
+               (import (((name . bogus-fn1) (arity . 0)) . local)
+                       (((name . bogus-fn2) (arity . 0)) . bad-mod)))
+        (fn-defns
+          (((name . add) (arity . 2))
+           ((cases (:var X) (:var Y))
+            (guards)
+            (body (:binop + (:var X) (:var Y)))))
+          (((name . sum) (arity . 1))
+           ((cases (:integer 0))
+             (guards)
+             (body (:integer 0)))
+           ((cases (:var X))
+            (guards ((:call is_integer ((:var X))) 
+                     (:binop > (:var X) (:integer 0))))
+            (body (:binop 
+                    + 
+                    (:var X) 
+                    (:call sum ((:binop - (:var X) (:integer 1))))))))))
+      (arithm-2
+        (attrs (module . arithm-2)
+               (export ((name . add*) (arity . 1)))
+               (import (((name . add) (arity . 2)) . arithm-1)))
+        (fn-defns
+          (((name . add*) (arity . 1))
+           ((cases (:nil))
+             (guards)
+             (body (:integer 0)))
+           ((cases (:cons (:var Hd) (:var Tl)))
+            (guards ((:call is_integer ((:var Hd)))))
+            (body (:match (:var Rest) (:call add* ((:var Tl))))
+                  (:call add ((:var Hd) (:var Rest))))))))
+      (local
+        (attrs (module . local)
+               (export)
+               (import))
+        (fn-defns)))))
+
+; Simple Local Function --------------------------------------------------------
+
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world)
+      :module 'arithm-1)
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:call add
+                            ((:integer 2)
+                             (:integer 2)))))))
+  (make-erl-state 
+    :in '(:integer 4)
+    :world (test-world)
+    :module 'arithm-1))
 
 
 ; Simple Remote Function -------------------------------------------------------
@@ -83,131 +141,182 @@
 (assert-equal
   (apply-k 
     (make-erl-state
-      :world 
-        '((shell 
-            (attrs (module . shell)
-                  (export)
-                  (import))
-            (fn-defns 
-              (((name . adder) (arity . 2))
-                ((cases (:var X) (:var Y))
-                 (guards)
-                 (body (:binop + (:var X) (:var Y)))))))))
+      :world (test-world))
     (list
       (make-erl-k
       :fuel 10000 
       :kont (make-kont-expr
-              :expr '(:call adder
-                            ((:integer 2)
-                             (:integer 2)))))))
+              :expr '(:remote-call 
+                       arithm-1
+                       add
+                       ((:integer 2)
+                        (:integer 2)))))))
   (make-erl-state 
     :in '(:integer 4)
-    :world 
-        '((shell 
-            (attrs (module . shell)
-                  (export)
-                  (import))
-            (fn-defns 
-              (((name . adder) (arity . 2))
-                ((cases (:var X) (:var Y))
-                (guards)
-                (body (:binop + (:var X) (:var Y))))))))))
+    :world (test-world)))
 
 
 ; Recursive Local Function -----------------------------------------------------
-; Recursive Remote Function ----------------------------------------------------
-
-
-; Example function: 
-;  sum(0) -> 0;
-;  sum(X) -> X + sum(X - 1).
-;
-'((name . sum) (arity . 1))
-
-; body of sum
-'(((cases (:integer 0))
-   (guards)
-   (body (:integer 0)))
-  ((cases (:var X))
-   (guards)
-   (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1))))))))
-
-; Attrs with sum
-'((module . shell)
-  (export)
-  (import))
-
-; function map with sum
-'((((name . sum) (arity . 1))
-   ((cases (:integer 0))
-    (guards)
-    (body (:integer 0)))
-   ((cases (:var X))
-    (guards)
-    (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1)))))))))
-
-; module with adder
-'((attrs (module . shell)
-         (export)
-         (import))
-  (fn-defns 
-    (((name . sum) (arity . 1))
-     ((cases (:integer 0))
-      (guards)
-      (body (:integer 0)))
-     ((cases (:var X))
-      (guards)
-      (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1))))))))))
-
-; Example World
-'((shell 
-  (attrs (module . shell)
-         (export)
-         (import))
-  (fn-defns 
-    (((name . sum) (arity . 1))
-     ((cases (:integer 0))
-      (guards)
-      (body (:integer 0)))
-     ((cases (:var X))
-      (guards)
-      (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1)))))))))))
-
 
 (assert-equal
   (apply-k 
     (make-erl-state
-      :world 
-        '((shell 
-            (attrs (module . shell)
-                  (export)
-                  (import))
-            (fn-defns 
-              (((name . sum) (arity . 1))
-              ((cases (:integer 0))
-                (guards)
-                (body (:integer 0)))
-              ((cases (:var X))
-                (guards)
-                (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1))))))))))))
+      :world (test-world)
+      :module 'arithm-1)
     (list
       (make-erl-k
       :fuel 10000 
       :kont (make-kont-expr
-              :expr '(:call sum
-                            ((:integer 5)))))))
+              :expr '(:call sum ((:integer 2)))))))
+  (make-erl-state
+    :in '(:integer 3)
+    :world (test-world)
+    :module 'arithm-1))
+
+
+; Recursive Remote Function ----------------------------------------------------
+
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world))
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:remote-call arithm-1 sum ((:integer 5)))))))
   (make-erl-state 
-    :in '(:integer 4)
-    :world 
-        '((shell 
-            (attrs (module . shell)
-                  (export)
-                  (import))
-            (fn-defns 
-              (((name . sum) (arity . 1))
-              ((cases (:integer 0))
-                (guards)
-                (body (:integer 0)))
-              ((cases (:var X))
-                (guards)
-                (body (:binop + (:var X) (:call sum ((:binop - (:var X) (:integer 1)))))))))))))
+    :in '(:integer 15)
+    :world (test-world)))
+
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world))
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont 
+        (make-kont-expr
+          :expr 
+            '(:remote-call 
+               arithm-2 
+               add* 
+               ((:cons 
+                  (:integer 3)
+                  (:cons (:integer 6)
+                         (:cons (:integer 9)
+                                (:nil))))))))))
+  (make-erl-state 
+    :in '(:integer 18)
+    :world (test-world)))
+
+
+; Exceptions -------------------------------------------------------------------
+
+; function_clause (local)
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world)
+      :module 'arithm-1)
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:call sum ((:integer -1)))))))
+  (make-erl-state 
+    :in 
+      '(:excpt ((class :error) (reason :function-clause) (stack)))
+    :world (test-world)
+    :module 'arithm-1))
+
+; function_clause (remote)
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world))
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:remote-call arithm-1 sum ((:integer -1)))))))
+  (make-erl-state 
+    :in '(:excpt ((class :error) (reason :function-clause) (stack)))
+    :world (test-world)))
+
+; undef (undefined imported module)
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world)
+      :module 'arithm-1)
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:call bogus-fn1 nil)))))
+  (make-erl-state 
+    :in 
+      '(:excpt 
+        ((class :error) 
+         (reason :undef) 
+         (stack local bogus-fn1 0)))
+    :world (test-world)
+    :module 'arithm-1))
+
+; undef (undefined imported function)
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world)
+      :module 'arithm-1)
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:call bogus-fn2 nil)))))
+  (make-erl-state 
+    :in 
+      '(:excpt 
+        ((class :error) 
+         (reason :undef) 
+         (stack bad-mod bogus-fn2 0)))
+    :world (test-world)
+    :module 'arithm-1))
+
+; undef (remote call to undefined module)
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world))
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:remote-call crock crock nil)))))
+  (make-erl-state 
+    :in 
+      '(:excpt 
+        ((class :error) 
+         (reason :undef) 
+         (stack crock crock 0)))
+    :world (test-world)))
+
+; undef (remote call to undefined function)
+(assert-equal
+  (apply-k 
+    (make-erl-state
+      :world (test-world))
+    (list
+      (make-erl-k
+      :fuel 10000 
+      :kont (make-kont-expr
+              :expr '(:remote-call arithm-1 crock nil)))))
+  (make-erl-state 
+    :in 
+      '(:excpt 
+        ((class :error) 
+         (reason :undef) 
+         (stack arithm-1 crock 0)))
+    :world (test-world)))

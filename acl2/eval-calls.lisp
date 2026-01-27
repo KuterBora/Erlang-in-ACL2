@@ -7,18 +7,15 @@
 
 ; Evaluate Local Function Calls ------------------------------------------------
 
-; TODO: UPDATE desc
-;  verify guards
-
 ; Evaluate a 'local' function call. This means the call was made to a function
 ; declared within or imported to the current module. Find the corresponding 
 ; function, its macthing clause, and return the function body. Otherwise, return
 ; function_clause exception.
 ;
-; - rs: is used to return exceptions and rejections, in which case body is set 
-;   to nil.
-; - body: will be set the matching function clause if there is one, and if there
-;   is no rejection.
+; - rs: is used to return exceptions, rejections, and BIF results, in which case 
+;   body is set to nil.
+; - body: will be set to the body of the matching function clause if there is one,
+;   and if there is no rejection.
 ;
 ; Order of function lookup:
 ; - First, the local definitions are checked. It is assumed that there should
@@ -26,7 +23,7 @@
 ; - If not found locally, then the imported functions are checked for a 
 ;   match. If there is one, then the module of the imported function is 
 ;   checked -- wheter it has the said function and also exports it. It is
-;   assumed that there are no duplicate imports, or defintions for imports.
+;   assumed that there are no duplicate imports or defintions.
 ; - If there is still no match, it is checked whether the function is a BIF.
 ;   It is also assumed that no definitions or imports conflict with BIFs.
 ; - Else, function_clause exception is returned.
@@ -38,6 +35,12 @@
 ;    guaranteed to include the Module, Function and Arity of the attempted
 ;    function as the first stacktrace entry.
 ;
+;    However, experiments show that local calls to undefined calls are discovered
+;    during compilation. This means, for undefined function x,
+;    - When x is defined locally, call to x() will return a rejection.
+;    - If x is imported, call to x() will return an undef exception. This is 
+;      also true if the module x was imported from is undefined.  
+;  
 (define eval-local-call ((s erl-state-p) (call symbolp) (args erl-vlst-p))
   :returns (mv (rs erl-state-p) (body expr-list-p))
   (b* ; Fix the arguments
@@ -50,18 +53,27 @@
        (s.world (erl-state->world s))
        (arity (len args))
        (fn (make-fn :name call :arity arity))
-       (undef 
+       
+       ; Rejection to throw when the function is not defined and would have
+       ; caused a compile error.
+       (reject 
         (update-erl-state->in 
           s 
-          (make-erl-val-excpt 
-            :err
-              (make-erl-err
-                :class (make-err-class-error)
-                :reason (make-exit-reason-undef)
-                :stack (list s.module call arity)))))
+          (make-erl-val-reject :err "eval-local-call: function is not defined.")))
+
+       ; Exception to throw when a function is defined but there 
+       ; are no matching clauses 
+       (function-clause 
+         (update-erl-state->in 
+           s 
+           (make-erl-val-excpt 
+             :err
+               (make-erl-err
+                 :class (make-err-class-error)
+                 :reason (make-exit-reason-function-clause)))))
 
        ; The module must exist.
-       ((unless (omap::assoc s.module s.world)) (mv undef nil))
+       ((unless (omap::assoc s.module s.world)) (mv reject nil))
        
        ; Obtain the module
        (module (omap::lookup s.module s.world))
@@ -79,31 +91,33 @@
                nil))
              ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
              ((if (null body)) 
-              (mv (update-erl-state->in
-                    s
-                    (make-erl-val-excpt 
-                      :err 
-                        (make-erl-err :class (make-err-class-error)
-                                      :reason (make-exit-reason-function-clause))))
-                  nil)))
+              (mv function-clause nil)))
             (mv (update-erl-state->in-bind s v b) body)))
       
        ; Check the module's imports for the function
        ((if (omap::assoc fn imports))
         (b* ((imod-name (omap::lookup fn imports))
+             
+             ; Exception to throw when the function is not defined and would not ahve
+             ; caused a compile error.
+             (undef
+               (update-erl-state->in 
+                 s 
+                 (make-erl-val-excpt 
+                   :err
+                     (make-erl-err
+                       :class (make-err-class-error)
+                       :reason (make-exit-reason-undef)
+                       :stack (list imod-name call arity)))))
+
              ((unless (omap::assoc imod-name s.world))
-              (mv
-                (update-erl-state->in
-                  s
-                  (make-erl-val-reject 
-                    :err "eval-local-call: Ill-formed module imports."))
-                 nil))
+              (mv undef nil))
              (imod (omap::lookup imod-name s.world))
              (idefns (module->fn-defns imod))
              (iattrs (module->attrs imod))
              (exports (attrs->export iattrs))
 
-             ; The function must have been exported
+             ; If the function was not exported, throw an undef error
              ((unless (member fn exports :test 'equal)) (mv undef nil))
             
              ; If the function was exported, the Erlang compiler
@@ -124,32 +138,37 @@
                 nil))
               ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
               ((if (null body)) 
-               (mv (update-erl-state->in
-                    s
-                    (make-erl-val-excpt 
-                      :err 
-                        (make-erl-err :class (make-err-class-error)
-                                      :reason (make-exit-reason-function-clause))))
-                   nil)))
+               (mv function-clause nil)))
             (mv (update-erl-state->in-bind-mod s v b imod-name) body)))
 
        ; Check if the function is a BIF
        ((if (erl-bif-p fn)) (mv (update-erl-state->in s (eval-bif fn args)) nil)))
-    (mv undef nil)))
+    (mv reject nil)))
 
 
 ; Evaluate Remote Function Calls -----------------------------------------------
 
-; TODO:
-; - defintion
-; - guards
+; Evaluate a 'remote' function call. This means the call was made to a function
+; declared outisde current module. Find the corresponding function, its macthing 
+; clause, and return the function body. Otherwise, return function_clause exception.
 ;
-; When a function M:F/N is called, first the module M is located in the World.
-; If the call is local, the module key is set to 'LOCAL' -- module names in Erlang
-; are atoms which use lowercase letter only, so this name should be unique among
-; valid modules.
-; 
-
+; - rs: is used to return exceptions and rejections, in which case body is set 
+;   to nil.
+; - body: will be set to the body of the matching function clause if there is one,
+;   and if there is no rejection.
+;
+; Implementation:
+; - First, check that the module exists and has the function in its definitions
+;   and also exports it.
+; - Evaluate the function clauses with the args. 
+;
+; Remark: 
+;  - The Erlang reference manual states that the exception stack is
+;    only for debugging purposes and has no guarantees. The only exception 
+;    to this rule is the class 'error' with the reason 'undef' which is 
+;    guaranteed to include the Module, Function and Arity of the attempted
+;    function as the first stacktrace entry.
+;
 (define eval-remote-call ((s erl-state-p) (module symbolp) (call symbolp) (args erl-vlst-p))
   :returns (mv (rs erl-state-p) (body expr-list-p))
   (b* ; Fix the arguments
@@ -161,15 +180,29 @@
        (s.world (erl-state->world s))
        (arity (len args))
        (fn (make-fn :name call :arity arity))
-       (undef 
-        (update-erl-state->in 
-          s 
-          (make-erl-val-excpt 
-            :err
-              (make-erl-err
-                :class (make-err-class-error)
-                :reason (make-exit-reason-undef)
-                :stack (list module call arity)))))
+       
+       ; Exception to throw when the function is not defined and would not ahve
+       ; caused a compile error.
+       (undef
+         (update-erl-state->in 
+           s 
+           (make-erl-val-excpt 
+             :err
+               (make-erl-err
+                 :class (make-err-class-error)
+                 :reason (make-exit-reason-undef)
+                 :stack (list module call arity)))))
+       
+       ; Exception to throw when a function is defined but there 
+       ; are no matching clauses 
+       (function-clause 
+         (update-erl-state->in 
+           s 
+           (make-erl-val-excpt 
+             :err
+               (make-erl-err
+                 :class (make-err-class-error)
+                 :reason (make-exit-reason-function-clause)))))
 
        ; The module must exist.
        ((unless (omap::assoc module s.world)) (mv undef nil))
@@ -191,12 +224,6 @@
                nil))
              ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
              ((if (null body)) 
-              (mv (update-erl-state->in
-                    s
-                    (make-erl-val-excpt 
-                      :err 
-                        (make-erl-err :class (make-err-class-error)
-                                      :reason (make-exit-reason-function-clause))))
-                  nil)))
+              (mv function-clause nil)))
             (mv (update-erl-state->in-bind-mod s v b module) body))))
     (mv undef nil)))

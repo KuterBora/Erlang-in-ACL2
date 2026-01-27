@@ -16,7 +16,6 @@
 ;   set the same variable to different values. These variables are called
 ;   'unsafe' and should not allowed.
 ;
-;
 (define eval-k ((k erl-k-p) (s erl-state-p))
   :returns (ks erl-s-klst-p)
   (b* ((k (erl-k-fix k))
