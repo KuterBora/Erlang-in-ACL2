@@ -35,6 +35,7 @@
       (:string (make-erl-val-reject :err "Numeric expressions cannot have strings."))
       (:atom (make-erl-val-reject :err "Numeric expressions cannot have atoms."))
       (:nil (make-erl-val-reject :err "Numeric expressions cannot have lists."))
+      (:fun (make-erl-val-reject :err "Numeric expressions cannot have funs."))
       (:cons (make-erl-val-reject :err "Numeric expressions cannot have lists."))
       (:tuple (make-erl-val-reject :err "Numeric expressions cannot have tuples."))
       (:var (make-erl-val-reject :err "Numeric expressions cannot have variables."))
@@ -61,8 +62,9 @@
       (:match (make-erl-val-reject :err "Numeric expressions cannot have match."))
       (:if (make-erl-val-reject :err "Numeric expressions cannot have if clauses."))
       (:case-of (make-erl-val-reject :err "Numeric expressions cannot have case clauses."))
-      (:remote-call (make-erl-val-reject :err "Numeric expressions cannot have case calls."))
-      (:call (make-erl-val-reject :err "Numeric expressions cannot have case calls."))))
+      (:remote-call (make-erl-val-reject :err "Numeric expressions cannot have remote calls."))
+      (:call (make-erl-val-reject :err "Numeric expressions cannot have local calls."))
+      (:fun-call (make-erl-val-reject :err "Numeric expressions cannot have fun calls."))))
 
   ///
     (verify-guards eval-numeric)

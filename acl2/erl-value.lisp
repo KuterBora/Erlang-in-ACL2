@@ -1,12 +1,13 @@
 (in-package "ACL2")
-(include-book "centaur/fty/top" :DIR :SYSTEM)
+(include-book "erl-ast")
 (include-book "kestrel/fty/defsubtype" :DIR :SYSTEM)
 (include-book "kestrel/utilities/strings/strings-codes" :dir :system)
 
 (set-induction-depth-limit 1)
-(set-well-founded-relation l<)
 
 ; Erlang Values and Exceptions -------------------------------------------------
+
+(set-well-founded-relation l<)
 
 ; Exceptions are run-time errors or generated errors and are of three different 
 ; classes, with different origins.
@@ -22,7 +23,7 @@
 ; Remarks:
 ; - Strings are represented as lists of integer
 ; - Pairs are not supported
-; - TODO: pid and fun
+; - TODO: pid
 (fty::deftypes erl-val
   
   ; Erlang Values
@@ -32,6 +33,9 @@
     (:atom ((val symbolp)))
     (:cons ((lst erl-vlst-p)))
     (:tuple ((lst erl-vlst-p)))
+    (:fun ((name symbolp) 
+           (cls erl-clause-list-p)
+           (bind bind-p)))
     (:excpt ((err erl-err-p)))
 
     ; Internal return values
@@ -71,12 +75,13 @@
     (:noconnection ())
     (:nocatch ((val erl-val-p)))
     (:system-limit ())
+    :measure (list (acl2-count x) 0))
+  
+  ; Reprsentation of Erlang bindings. Maps each variable to a value.
+  (fty::defomap bind
+    :key-type symbol
+    :val-type erl-val
     :measure (list (acl2-count x) 0)))
-
-; Reprsentation of Erlang bindings. Maps each variable to a value.
-(fty::defomap bind
-  :key-type symbol
-  :val-type erl-val)
 
 
 ; Utility Functions/Structures -------------------------------------------------

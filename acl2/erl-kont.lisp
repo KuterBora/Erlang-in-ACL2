@@ -56,7 +56,7 @@
     ; Continue after the expression of the case had been evaluated.
     ; The expression would be `X` in `case X of ... end`
     (:case-of ((clauses erl-clause-list-p)))
-    
+
     ; List of function arguments to be evaluated
     (:function-args-start ((args expr-list-p)))
 

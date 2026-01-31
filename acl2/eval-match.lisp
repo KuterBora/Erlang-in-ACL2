@@ -147,6 +147,8 @@
                         :err (make-erl-err :class (make-err-class-error) 
                                            :reason (make-exit-reason-badmatch :val val)))
                       nil)))
+            (:fun
+              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
             (:cons
               (b* (((unless (equal (erl-val-kind val) :cons))
                     (mv (make-erl-val-excpt 
@@ -240,6 +242,8 @@
             (:remote-call
               (mv (make-erl-val-reject :err "Illegal pattern.") nil))
             (:call
+              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
+            (:fun-call
               (mv (make-erl-val-reject :err "Illegal pattern.") nil)))))
     /// 
       (verify-guards eval-match)

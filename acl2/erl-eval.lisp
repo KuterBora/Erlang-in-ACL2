@@ -105,7 +105,7 @@
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-case-of :clauses x.clauses)))))
 
           ; if x is remote call, first evaluate the arguments and then handle the call
-          (:remote-call 
+          (:remote-call
             (make-erl-s-klst 
               :s (update-erl-state->in s (make-erl-val-none))
               :klst

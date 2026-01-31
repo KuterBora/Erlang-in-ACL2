@@ -227,3 +227,8 @@
               (mv function-clause nil)))
             (mv (update-erl-state->in-bind-mod s v b module) body))))
     (mv undef nil)))
+
+
+; Evaluate Anonymous Function Calls --------------------------------------------
+
+; TODO
