@@ -34,8 +34,10 @@
     (:cons ((lst erl-vlst-p)))
     (:tuple ((lst erl-vlst-p)))
     (:fun ((name symbolp) 
+           (arity natp)
            (cls erl-clause-list-p)
-           (bind bind-p)))
+           (bind bind-p)
+           (module symbolp)))
     (:excpt ((err erl-err-p)))
 
     ; Internal return values
@@ -86,7 +88,7 @@
 
 ; Utility Functions/Structures -------------------------------------------------
 
-; TODO: Another subtype could be erl-numberp
+; TODO: Another subtype could be erl-number-p
 
 ; Erlang boolean, defined for utility reasons only
 (fty::defsubtype erl-boolean
@@ -131,6 +133,19 @@
     (more-returns
       (v (equal (erl-val-kind v) :cons)
       :name erl-val-kind-of-string=>erl-cons)))
+
+; Obtain the arity from a clause-list
+; Return nil if all clauses do not have the same arity, or if x is nil
+(define erl-clause-list->arity ((x erl-clause-list-p))
+  :measure (len x)
+  (b* ((x (erl-clause-list-fix x))
+       ((if (null x)) nil)
+       (arity (len (node-clause->cases (car x))))
+       ((if (null (cdr x))) arity)
+       (rest (erl-clause-list->arity (cdr x)))
+       ((if (null rest)) nil)
+       ((unless (equal rest arity)) nil))
+      arity))
 
 ; Erlang Equivalence -----------------------------------------------------------
 

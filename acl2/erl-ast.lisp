@@ -106,8 +106,8 @@
     (:if ((clauses node-clause-list)))
     (:case-of ((expr node-p) (clauses node-clause-list)))
     (:remote-call ((module symbolp) (fn symbolp) (args node-list-p)))
-    (:call ((fn symbolp) (args node-list-p)))
     (:fun-call ((fun node-p) (args node-list-p)))
+    (:call ((fn symbolp) (args node-list-p)))
     :measure (list (acl2-count x) 3))
 
   (fty::deflist node-list

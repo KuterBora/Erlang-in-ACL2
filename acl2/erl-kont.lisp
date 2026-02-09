@@ -67,6 +67,11 @@
     ; Continue after argument evaluation is finished by calling the function.
     (:local-call ((call symbolp)))
     (:remote-call ((module symbolp) (call symbolp)))
+    
+    ; When there is a call to an anonymous function, first evaluate the fun expression,
+    ; then the arguments, and finally the clauses.
+    (:fun-call-args ((args expr-list-p)))
+    (:fun-call ((fun erl-val-p)))
 
     ; Continue after the function returns.
     (:function-return ((bind bind-p) (module symbolp))))

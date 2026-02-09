@@ -137,8 +137,7 @@
                 (omap::lookup fn idefns)
                 nil))
               ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
-              ((if (null body)) 
-               (mv function-clause nil)))
+              ((if (null body)) (mv function-clause nil)))
             (mv (update-erl-state->in-bind-mod s v b imod-name) body)))
 
        ; Check if the function is a BIF
@@ -223,8 +222,7 @@
                (omap::lookup fn fn-defns)
                nil))
              ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
-             ((if (null body)) 
-              (mv function-clause nil)))
+             ((if (null body)) (mv function-clause nil)))
             (mv (update-erl-state->in-bind-mod s v b module) body))))
     (mv undef nil)))
 
@@ -232,3 +230,65 @@
 ; Evaluate Anonymous Function Calls --------------------------------------------
 
 ; TODO
+
+(define eval-fun-call ((s erl-state-p) (fun erl-val-p) (args erl-vlst-p))
+  :returns (mv (rs erl-state-p) (body expr-list-p))
+  (b* ; Fix the arguments
+      ((s (erl-state-fix s))
+       (fun (erl-val-fix fun))
+       (args (erl-vlst-fix args))
+       (arity (len args))
+
+       ((if (not (equal (erl-val-kind s.in) :fun)))
+        (mv 
+          (update-erl-state->in 
+            s 
+            (make-erl-val-excpt 
+                      :err (make-erl-err :class (make-err-class-error)
+                                         :reason (make-exit-reason-badfun :val fun))))
+          nil))
+        
+        ((if (not (equal (erl-val-fun->arity fun) arity)))
+          (mv 
+            (update-erl-state->in 
+              s 
+              (make-erl-val-excpt 
+                        :err (make-erl-err :class (make-err-class-error)
+                                          :reason (make-exit-reason-badarity :val fun))))
+            nil))
+
+
+       
+       ; Exception to throw when the fun is well-formed but there 
+       ; are no matching clauses 
+       (function-clause 
+         (update-erl-state->in 
+           s 
+           (make-erl-val-excpt 
+             :err
+               (make-erl-err
+                 :class (make-err-class-error)
+                 :reason (make-exit-reason-function-clause)))))
+
+      ((mv v b body) (eval-clauses args (erl-val-fun->cls fun) nil))
+      ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
+      ((if (null body)) (mv function-clause nil))
+
+      ; Remark: Badmatch exception are supposed to return the value that failed to 
+      ; match. This is currently not supported. Instead, return the whole fun.
+      ((unless (omap::compatiblep b (erl-val-fun->bind fun))) 
+       (mv  
+        (update-erl-state->in 
+           s 
+           (make-erl-val-excpt 
+             :err
+               (make-erl-err
+                 :class (make-err-class-error)
+                 :reason (make-exit-reason-badmatch :val fun))))
+        nil)))
+    (mv 
+      (update-erl-state->in-bind-mod 
+        s 
+        v 
+        (omap::update (erl-val-fun->bind fun) b)
+        (erl-val-fun->module fun)))))

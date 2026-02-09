@@ -36,6 +36,26 @@
           (:atom    (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-atom :val x.val))))
           (:string  (make-erl-s-klst :s (update-erl-state->in s (string=>erl-cons x.val))))
           (:nil     (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-cons :lst nil))))
+          ; if x is a fun, create an anonymous function with a unique name
+          ; - The unique name is necessariy for comparison operations, i.e. two anonymous 
+          ;   functions with the same clauses but different names are not equal
+          (:fun
+            (b* ((arity (erl-clause-list->arity x.cls))
+                 ((if (null arity))
+                  (make-erl-s-klst
+                    (update-erl-state->in 
+                      s 
+                      (make-erl-val-reject :err "erl-eval: ill-formed fun clauses"))))
+                 (name (acl2::new-symbol 'fun (omap::keys s.bind))))
+                (make-erl-s-klst
+                  :s (update-erl-state->in 
+                        s
+                        (make-erl-val-fun
+                          :name name
+                          :arity arity
+                          :cls x.cls
+                          :bind s.bind
+                          :module s.module)))))
           ; if x is a list, evaluate car and save cdr in a continuation.
           (:cons 
             (make-erl-s-klst
@@ -115,6 +135,18 @@
                       (make-erl-k
                         :fuel (1- fuel)
                         :kont (make-kont-remote-call :module x.module :call x.fn)))))
+          
+          ; if x is a fun call, first evaluate the fun expr and then arguments
+          (:fun-call
+            (make-erl-s-klst 
+              :s (update-erl-state->in s (make-erl-val-none))
+              :klst
+                (list (make-erl-k
+                        :fuel (1- fuel)
+                        :kont (make-kont-expr :expr x.fun))
+                      (make-erl-k
+                        :fuel (1- fuel) 
+                        :kont (make-fun-call-args :args x.args)))))
           ; if x is a local call, first evaluate the arguments and then handle the call
           (:call
             (make-erl-s-klst 
@@ -336,6 +368,50 @@
                           (make-erl-k
                             :fuel (1- fuel) 
                             :kont (make-kont-function-return :bind s.bind :module s.module))))))
+      
+      ; Evalute the arguments to an anonymous call after the fun expression has been evaluated.
+      (:fun-call-args
+        (b* (((if (not (equal (erl-val-kiind s.in) :fun)))
+              (make-erl-s-klst
+                :s (update-erl-state->in
+                  s
+                  (make-erl-val-excpt 
+                      :err (make-erl-err :class (make-err-class-error)
+                                         :reason (make-exit-reason-badfun :val s.in)))))))
+            (make-erl-s-klst 
+              :s (update-erl-state->in s (make-erl-val-none))
+              :klst
+                (list (make-erl-k 
+                        :fuel (1- fuel) 
+                        :kont (make-kont-function-args-start :args k.args))
+                      (make-erl-k
+                        :fuel (1- fuel)
+                        :kont (make-kont-fun-call :fun s.in))))))
+      
+      ; Call an anonymous function after the arguments have been evaluated
+      (:remote-call
+        (b* (((if (not (equal (erl-val-kind s.in) :cons)))
+              (make-erl-s-klst 
+                :s (update-erl-state->in 
+                     s
+                     (make-erl-val-reject :err "Fun call: invalid arg list."))))
+             ; Obtain the args from the state. They are reversed because they are
+             ; evaluated in order and accumulated with cons.
+             (args (rev (erl-val-cons->lst s.in)))
+             ((mv rs body) 
+              (eval-fun-call (update-erl-state->in s (make-erl-val-none)) k.fun args))
+             ; if the body is nil, return the value produced by call evaluation.
+             ((if (null body)) (make-erl-s-klst :s rs)))
+            ; Otherwise, continue with the function body
+            (make-erl-s-klst
+              :s (update-erl-state->in rs (make-erl-val-none))
+              :klst (list (make-erl-k 
+                            :fuel (1- fuel)
+                            :kont (make-kont-exprs :exprs body))
+                          (make-erl-k
+                            :fuel (1- fuel) 
+                            :kont (make-kont-function-return :bind s.bind :module s.module))))))
+
 
       ; Once a call returns, return to the correct module and scope
       (:function-return (make-erl-s-klst :s (update-erl-state->bind-mod s k.bind k.module))))))
