@@ -71,7 +71,7 @@
     (:try-clause ((val erl-val-p)))
     (:undef ())
     (:badfun ((fun erl-val-p)))
-    (:bad-arity ((fun erl-val-p) (args erl-vlst-p)))
+    (:badarity ((fun erl-val-p) (args erl-vlst-p)))
     (:timeout-value ())
     (:noproc ())
     (:noconnection ())

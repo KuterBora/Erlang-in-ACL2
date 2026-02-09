@@ -239,13 +239,13 @@
        (args (erl-vlst-fix args))
        (arity (len args))
 
-       ((if (not (equal (erl-val-kind s.in) :fun)))
+       ((if (not (equal (erl-val-kind fun) :fun)))
         (mv 
           (update-erl-state->in 
             s 
             (make-erl-val-excpt 
                       :err (make-erl-err :class (make-err-class-error)
-                                         :reason (make-exit-reason-badfun :val fun))))
+                                         :reason (make-exit-reason-badfun :fun fun))))
           nil))
         
         ((if (not (equal (erl-val-fun->arity fun) arity)))
@@ -254,11 +254,9 @@
               s 
               (make-erl-val-excpt 
                         :err (make-erl-err :class (make-err-class-error)
-                                          :reason (make-exit-reason-badarity :val fun))))
+                                          :reason (make-exit-reason-badarity :fun fun))))
             nil))
 
-
-       
        ; Exception to throw when the fun is well-formed but there 
        ; are no matching clauses 
        (function-clause 
@@ -290,5 +288,6 @@
       (update-erl-state->in-bind-mod 
         s 
         v 
-        (omap::update (erl-val-fun->bind fun) b)
-        (erl-val-fun->module fun)))))
+        (omap::update* (erl-val-fun->bind fun) b)
+        (erl-val-fun->module fun))
+      body)))

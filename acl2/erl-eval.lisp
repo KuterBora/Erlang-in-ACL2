@@ -1,6 +1,7 @@
 (in-package "ACL2")
 (include-book "termination")
 (include-book "eval-calls")
+(include-book "clause-processors/generalize" :dir :system)
 
 (set-induction-depth-limit 1)
 
@@ -43,9 +44,9 @@
             (b* ((arity (erl-clause-list->arity x.cls))
                  ((if (null arity))
                   (make-erl-s-klst
-                    (update-erl-state->in 
-                      s 
-                      (make-erl-val-reject :err "erl-eval: ill-formed fun clauses"))))
+                    :s (update-erl-state->in
+                        s 
+                        (make-erl-val-reject :err "erl-eval: ill-formed fun clauses"))))
                  (name (acl2::new-symbol 'fun (omap::keys s.bind))))
                 (make-erl-s-klst
                   :s (update-erl-state->in 
@@ -146,7 +147,7 @@
                         :kont (make-kont-expr :expr x.fun))
                       (make-erl-k
                         :fuel (1- fuel) 
-                        :kont (make-fun-call-args :args x.args)))))
+                        :kont (make-kont-fun-call-args :args x.args)))))
           ; if x is a local call, first evaluate the arguments and then handle the call
           (:call
             (make-erl-s-klst 
@@ -371,13 +372,13 @@
       
       ; Evalute the arguments to an anonymous call after the fun expression has been evaluated.
       (:fun-call-args
-        (b* (((if (not (equal (erl-val-kiind s.in) :fun)))
+        (b* (((if (not (equal (erl-val-kind s.in) :fun)))
               (make-erl-s-klst
                 :s (update-erl-state->in
                   s
                   (make-erl-val-excpt 
                       :err (make-erl-err :class (make-err-class-error)
-                                         :reason (make-exit-reason-badfun :val s.in)))))))
+                                         :reason (make-exit-reason-badfun :fun s.in)))))))
             (make-erl-s-klst 
               :s (update-erl-state->in s (make-erl-val-none))
               :klst
@@ -389,7 +390,7 @@
                         :kont (make-kont-fun-call :fun s.in))))))
       
       ; Call an anonymous function after the arguments have been evaluated
-      (:remote-call
+      (:fun-call
         (b* (((if (not (equal (erl-val-kind s.in) :cons)))
               (make-erl-s-klst 
                 :s (update-erl-state->in 
