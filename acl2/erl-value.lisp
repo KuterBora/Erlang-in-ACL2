@@ -1,12 +1,13 @@
 (in-package "ACL2")
-(include-book "centaur/fty/top" :DIR :SYSTEM)
+(include-book "erl-ast")
 (include-book "kestrel/fty/defsubtype" :DIR :SYSTEM)
 (include-book "kestrel/utilities/strings/strings-codes" :dir :system)
 
 (set-induction-depth-limit 1)
-(set-well-founded-relation l<)
 
 ; Erlang Values and Exceptions -------------------------------------------------
+
+(set-well-founded-relation l<)
 
 ; Exceptions are run-time errors or generated errors and are of three different 
 ; classes, with different origins.
@@ -22,7 +23,7 @@
 ; Remarks:
 ; - Strings are represented as lists of integer
 ; - Pairs are not supported
-; - TODO: pid and fun
+; - TODO: pid
 (fty::deftypes erl-val
   
   ; Erlang Values
@@ -32,6 +33,11 @@
     (:atom ((val symbolp)))
     (:cons ((lst erl-vlst-p)))
     (:tuple ((lst erl-vlst-p)))
+    (:fun ((name symbolp) 
+           (arity natp)
+           (cls erl-clause-list-p)
+           (bind bind-p)
+           (module symbolp)))
     (:excpt ((err erl-err-p)))
 
     ; Internal return values
@@ -65,23 +71,24 @@
     (:try-clause ((val erl-val-p)))
     (:undef ())
     (:badfun ((fun erl-val-p)))
-    (:bad-arity ((fun erl-val-p) (args erl-vlst-p)))
+    (:badarity ((fun erl-val-p) (args erl-vlst-p)))
     (:timeout-value ())
     (:noproc ())
     (:noconnection ())
     (:nocatch ((val erl-val-p)))
     (:system-limit ())
+    :measure (list (acl2-count x) 0))
+  
+  ; Reprsentation of Erlang bindings. Maps each variable to a value.
+  (fty::defomap bind
+    :key-type symbol
+    :val-type erl-val
     :measure (list (acl2-count x) 0)))
-
-; Reprsentation of Erlang bindings. Maps each variable to a value.
-(fty::defomap bind
-  :key-type symbol
-  :val-type erl-val)
 
 
 ; Utility Functions/Structures -------------------------------------------------
 
-; TODO: Another subtype could be erl-numberp
+; TODO: Another subtype could be erl-number-p
 
 ; Erlang boolean, defined for utility reasons only
 (fty::defsubtype erl-boolean
@@ -127,6 +134,19 @@
       (v (equal (erl-val-kind v) :cons)
       :name erl-val-kind-of-string=>erl-cons)))
 
+; Obtain the arity from a clause-list
+; Return nil if all clauses do not have the same arity, or if x is nil
+(define erl-clause-list->arity ((x erl-clause-list-p))
+  :measure (len x)
+  (b* ((x (erl-clause-list-fix x))
+       ((if (null x)) nil)
+       (arity (len (node-clause->cases (car x))))
+       ((if (null (cdr x))) arity)
+       (rest (erl-clause-list->arity (cdr x)))
+       ((if (null rest)) nil)
+       ((unless (equal rest arity)) nil))
+      arity))
+
 ; Erlang Equivalence -----------------------------------------------------------
 
 ; Checks if two Erlang values are equivalent. If one of the values is a rejection,
@@ -171,3 +191,29 @@
   (implies (erl-val-p v)
            (not (erl-val-p (cons v x))))
   :expand ((erl-val-p v) (erl-val-p (cons v x))))
+
+; Some lemmas for symbol-listp-of-keys-of-bind-p
+(local (defrule set-p-of-keys-of-bind-p
+  (implies (bind-p b) (set::setp (omap::keys b)))))
+  
+(local (defrule symbolp-of-set-head
+  (implies (and (set::setp s) (symbol-listp s))
+            (symbolp (set::head s)))
+  :expand (set::head s)))
+
+(local (defrule symbol-listp-of-set-tail
+  (implies (and (set::setp s) (symbol-listp s))
+            (symbol-listp (set::tail s)))
+  :expand (set::tail s)))
+  
+(local (defrule symbol-listp-of-set-insert
+  (implies (and (set::setp s) (symbol-listp s) (symbolp x))
+            (symbol-listp (set::insert x s)))
+  :enable set::insert))
+
+; The keys of a bind-p are a symbol-listp
+(defrule symbol-listp-of-keys-of-bind-p
+  (implies (bind-p b)
+           (symbol-listp (omap::keys b)))
+  :expand (bind-p b)
+  :enable (omap::keys omap::head))

@@ -170,3 +170,16 @@
   (implies
     (and x (expr-list-p x))
     (consp x)))
+
+; Clauses of a fun expression are erl-clauses, and its expr is an expression
+(defrule expr-fun-ensures
+  (implies (and (expr-p x) (equal (node-kind x) :fun))
+           (erl-clause-list-p (node-fun->cls x)))
+  :enable expr-p)
+
+; Clauses of a fun expression are erl-clauses, and its expr is an expression
+(defrule expr-fun-call-ensures
+  (implies (and (expr-p x) (equal (node-kind x) :fun-call))
+           (and (expr-p (node-fun-call->fun x))
+                (expr-list-p (node-fun-call->args x))))
+  :enable expr-p)

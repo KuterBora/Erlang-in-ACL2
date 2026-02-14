@@ -113,6 +113,7 @@
         (:atom (make-erl-val-atom :val x.val))
         (:string (string=>erl-cons x.val))
         (:nil (make-erl-val-cons :lst nil))
+        (:fun (make-erl-val-reject :err "Guard expressions cannot have fun."))
         (:cons (b* ((hd (eval-guard-expr x.hd bind))
                     (tl (eval-guard-expr x.tl bind))
                     ((if (equal (erl-val-kind hd) :reject)) hd)
@@ -151,7 +152,8 @@
                 (make-erl-val-reject :err "Guard expressions can only have calls to BIFs."))
                (vlst (eval-guard-expr-list x.args bind))
                ((if (erl-val-p vlst)) vlst))
-              (eval-bif fn vlst))))))
+              (eval-bif fn vlst)))
+        (:fun-call (make-erl-val-reject :err "Guard expressions can only have calls to BIFs.")))))
   
   ; Evaluate each guard expression in the list, return the list of results.
   ; However, if any expression causes a rejecetion or exception, stop evaluation 

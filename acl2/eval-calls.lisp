@@ -137,8 +137,7 @@
                 (omap::lookup fn idefns)
                 nil))
               ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
-              ((if (null body)) 
-               (mv function-clause nil)))
+              ((if (null body)) (mv function-clause nil)))
             (mv (update-erl-state->in-bind-mod s v b imod-name) body)))
 
        ; Check if the function is a BIF
@@ -223,7 +222,99 @@
                (omap::lookup fn fn-defns)
                nil))
              ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
-             ((if (null body)) 
-              (mv function-clause nil)))
+             ((if (null body)) (mv function-clause nil)))
             (mv (update-erl-state->in-bind-mod s v b module) body))))
     (mv undef nil)))
+
+
+; Evaluate Anonymous Function Calls --------------------------------------------
+
+; Erlang reference manual defines anonymous functions, 'fun expressions', as:
+; 
+; - A fun expression begins with the keyword fun and ends with the keyword end. 
+;   Between them is to be a function declaration, similar to a regular function 
+;   declaration, except that the function name is optional and is to be a 
+;   variable, if any.
+;
+; - Variables in a fun head shadow the function name and both shadow variables in
+;   the function clause surrounding the fun expression. Variables bound in a fun
+;   body are local to the fun body.
+;
+; - The return value of the expression is the resulting fun.
+;
+; Implementation:
+; - Any call that is not a local or remote call must be a function call. So, as a 
+;   precondition, it assumed that any function that has an expression to be called
+;   that is not an Atom or {remote, Atom} where Atom is a symbol, has been parsed as
+;   a (:fun-call Expr Args) when converted to ACL2. This makes the control flow a
+;   bit easier to follow.
+; - If the Expr to be called does not evaluate to a fun expression, then the badfun 
+;   exception is thrown.
+; - Otherwise, this is treated as a local call. If the fun was defined in a module, 
+;   it will be treated as local call within that module, i.e. it will have access to 
+;   the functions in that module.
+;
+; Not Supported:
+; - Named funs are currently not supported. However, adding them should be trivial
+; - funs of the form 'fun Module:Name/Arity" are not currently supported.
+
+(define eval-fun-call ((s erl-state-p) (fun erl-val-p) (args erl-vlst-p))
+  :returns (mv (rs erl-state-p) (body expr-list-p))
+  (b* ; Fix the arguments
+      ((s (erl-state-fix s))
+       (fun (erl-val-fix fun))
+       (args (erl-vlst-fix args))
+       (arity (len args))
+
+       ((if (not (equal (erl-val-kind fun) :fun)))
+        (mv 
+          (update-erl-state->in 
+            s 
+            (make-erl-val-excpt 
+                      :err (make-erl-err :class (make-err-class-error)
+                                         :reason (make-exit-reason-badfun :fun fun))))
+          nil))
+        
+        ((if (not (equal (erl-val-fun->arity fun) arity)))
+          (mv 
+            (update-erl-state->in 
+              s 
+              (make-erl-val-excpt 
+                        :err (make-erl-err :class (make-err-class-error)
+                                          :reason (make-exit-reason-badarity :fun fun))))
+            nil))
+
+       ; Exception to throw when the fun is well-formed but there 
+       ; are no matching clauses 
+       (function-clause 
+         (update-erl-state->in 
+           s 
+           (make-erl-val-excpt 
+             :err
+               (make-erl-err
+                 :class (make-err-class-error)
+                 :reason (make-exit-reason-function-clause)))))
+
+      ((mv v b body) (eval-clauses args (erl-val-fun->cls fun) nil))
+      ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
+      ((if (null body)) (mv function-clause nil))
+
+      ; Remark: Badmatch exception are supposed to return the value that failed to 
+      ; match. This is currently not supported. Instead, return the whole fun.
+      ((unless (omap::compatiblep b (erl-val-fun->bind fun))) 
+       (mv  
+        (update-erl-state->in 
+           s 
+           (make-erl-val-excpt 
+             :err
+               (make-erl-err
+                 :class (make-err-class-error)
+                 :reason (make-exit-reason-badmatch :val fun))))
+        nil)))
+    (mv 
+      (update-erl-state->in-bind-mod 
+        s 
+        v 
+        (omap::update* (erl-val-fun->bind fun) b)
+        (erl-val-fun->module fun))
+      body)))

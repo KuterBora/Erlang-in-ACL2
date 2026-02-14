@@ -93,6 +93,7 @@
     (:atom ((val symbolp)))
     (:string ((val stringp)))
     (:nil ())
+    (:fun ((cls node-clause-list-p)))
     (:cons ((hd node-p)
             (tl node-p)))
     (:tuple ((lst node-list-p)))
@@ -105,6 +106,7 @@
     (:if ((clauses node-clause-list)))
     (:case-of ((expr node-p) (clauses node-clause-list)))
     (:remote-call ((module symbolp) (fn symbolp) (args node-list-p)))
+    (:fun-call ((fun node-p) (args node-list-p)))
     (:call ((fn symbolp) (args node-list-p)))
     :measure (list (acl2-count x) 3))
 
@@ -145,6 +147,7 @@
          (:atom nil)
          (:string nil)
          (:nil nil)
+         (:fun nil)
          (:cons nil)
          (:tuple nil)
          (:var nil)
@@ -157,7 +160,8 @@
          (:if nil)
          (:case-of nil)
          (:remote-call nil)
-         (:call nil))))
+         (:call nil)
+         (:fun-call nil))))
 
 ; Erlang Pattern ---------------------------------------------------------------
 
@@ -179,6 +183,7 @@
                 (:atom t)
                 (:string t)
                 (:nil t)
+                (:fun nil)
                 (:cons
                   (and (pattern-p (node-cons->hd x))
                        (pattern-p (node-cons->tl x))))
@@ -192,7 +197,8 @@
                 (:if nil)
                 (:case-of nil)
                 (:remote-call nil)
-                (:call nil)))))
+                (:call nil)
+                (:fun-call nil)))))
   (define pattern-list-p ((x acl2::any-p))
     :returns (ok booleanp)
     :measure (node-list-count x)
@@ -226,6 +232,7 @@
           (:atom t)
           (:string t)
           (:nil t)
+          (:fun nil)
           (:cons
             (and (guard-expr-p (node-cons->hd x))
                  (guard-expr-p (node-cons->tl x))))
@@ -238,7 +245,8 @@
           (:if nil)
           (:case-of nil)
           (:remote-call nil)
-          (:call (guard-expr-list-p (node-call->args x))))))
+          (:call (guard-expr-list-p (node-call->args x)))
+          (:fun-call nil))))
 
   ; List of Erlang Expressions
   (define guard-expr-list-p ((x acl2::any-p))
@@ -284,6 +292,7 @@
           (:atom t)
           (:string t)
           (:nil t)
+          (:fun (erl-clause-list-p (node-fun->cls x)))
           (:cons 
             (and (expr-p (node-cons->hd x))
                  (expr-p (node-cons->tl x))))
@@ -299,7 +308,9 @@
             (and (expr-p (node-case-of->expr x))
                  (erl-clause-list-p (node-case-of->clauses x))))
           (:remote-call (expr-list-p (node-remote-call->args x)))
-          (:call (expr-list-p (node-call->args x))))))
+          (:call (expr-list-p (node-call->args x)))
+          (:fun-call (and (expr-p (node-fun-call->fun x))
+                          (expr-list-p (node-fun-call->args x)))))))
 
   ; List of Erlang Expressions
   (define expr-list-p ((x acl2::any-p))
