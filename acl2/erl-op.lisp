@@ -333,6 +333,28 @@
 ; in the Erlang reference manual:
 ; number < atom < reference < fun < port < pid < tuple < map < nil < list < bit string
 ;
+; Unsupported: 
+; - fun comparisons, though not documented in the Erlang manual, are allowed in Erlang.
+; '==' and '=:=' seem obvious to implement, but other operations required experiments
+;  to figure out. 
+; - When comparing funs, the AST's are compared, including the line numbers assigned to
+;   the nodes. 
+;   
+;   For example,
+;   
+;   A = fun() -> 1 end, B = fun() -> 1 end, A == B. 
+;   
+;   returns true, while 
+;   
+;   A = fun() -> 1 end,
+;   B = fun() -> 1 end,
+;   A == B.
+;   
+;   returns false.
+;   
+; Since this is not a very practical feature of Erlang, it will not be supported
+; in the ACL2 evaluator for now. 
+;
 (defines erl-comparison
   :flag-local nil
   (define erl-compare ((left erl-val-p) (right erl-val-p))

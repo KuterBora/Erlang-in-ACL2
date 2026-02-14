@@ -229,7 +229,34 @@
 
 ; Evaluate Anonymous Function Calls --------------------------------------------
 
-; TODO
+; Erlang reference manual defines anonymous functions, 'fun expressions', as:
+; 
+; - A fun expression begins with the keyword fun and ends with the keyword end. 
+;   Between them is to be a function declaration, similar to a regular function 
+;   declaration, except that the function name is optional and is to be a 
+;   variable, if any.
+;
+; - Variables in a fun head shadow the function name and both shadow variables in
+;   the function clause surrounding the fun expression. Variables bound in a fun
+;   body are local to the fun body.
+;
+; - The return value of the expression is the resulting fun.
+;
+; Implementation:
+; - Any call that is not a local or remote call must be a function call. So, as a 
+;   precondition, it assumed that any function that has an expression to be called
+;   that is not an Atom or {remote, Atom} where Atom is a symbol, has been parsed as
+;   a (:fun-call Expr Args) when converted to ACL2. This makes the control flow a
+;   bit easier to follow.
+; - If the Expr to be called does not evaluate to a fun expression, then the badfun 
+;   exception is thrown.
+; - Otherwise, this is treated as a local call. If the fun was defined in a module, 
+;   it will be treated as local call within that module, i.e. it will have access to 
+;   the functions in that module.
+;
+; Not Supported:
+; - Named funs are currently not supported. However, adding them should be trivial
+; - funs of the form 'fun Module:Name/Arity" are not currently supported.
 
 (define eval-fun-call ((s erl-state-p) (fun erl-val-p) (args erl-vlst-p))
   :returns (mv (rs erl-state-p) (body expr-list-p))
