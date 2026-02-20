@@ -422,41 +422,6 @@
                     ((equal curr 0) (erl-compare-by-elements (cdr left) (cdr right)))
                     (t curr))))))))
 
-; Some tests for erl-compare
-; (and
-;   (equal (erl-compare '(:integer 9) '(:integer 3)) 1)
-;   (equal (erl-compare '(:integer 3) '(:integer 3)) 0)
-;   (equal (erl-compare '(:integer 1) '(:integer 3)) -1)
-
-
-;   (equal (erl-compare '(:atom z) '(:atom foo)) 1)
-;   (equal (erl-compare '(:atom foo) '(:atom foo)) 0)
-;   (equal (erl-compare '(:atom bar) '(:atom foo)) -1)
-
-;   (equal (erl-compare '(:integer 100) '(:atom foo)) -1)
-;   (equal (erl-compare '(:integer 100) '(:tuple nil)) -1)
-;   (equal (erl-compare '(:tuple nil) '(:cons nil)) -1)
-
-;   (equal (erl-compare '(:tuple ((:integer 1))) '(:tuple ((:integer 0)))) 1)
-;   (equal (erl-compare '(:tuple ((:integer 1))) '(:tuple ((:integer 1)))) 0)
-;   (equal (erl-compare '(:tuple ((:integer 1))) '(:tuple ((:integer 2)))) -1)
-;   (equal (erl-compare '(:tuple ((:integer 1) (:integer 2))) 
-;                       '(:tuple ((:integer 1) (:integer 1)))) 
-;           1)
-;   (equal (erl-compare '(:tuple ((:integer 2))) 
-;                       '(:tuple ((:integer 1) (:integer 1)))) 
-;           -1)
-  
-;   (equal (erl-compare '(:cons ((:integer 1))) '(:cons ((:integer 0)))) 1)
-;   (equal (erl-compare '(:cons ((:integer 1))) '(:cons ((:integer 1)))) 0)
-;   (equal (erl-compare '(:cons ((:integer 1))) '(:cons ((:integer 2)))) -1)
-;   (equal (erl-compare '(:cons ((:integer 1) (:integer 2))) 
-;                       '(:cons ((:integer 1) (:integer 1)))) 
-;           1)
-;   (equal (erl-compare '(:cons ((:integer 2))) 
-;                       '(:cons ((:integer 1) (:integer 1)))) 
-;           1))
-
 ; Given a comparison binop, apply the corresponding Erlang operation.
 (define apply-erl-comp-binop ((op comp-binop-p) (left erl-val-p) (right erl-val-p))
   :returns (v erl-val-p)
