@@ -9,6 +9,16 @@
 ; given args, and a has guard sequence that is satisfied. If no clauses match, 
 ; nil is returned, and the caller can decide on the appropiate clause error.
 ;
+; If a clause causes an exception during pattern maching or guard evaluation
+; for any reason, it is treated as if the clause failed to match the arguments
+; and it is skipped. Remark: some operations that would cause an exceptions in
+; expression context might instead cause a rejection in a different context.
+; For example, '1 div 0' as an expression would throw a badarith exception, but
+; as an arithmetic expression used in a pattern, it would instead cause a compiler
+; error as arithemtic expressions in patterns are evaluated at compile time.
+; (Meanwhile, in a guard sequence, a badarith expression is treated the same way as 
+; the guard evaluating to false).
+;
 ;  Returns:
 ; - Rejections propagated, and the return value 'v' is set to keep track of them. 
 ;   If there are no rejections, then 'v' is set to :none. Otherwise the returned 
