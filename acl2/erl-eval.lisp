@@ -1,7 +1,6 @@
 (in-package "ACL2")
 (include-book "termination")
 (include-book "eval-calls")
-(include-book "clause-processors/generalize" :dir :system)
 
 (set-induction-depth-limit 1)
 
@@ -46,13 +45,11 @@
                   (make-erl-s-klst
                     :s (update-erl-state->in
                         s 
-                        (make-erl-val-reject :err "erl-eval: ill-formed fun clauses"))))
-                 (name (acl2::new-symbol 'fun (omap::keys s.bind))))
+                        (make-erl-val-reject :err "erl-eval: ill-formed fun clauses")))))
                 (make-erl-s-klst
                   :s (update-erl-state->in 
                         s
                         (make-erl-val-fun
-                          :name name
                           :arity arity
                           :cls x.cls
                           :bind s.bind
