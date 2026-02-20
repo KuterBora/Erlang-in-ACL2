@@ -88,7 +88,7 @@
 
 ; Utility Functions/Structures -------------------------------------------------
 
-; Erlang boolean, defined for utility reasons only
+; Erlang boolean
 (fty::defsubtype erl-boolean
   :supertype erl-val-p
   :restriction 
@@ -98,6 +98,23 @@
               (equal (erl-val-atom->val x) 'false))))
   :fix-value (make-erl-val-atom :val 'false))
 
+; Erlang anonymous function
+(fty::defsubtype erl-fun
+  :supertype erl-val-p
+  :restriction 
+    (lambda (x)
+      (and (equal (erl-val-kind x) :fun)))
+  :fix-value 
+    (make-erl-val-fun 
+      :arity 0 
+      :cls '((:none)) 
+      :bind nil 
+      :module 'local))
+
+(defrule erl-fun-p-of-erl-val-fun
+  (implies (and (erl-val-p v) (equal (erl-val-kind v) :fun))
+           (erl-fun-p v))
+  :expand (erl-fun-p v))
 
 ; Helper for implementing list substraction
 ; For each element in the first argument, the first occurrence of this element 
