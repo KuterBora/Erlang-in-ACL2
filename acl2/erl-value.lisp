@@ -23,6 +23,7 @@
 ; Remarks:
 ; - Strings are represented as lists of integer
 ; - Pairs are not supported
+; - Named funs are not supported
 ; - TODO: pid
 (fty::deftypes erl-val
   
@@ -86,8 +87,6 @@
 
 
 ; Utility Functions/Structures -------------------------------------------------
-
-; TODO: Another subtype could be erl-number-p
 
 ; Erlang boolean, defined for utility reasons only
 (fty::defsubtype erl-boolean

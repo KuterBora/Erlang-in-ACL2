@@ -168,7 +168,8 @@
 ; A pattern has the same structure as a term but can contain unbound variables.
 ; - The match operator is allowed if both operands are valid patterns.
 ; - Arithmetic expressions are allowed.
-; - List concatenation is allowed, but not list substraction.
+; - List concatenation is allowed, but not list substraction. However, this is
+;   currently not supported.
 (defines pattern
   :flag-local nil
   (define pattern-p ((x acl2::any-p))
@@ -190,7 +191,6 @@
                 (:tuple (pattern-list-p (node-tuple->lst x)))
                 (:var t)
                 (:unop nil)
-                ; TODO: strings concat is allowed
                 (:binop nil)
                 (:match (and (pattern-p (node-match->lhs x))
                              (pattern-p (node-match->rhs x))))
