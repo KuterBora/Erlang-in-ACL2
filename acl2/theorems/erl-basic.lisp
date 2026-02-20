@@ -1,8 +1,24 @@
 (in-package "ACL2")
 (include-book "erl-eval")
 (include-book "eval-theorems")
-
++
 (set-induction-depth-limit 1)
+
+
+; drop the hint,
+; cons of apply k
+
+(defrule apply-k-of-cons
+  (implies
+    (and (erl-k-p k)
+         (erl-klst-p klst)
+         (erl-state-p s)
+         (equal klst (cons k klst)))
+    (equal
+      (apply-k s klst)
+      (apply-k (apply-k s (list k)) klst)))
+  :in-theory (enable apply-k))
+
 
 ; Erlang Unop ------------------------------------------------------------------
 
@@ -55,52 +71,55 @@
         ))
   :in-theory (disable apply-k-of-append)
   :hints 
-    (("Goal" :use (:instance apply-k-of-append (klst1 (list k)) (klst2 rest) (klst (cons k rest)) (s s)))
+    (
+     ("Goal" :use (:instance apply-k-of-append (klst1 (list k)) (klst2 rest) (klst (cons k rest)) (s s)))
      ("Goal'''" :expand (apply-k s (list k)))
      ("Goal'4'" :in-theory (enable eval-k))
-     ("Goal'6'" 
-      :use 
-        (:instance apply-k-of-append
-          (klst1 (list (erl-k (+ -1 (erl-k->fuel k)) (kont-expr (node-unop->expr (kont-expr->expr (erl-k->kont k)))))))
-          (klst2 (list (erl-k (+ -1 (erl-k->fuel k)) (kont-unop (node-unop->op (kont-expr->expr (erl-k->kont k)))))))
-          (klst (list (erl-k (+ -1 (erl-k->fuel k)) (kont-expr (node-unop->expr (kont-expr->expr (erl-k->kont k)))))
-                      (erl-k (+ -1 (erl-k->fuel k)) (kont-unop (node-unop->op (kont-expr->expr (erl-k->kont k)))))))
-          (s (erl-state '(:none) (erl-state->bind s)))))
-    ("Goal'9'"
-      :expand 
-        (:free (v) 
-               (apply-k v (list (erl-k (+ -1 (erl-k->fuel k)) (kont-unop (node-unop->op (kont-expr->expr (erl-k->kont k)))))))))
-    ("Subgoal 3''"
-      :use (:instance erl-states-are-equal-if-fields-are-equal
-            (x (APPLY-K
-                (ERL-STATE '(:NONE) (ERL-STATE->BIND S))
-                (LIST
-                  (ERL-K
-                  (+ -1 (ERL-K->FUEL K))
-                  (KONT-EXPR (NODE-UNOP->EXPR (KONT-EXPR->EXPR (ERL-K->KONT K)))))
-                  (ERL-K
-                  (+ -1 (ERL-K->FUEL K))
-                  (KONT-UNOP (NODE-UNOP->OP (KONT-EXPR->EXPR (ERL-K->KONT K))))))))
-            (y (ERL-STATE
-                  (APPLY-ERL-UNOP
-                  (NODE-UNOP->OP (KONT-EXPR->EXPR (ERL-K->KONT K)))
-                  (ERL-STATE->IN
-                    (APPLY-K
-                    (ERL-STATE '(:NONE) (ERL-STATE->BIND S))
-                    (LIST
-                      (ERL-K
-                      (+ -1 (ERL-K->FUEL K))
-                      (KONT-EXPR
-                            (NODE-UNOP->EXPR (KONT-EXPR->EXPR (ERL-K->KONT K)))))))))
-                  (ERL-STATE->BIND
-                  (APPLY-K
-                    (ERL-STATE '(:NONE) (ERL-STATE->BIND S))
-                    (LIST
-                    (ERL-K
-                      (+ -1 (ERL-K->FUEL K))
-                      (KONT-EXPR
-                            (NODE-UNOP->EXPR (KONT-EXPR->EXPR (ERL-K->KONT K))))))))))
-            (klst rest)))))
+    ))
+
+    ;  ("Goal'6'" 
+    ;   :use 
+    ;     (:instance apply-k-of-append
+    ;       (klst1 (list (erl-k (+ -1 (erl-k->fuel k)) (kont-expr (node-unop->expr (kont-expr->expr (erl-k->kont k)))))))
+    ;       (klst2 (list (erl-k (+ -1 (erl-k->fuel k)) (kont-unop (node-unop->op (kont-expr->expr (erl-k->kont k)))))))
+    ;       (klst (list (erl-k (+ -1 (erl-k->fuel k)) (kont-expr (node-unop->expr (kont-expr->expr (erl-k->kont k)))))
+    ;                   (erl-k (+ -1 (erl-k->fuel k)) (kont-unop (node-unop->op (kont-expr->expr (erl-k->kont k)))))))
+    ;       (s (erl-state '(:none) (erl-state->bind s)))))
+    ; ("Goal'9'"
+    ;   :expand 
+    ;     (:free (v) 
+    ;            (apply-k v (list (erl-k (+ -1 (erl-k->fuel k)) (kont-unop (node-unop->op (kont-expr->expr (erl-k->kont k)))))))))
+    ; ("Subgoal 3''"
+    ;   :use (:instance erl-states-are-equal-if-fields-are-equal
+    ;         (x (APPLY-K
+    ;             (ERL-STATE '(:NONE) (ERL-STATE->BIND S))
+    ;             (LIST
+    ;               (ERL-K
+    ;               (+ -1 (ERL-K->FUEL K))
+    ;               (KONT-EXPR (NODE-UNOP->EXPR (KONT-EXPR->EXPR (ERL-K->KONT K)))))
+    ;               (ERL-K
+    ;               (+ -1 (ERL-K->FUEL K))
+    ;               (KONT-UNOP (NODE-UNOP->OP (KONT-EXPR->EXPR (ERL-K->KONT K))))))))
+    ;         (y (ERL-STATE
+    ;               (APPLY-ERL-UNOP
+    ;               (NODE-UNOP->OP (KONT-EXPR->EXPR (ERL-K->KONT K)))
+    ;               (ERL-STATE->IN
+    ;                 (APPLY-K
+    ;                 (ERL-STATE '(:NONE) (ERL-STATE->BIND S))
+    ;                 (LIST
+    ;                   (ERL-K
+    ;                   (+ -1 (ERL-K->FUEL K))
+    ;                   (KONT-EXPR
+    ;                         (NODE-UNOP->EXPR (KONT-EXPR->EXPR (ERL-K->KONT K)))))))))
+    ;               (ERL-STATE->BIND
+    ;               (APPLY-K
+    ;                 (ERL-STATE '(:NONE) (ERL-STATE->BIND S))
+    ;                 (LIST
+    ;                 (ERL-K
+    ;                   (+ -1 (ERL-K->FUEL K))
+    ;                   (KONT-EXPR
+    ;                         (NODE-UNOP->EXPR (KONT-EXPR->EXPR (ERL-K->KONT K))))))))))
+    ;         (klst rest)))
     
 
 ; Erlang Binop -----------------------------------------------------------------
@@ -151,7 +170,7 @@
 
       ; The body of the theorem
       (equal
-        (apply-k s (cons k rest))        
+        (apply-k s (cons k rest))
         (apply-k 
           (make-erl-state 
             :in (apply-erl-binop op l.val r.val)
