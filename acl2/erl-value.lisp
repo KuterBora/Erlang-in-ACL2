@@ -206,29 +206,3 @@
   (implies (erl-val-p v)
            (not (erl-val-p (cons v x))))
   :expand ((erl-val-p v) (erl-val-p (cons v x))))
-
-; Some lemmas for symbol-listp-of-keys-of-bind-p
-(local (defrule set-p-of-keys-of-bind-p
-  (implies (bind-p b) (set::setp (omap::keys b)))))
-  
-(local (defrule symbolp-of-set-head
-  (implies (and (set::setp s) (symbol-listp s))
-            (symbolp (set::head s)))
-  :expand (set::head s)))
-
-(local (defrule symbol-listp-of-set-tail
-  (implies (and (set::setp s) (symbol-listp s))
-            (symbol-listp (set::tail s)))
-  :expand (set::tail s)))
-  
-(local (defrule symbol-listp-of-set-insert
-  (implies (and (set::setp s) (symbol-listp s) (symbolp x))
-            (symbol-listp (set::insert x s)))
-  :enable set::insert))
-
-; The keys of a bind-p are a symbol-listp
-(defrule symbol-listp-of-keys-of-bind-p
-  (implies (bind-p b)
-           (symbol-listp (omap::keys b)))
-  :expand (bind-p b)
-  :enable (omap::keys omap::head))
