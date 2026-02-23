@@ -1,6 +1,6 @@
 (in-package "ACL2")
 (include-book "../erl-op")
-(include-book "std/testing/assert-equal" :DIR :SYSTEM)
+(include-book "std/testing/assert-equal" :dir :system)
 
 ; This file contains some test for Erlang comparison operations
 ;

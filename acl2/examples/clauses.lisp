@@ -1,6 +1,6 @@
 (in-package "ACL2")
 (include-book "../erl-eval")
-(include-book "std/testing/assert-equal" :DIR :SYSTEM)
+(include-book "std/testing/assert-equal" :dir :system)
 
 ; This file contains some tests for evaluating if and case clauses
 

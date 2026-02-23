@@ -2,6 +2,7 @@
 (include-book "erl-ast")
 (include-book "ast-theorems")
 (include-book "eval-bif")
+(include-book "erl-state")
 
 (set-induction-depth-limit 1)
 
