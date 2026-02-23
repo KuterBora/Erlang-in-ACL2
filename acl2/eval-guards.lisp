@@ -188,7 +188,7 @@
     :returns r
     :measure (node-list-count (guard-expr-list-fix x))
     (b* ((x (guard-expr-list-fix x))
-         ((erl-state s) (erl-state-fix s))
+         (s (erl-state-fix s))
          ((if (null x)) nil)
          
          ; Evaluate the car and cdr of the guard list.

@@ -24,7 +24,7 @@
   :measure (len (erl-clause-list-fix cls))
   (b* ((args (erl-vlst-fix args))
        (cls (erl-clause-list-fix cls))
-       ((erl-state s) (erl-state-fix s))
+       (s (erl-state-fix s))
        
        ; No clauses matched -- the caller can return the appropiate clause error.
        ((if (null cls)) (mv s nil))
@@ -75,7 +75,7 @@
   :returns (mv (s erl-state-p) (body expr-list-p))
   (b* ((args (erl-vlst-fix args))
        (cls (erl-clause-list-fix cls))
-       ((erl-state s) (erl-state-fix s))
+       (s (erl-state-fix s))
        ((if (null cls)) 
         (mv 
           (update-erl-state->in 

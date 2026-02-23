@@ -111,10 +111,11 @@
       :bind nil 
       :module 'local))
 
-(defrule erl-fun-p-of-erl-val-fun
-  (implies (and (erl-val-p v) (equal (erl-val-kind v) :fun))
-           (erl-fun-p v))
-  :expand (erl-fun-p v))
+(defrule erl-val-when-erl-fun
+  (iff (erl-fun-p fun)
+       (and (erl-val-p fun)
+            (equal (erl-val-kind fun) :fun)))
+  :enable erl-fun-p)
 
 ; Helper for implementing list substraction
 ; For each element in the first argument, the first occurrence of this element 
