@@ -1,9 +1,7 @@
 (in-package "ACL2")
 (include-book "erl-ast")
 (include-book "ast-theorems")
-(include-book "erl-value")
-(include-book "erl-op")
-(include-book "erl-world")
+(include-book "eval-bif")
 
 (set-induction-depth-limit 1)
 
