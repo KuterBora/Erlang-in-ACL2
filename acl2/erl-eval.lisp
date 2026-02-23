@@ -23,10 +23,7 @@
        (k (erl-k->kont k))
        ((if (zp fuel)) 
         (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit))))
-       (s (erl-state-fix s))
-       (s.in (erl-state->in s))
-       (s.bind (erl-state->bind s))
-       (s.module (erl-state->module s)))
+       ((erl-state s) (erl-state-fix s)))
     (kont-case k
       ; Evaluate an expression.
       (:expr (let ((x k.expr))
@@ -103,14 +100,14 @@
           ; if x is an if clause, invoke the clause evaluator
           (:if
             (b* (((mv (erl-state rs) body) (eval-clauses nil x.clauses s))
-                 ((if (equal (erl-val-kind rs.in) :reject))
-                  (make-erl-s-klst :s (update-erl-state->in s rs.in)))
+                 ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))
                  ((if (null body))
                   (make-erl-s-klst
-                    :s (make-erl-state 
-                        :in (make-erl-val-excpt 
-                              :err (make-erl-err :class (make-err-class-error)
-                                                 :reason (make-exit-reason-if-clause)))))))
+                    :s (update-erl-state->in
+                        s
+                        (make-erl-val-excpt 
+                          :err (make-erl-err :class (make-err-class-error)
+                                             :reason (make-exit-reason-if-clause)))))))
                 (make-erl-s-klst
                   :s (update-erl-state->in s (make-erl-val-none))
                   :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
@@ -253,13 +250,12 @@
                     (make-erl-val-excpt 
                       :err (make-erl-err :class (make-err-class-error) 
                                          :reason (make-exit-reason-badmatch :val s.in)))))))
-            (make-erl-s-klst :s (update-erl-state->in-bind s ms.in ms.bind))))
+            (make-erl-s-klst :s ms)))
       
       ; Once the expression is evaluated, invoke the clause-evaluator.
       (:case-of
         (b* (((mv (erl-state rs) body) (eval-clauses (list s.in) k.clauses s))
-             ((if (equal (erl-val-kind rs.in) :reject))
-              (make-erl-s-klst :s (update-erl-state->in s rs.in)))
+             ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))
              ((if (null body))
               (make-erl-s-klst
                 :s (update-erl-state->in
@@ -268,7 +264,7 @@
                       :err (make-erl-err :class (make-err-class-error)
                                          :reason (make-exit-reason-case-clause :val s.in)))))))
             (make-erl-s-klst
-              :s (update-erl-state->bind s rs.bind)
+              :s rs
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
       
@@ -320,9 +316,9 @@
                      s
                      (make-erl-val-reject :err "Local call: invalid arg list."))))
              ; Obtain the args from the state. They are reversed because they are
-             ; evaluated in order and accumulated with cons.
+             ; evaluated from left to right and stored in a cons list.
              (args (rev (erl-val-cons->lst s.in)))
-             ((mv (erl-state rs) body) 
+             ((mv rs body) 
               (eval-local-call
                 (update-erl-state->in s (make-erl-val-none))
                 k.call 
@@ -349,7 +345,7 @@
              ; Obtain the args from the state. They are reversed because they are
              ; evaluated in order and accumulated with cons.
              (args (rev (erl-val-cons->lst s.in)))
-             ((mv (erl-state rs) body) 
+             ((mv rs body) 
               (eval-remote-call
                 (update-erl-state->in s (make-erl-val-none))
                 k.module
@@ -369,7 +365,7 @@
       
       ; Evalute the arguments to an anonymous call after the fun expression has been evaluated.
       (:fun-call-args
-        (b* (((if (not (equal (erl-val-kind s.in) :fun)))
+        (b* (((if (not (erl-fun-p s.in)))
               (make-erl-s-klst
                 :s (update-erl-state->in
                   s
@@ -396,7 +392,7 @@
              ; Obtain the args from the state. They are reversed because they are
              ; evaluated in order and accumulated with cons.
              (args (rev (erl-val-cons->lst s.in)))
-             ((mv (erl-state rs) body) 
+             ((mv rs body) 
               (eval-fun-call (update-erl-state->in s (make-erl-val-none)) k.fun args))
              ; if the body is nil, return the value produced by call evaluation.
              ((if (null body)) (make-erl-s-klst :s rs)))
