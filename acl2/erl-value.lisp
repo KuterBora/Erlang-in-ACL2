@@ -23,6 +23,7 @@
 ; Remarks:
 ; - Strings are represented as lists of integer
 ; - Pairs are not supported
+; - Named funs are not supported
 ; - TODO: pid
 (fty::deftypes erl-val
   
@@ -33,8 +34,7 @@
     (:atom ((val symbolp)))
     (:cons ((lst erl-vlst-p)))
     (:tuple ((lst erl-vlst-p)))
-    (:fun ((name symbolp) 
-           (arity natp)
+    (:fun ((arity natp)
            (cls erl-clause-list-p)
            (bind bind-p)
            (module symbolp)))
@@ -88,9 +88,7 @@
 
 ; Utility Functions/Structures -------------------------------------------------
 
-; TODO: Another subtype could be erl-number-p
-
-; Erlang boolean, defined for utility reasons only
+; Erlang boolean
 (fty::defsubtype erl-boolean
   :supertype erl-val-p
   :restriction 
@@ -100,6 +98,24 @@
               (equal (erl-val-atom->val x) 'false))))
   :fix-value (make-erl-val-atom :val 'false))
 
+; Erlang anonymous function
+(fty::defsubtype erl-fun
+  :supertype erl-val-p
+  :restriction 
+    (lambda (x)
+      (and (equal (erl-val-kind x) :fun)))
+  :fix-value 
+    (make-erl-val-fun 
+      :arity 0 
+      :cls '((:none)) 
+      :bind nil 
+      :module 'local))
+
+(defrule erl-val-when-erl-fun
+  (iff (erl-fun-p fun)
+       (and (erl-val-p fun)
+            (equal (erl-val-kind fun) :fun)))
+  :enable erl-fun-p)
 
 ; Helper for implementing list substraction
 ; For each element in the first argument, the first occurrence of this element 
@@ -191,29 +207,3 @@
   (implies (erl-val-p v)
            (not (erl-val-p (cons v x))))
   :expand ((erl-val-p v) (erl-val-p (cons v x))))
-
-; Some lemmas for symbol-listp-of-keys-of-bind-p
-(local (defrule set-p-of-keys-of-bind-p
-  (implies (bind-p b) (set::setp (omap::keys b)))))
-  
-(local (defrule symbolp-of-set-head
-  (implies (and (set::setp s) (symbol-listp s))
-            (symbolp (set::head s)))
-  :expand (set::head s)))
-
-(local (defrule symbol-listp-of-set-tail
-  (implies (and (set::setp s) (symbol-listp s))
-            (symbol-listp (set::tail s)))
-  :expand (set::tail s)))
-  
-(local (defrule symbol-listp-of-set-insert
-  (implies (and (set::setp s) (symbol-listp s) (symbolp x))
-            (symbol-listp (set::insert x s)))
-  :enable set::insert))
-
-; The keys of a bind-p are a symbol-listp
-(defrule symbol-listp-of-keys-of-bind-p
-  (implies (bind-p b)
-           (symbol-listp (omap::keys b)))
-  :expand (bind-p b)
-  :enable (omap::keys omap::head))

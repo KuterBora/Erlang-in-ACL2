@@ -20,7 +20,7 @@
 ;     an alist mapping phases of the test to an output specification for with-output.
 ;     with-output.  The phases are:
 ;      :prep -- output generated while executing prep-events
-;      :eval -- output generated whil evaluating assertion
+;      :eval -- output generated while evaluating assertion
 ;      :pass -- reporting a successful test
 ;      :fail -- reporting a failed test
 ;     Furthermore, there are a few "general" categories:
@@ -63,10 +63,10 @@
 
 
 
-(in-package "SMT")
+(in-package "ACL2")
 
-(local (include-book "std/testing/must-fail" :dir :system))
-(local (include-book "std/testing/must-succeed" :dir :system))
+(include-book "std/testing/must-fail" :dir :system)
+(include-book "std/testing/must-succeed" :dir :system)
 (include-book "std/util/bstar" :dir :system)
 (set-state-ok t)
 

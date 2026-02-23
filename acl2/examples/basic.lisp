@@ -1,6 +1,16 @@
 (in-package "ACL2")
-(include-book "erl-eval")
-(include-book "std/testing/assert-equal" :DIR :SYSTEM)
+(include-book "../erl-eval")
+(include-book "std/testing/assert-equal" :dir :system)
+
+; This file contains some basic tests for the evaluator and the Erlang AST.
+; Including,
+; - Erlang Terms
+; - Unop/Binops
+; - Variables
+; - Match Statements
+;
+; TODO: 
+; This file probably does not have enough tests. Especially for error conditions.
 
 ; Terms ------------------------------------------------------------------------
 
@@ -162,8 +172,6 @@
 
 ; Match ------------------------------------------------------------------------
 
-; Match Coonstructor 
-
 ; var = int.
 (assert-equal (make-node-match :lhs '(:var X) :rhs '(:integer 1))
               '(:match (:var X) (:integer 1)))                
@@ -281,10 +289,6 @@
                           (Y :integer 4) 
                           (Z :cons ((:integer 1) (:integer 2) (:integer 3))))))
 
-
-
-; Series of Match
-
 ; X = int, Y = X + int, Y + int.
 (assert-equal
   (apply-k 
@@ -298,6 +302,3 @@
                          (:binop * (:var Y) (:var X)))))))
   (make-erl-state :in '(:integer 15) 
                   :bind '((X :integer 3) (Y :integer 5))))
-
-; TODO: Bad Match
-; TODO: Illegal Pattern

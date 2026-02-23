@@ -1,8 +1,12 @@
 (in-package "ACL2")
-(include-book "erl-eval")
-(include-book "std/testing/assert-equal" :DIR :SYSTEM)
+(include-book "../erl-eval")
+(include-book "std/testing/assert-equal" :dir :system)
 
-(set-induction-depth-limit 1)
+; This file contains some tests for evaluating if and case clauses
+
+; TODO: 
+; This file probably does not have enough tests. Especially for error conditions.
+
 
 ; Erlang If --------------------------------------------------------------------
 
@@ -15,30 +19,30 @@
 ;   1 div 0; X == -1 -> 4;
 ;   true -> 5
 ; end.
-(make-node-if 
-  :clauses 
-    (list
-      (make-node-clause 
-        :cases nil
-        :guards '(((:var X) (:var Y)))
-        :body '((:binop - (:integer 2) (:integer 1))))
-      (make-node-clause
-        :cases nil
-        :guards '(((:binop > (:var X) (:integer 0))))
-        :body '((:integer 2)))
-      (make-node-clause 
-        :cases nil
-        :guards '(((:atom false)) ((:var Y)) ((:atom false)))
-        :body '((:integer 3)))
-      (make-node-clause 
-        :cases nil                 
-        :guards '(((:binop div (:integer 1) (:integer 0))) 
-                  ((:binop == (:var X) (:integer -1)))) 
-        :body '((:integer 4)))
-      (make-node-clause 
-        :cases nil                 
-        :guards '(((:atom true))) 
-        :body '((:integer 5)))))
+; (make-node-if 
+;   :clauses 
+;     (list
+;       (make-node-clause 
+;         :cases nil
+;         :guards '(((:var X) (:var Y)))
+;         :body '((:binop - (:integer 2) (:integer 1))))
+;       (make-node-clause
+;         :cases nil
+;         :guards '(((:binop > (:var X) (:integer 0))))
+;         :body '((:integer 2)))
+;       (make-node-clause 
+;         :cases nil
+;         :guards '(((:atom false)) ((:var Y)) ((:atom false)))
+;         :body '((:integer 3)))
+;       (make-node-clause 
+;         :cases nil                 
+;         :guards '(((:binop div (:integer 1) (:integer 0))) 
+;                   ((:binop == (:var X) (:integer -1)))) 
+;         :body '((:integer 4)))
+;       (make-node-clause 
+;         :cases nil                 
+;         :guards '(((:atom true))) 
+;         :body '((:integer 5)))))
 
 (assert-equal 
   (apply-k
@@ -201,31 +205,31 @@
 ;   _ -> 'no_match
 ; end
 
-(make-node-case-of
-  :expr '(:var X)
-  :clauses
-    (list
-      (make-node-clause 
-        :cases '((:tuple ((:var One) (:integer 2))))
-        :guards '(((:binop == (:var One) (:integer 1))))
-        :body '((:binop + (:var One) (:integer 2))))
-      (make-node-clause
-        :cases '((:tuple ((:var Two) (:binop + (:integer 1) (:integer 1)))))
-        :guards '(((:binop == (:var Two) (:integer 2))))
-        :body '((:binop * (:var Two) (:var Two))))
-      (make-node-clause
-        :cases '((:tuple ((:var Nat) (:var _))))
-        :guards '(((:call is_integer ((:var Nat))) 
-                   (:binop >= (:var Nat) (:integer 0))))
-        :body '((:atom at_least_it_is_nat)))
-      (make-node-clause
-        :cases '((:tuple ((:var Int) (:var _))))
-        :guards '(((:call is_integer ((:var Int)))))
-        :body '((:atom at_least_it_int)))
-      (make-node-clause
-        :cases '((:var _))            
-        :guards nil 
-        :body '((:atom no_match_at_all)))))
+; (make-node-case-of
+;   :expr '(:var X)
+;   :clauses
+;     (list
+;       (make-node-clause 
+;         :cases '((:tuple ((:var One) (:integer 2))))
+;         :guards '(((:binop == (:var One) (:integer 1))))
+;         :body '((:binop + (:var One) (:integer 2))))
+;       (make-node-clause
+;         :cases '((:tuple ((:var Two) (:binop + (:integer 1) (:integer 1)))))
+;         :guards '(((:binop == (:var Two) (:integer 2))))
+;         :body '((:binop * (:var Two) (:var Two))))
+;       (make-node-clause
+;         :cases '((:tuple ((:var Nat) (:var _))))
+;         :guards '(((:call is_integer ((:var Nat))) 
+;                    (:binop >= (:var Nat) (:integer 0))))
+;         :body '((:atom at_least_it_is_nat)))
+;       (make-node-clause
+;         :cases '((:tuple ((:var Int) (:var _))))
+;         :guards '(((:call is_integer ((:var Int)))))
+;         :body '((:atom at_least_it_int)))
+;       (make-node-clause
+;         :cases '((:var _))            
+;         :guards nil 
+;         :body '((:atom no_match_at_all)))))
 
 (assert-equal 
   (apply-k

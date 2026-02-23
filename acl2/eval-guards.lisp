@@ -1,9 +1,8 @@
 (in-package "ACL2")
 (include-book "erl-ast")
 (include-book "ast-theorems")
-(include-book "erl-value")
-(include-book "erl-op")
-(include-book "erl-world")
+(include-book "eval-bif")
+(include-book "erl-state")
 
 (set-induction-depth-limit 1)
 
@@ -88,7 +87,7 @@
 ;
 ; Remarks:
 ; - Currently, all operations included in erl-binop and erl-unop are allowed in
-;   guard-expressions.
+;   guard-expressions, except for send, '!'.
 ; - Unlike in patterns, arithmetic expressions in guards do not seem to be
 ;   evaluated at compile time. Thus, they can cause exceptions, and they will
 ;   not be rejected by the interpreter if they do.
@@ -101,56 +100,84 @@
 (defines eval-guards
   :verify-guards nil
   :flag-local nil
-  ; Evaluate the guard expressions 'x' with the bindings 'bind'. Return the
+  ; Evaluate the guard expressions 'x' within the given state. Return the
   ; erl-value produced.  
-  (define eval-guard-expr ((x guard-expr-p) (bind bind-p))
+  (define eval-guard-expr ((x guard-expr-p) (s erl-state-p))
     :returns (v erl-val-p)
     :measure (node-count x)
     (b* ((x (guard-expr-fix x))
-         (bind (bind-fix bind)))
+         ((erl-state s) (erl-state-fix s)))
       (node-case x
         (:integer (make-erl-val-integer :val x.val))
         (:atom (make-erl-val-atom :val x.val))
         (:string (string=>erl-cons x.val))
         (:nil (make-erl-val-cons :lst nil))
         (:fun (make-erl-val-reject :err "Guard expressions cannot have fun."))
-        (:cons (b* ((hd (eval-guard-expr x.hd bind))
-                    (tl (eval-guard-expr x.tl bind))
+        (:cons (b* (; Evaluate the car and cdr of the list.
+                    (hd (eval-guard-expr x.hd s))
+                    (tl (eval-guard-expr x.tl s))
+
+                    ; Propagate rejections.
                     ((if (equal (erl-val-kind hd) :reject)) hd)
                     ((if (equal (erl-val-kind tl) :reject)) tl)
+
+                    ; Propagate exceptions
                     ((if (equal (erl-val-kind hd) :excpt)) hd)
                     ((if (equal (erl-val-kind tl) :excpt)) tl)
+                    
+                    ; Pairs are not supported.
                     ((unless (equal (erl-val-kind tl) :cons))
                       (make-erl-val-reject :err "Eval-Guard: tl of cons must be a list.")))
                   (make-erl-val-cons :lst (cons hd (erl-val-cons->lst tl)))))
-        (:tuple (b* (((if (null x.lst)) (make-erl-val-tuple :lst nil))
-                     (hd (eval-guard-expr (car x.lst) bind))
-                     (tl (eval-guard-expr (make-node-tuple :lst (cdr x.lst)) bind))
+        (:tuple (b* (; If the tuple is empty, return empty tuple.
+                     ((if (null x.lst)) (make-erl-val-tuple :lst nil))
+                     
+                     ; Evaluate the car and cdr of the list.
+                     (hd (eval-guard-expr (car x.lst) s))
+                     (tl (eval-guard-expr (make-node-tuple :lst (cdr x.lst)) s))
+                     
+                     ; Propagate rejections.
                      ((if (equal (erl-val-kind hd) :reject)) hd)
                      ((if (equal (erl-val-kind tl) :reject)) tl)
+                     
+                     ; Propagate exceptions.
                      ((if (equal (erl-val-kind hd) :excpt)) hd)
                      ((if (equal (erl-val-kind tl) :excpt)) tl)
+                     
+                     ; Tuple must be well-formed.
                      ((unless (equal (erl-val-kind tl) :tuple))
                       (make-erl-val-reject :err "Eval-Guard: ill-formed tuple.")))
                     (make-erl-val-tuple :lst (cons hd (erl-val-tuple->lst tl)))))
         (:var
-          (if (omap::assoc x.id bind)
-              (omap::lookup x.id bind)
+          ; If the variable is bound, return its value, otherwise reject the AST.
+          (if (omap::assoc x.id s.bind)
+              (omap::lookup x.id s.bind)
               (make-erl-val-reject :err "unbound variable")))
-        (:unop (apply-erl-unop x.op (eval-guard-expr x.expr bind)))
+        (:unop 
+          ; Evaluate the operand and apply the unop.
+          (apply-erl-unop x.op (eval-guard-expr x.expr s)))
         (:binop
-          (b* ((left (eval-guard-expr x.left bind))
-               (right (eval-guard-expr x.right bind)))
+          ; Evaluate the operands and apply the binop.
+          (b* ((left (eval-guard-expr x.left s))
+               (right (eval-guard-expr x.right s)))
               (apply-erl-binop x.op left right)))
         (:match (make-erl-val-reject :err "Guard expressions cannot have match."))
         (:if (make-erl-val-reject :err "Guard expressions cannot have if clauses."))
         (:case-of (make-erl-val-reject :err "Guard expressions cannot have case clauses."))
         (:remote-call (make-erl-val-reject :err "Guard expressions can only have calls to BIFs."))
         (:call
-          (b* ((fn (make-fn :name x.fn :arity (len x.args)))
+          (b* (; construct the function call
+               (fn (make-fn :name x.fn :arity (len x.args)))
+               
+               ; if the function call is not a BIF, it is not allowed in a guard.
                ((unless (erl-bif-p fn)) 
                 (make-erl-val-reject :err "Guard expressions can only have calls to BIFs."))
-               (vlst (eval-guard-expr-list x.args bind))
+               
+               ; Evaluate the argument guard expresions.
+               (vlst (eval-guard-expr-list x.args s))
+               
+               ; If the argument evaluation did not return a list, an argument must
+               ; have caused an exception or a rejection.
                ((if (erl-val-p vlst)) vlst))
               (eval-bif fn vlst)))
         (:fun-call (make-erl-val-reject :err "Guard expressions can only have calls to BIFs.")))))
@@ -158,16 +185,22 @@
   ; Evaluate each guard expression in the list, return the list of results.
   ; However, if any expression causes a rejecetion or exception, stop evaluation 
   ; and return its value.
-  (define eval-guard-expr-list ((x guard-expr-list-p) (bind bind-p))
+  (define eval-guard-expr-list ((x guard-expr-list-p) (s erl-state-p))
     :returns r
     :measure (node-list-count (guard-expr-list-fix x))
     (b* ((x (guard-expr-list-fix x))
-         (bind (bind-fix bind))
+         (s (erl-state-fix s))
          ((if (null x)) nil)
-         (hd (eval-guard-expr (car x) bind))
-         (tl (eval-guard-expr-list (cdr x) bind))
+         
+         ; Evaluate the car and cdr of the guard list.
+         (hd (eval-guard-expr (car x) s))
+         (tl (eval-guard-expr-list (cdr x) s))
+
+         ; Propagate rejections.
          ((if (equal (erl-val-kind hd) :reject)) hd) 
          ((if (and (erl-val-p tl) (equal (erl-val-kind tl) :reject))) tl)
+         
+         ; Propagate exceptions.
          ((if (equal (erl-val-kind hd) :excpt)) hd)
          ((if (erl-val-p tl)) tl))
         (cons hd tl)))
@@ -178,10 +211,9 @@
         :fn eval-guard-expr)
       (defret returns-of-eval-guard-expr-list
         (or (erl-val-p r) (erl-vlst-p r))
-        :fn eval-guard-expr-list
-        )
+        :fn eval-guard-expr-list)
       :mutual-recursion eval-guards
-      :hints (("Goal" :expand (eval-guard-expr-list x bind))))
+      :hints (("Goal" :expand (eval-guard-expr-list x s))))
     
     (std::defret-mutual returns-of-eval-guard-expr-list
       (defret val-kind-of-eval-guard-expr-list
@@ -190,13 +222,13 @@
         :fn eval-guard-expr-list)
       :mutual-recursion eval-guards
       :skip-others t
-      :hints (("Goal" :expand (eval-guard-expr-list x bind))))
+      :hints (("Goal" :expand (eval-guard-expr-list x s))))
 
     (verify-guards eval-guard-expr
       :hints (("Goal" :use 
         (:instance returns-of-eval-guard-expr-list
           (x (node-call->args x))
-          (bind bind)
+          (s s)
           ))))
     (verify-guards eval-guard-expr-list))
 
@@ -222,37 +254,53 @@
 ; cases like these. 
 
 ; Return '(:atom true) if every guard expression in the sequence evaluates 
-; to '(:atom true). If there are rejections, retun the first rejection 
+; to '(:atom true). If there are rejections, return the first rejection 
 ; encounetered. If any guard expressions evaluates to a different value,
 ; return that value.
-(define eval-guard ((x guard-expr-list-p) (bind bind-p))
+(define eval-guard ((x guard-expr-list-p) (s erl-state-p))
   :returns (result erl-val-p)
   :measure (len (guard-expr-list-fix x))
   (b* ((x (guard-expr-list-fix x))
-       (bind (bind-fix bind))
+       (s (erl-state-fix s))
+
+       ; If there are no guard expressions, the guard succeeds. 
        ((if (null x)) (make-erl-val-atom :val 'true))
-       (hd (eval-guard-expr (car x) bind))
-       (tl (eval-guard (cdr x) bind))
+
+       ; Evaluate the car and cdr of the guard expressions.
+       (hd (eval-guard-expr (car x) s))
+       (tl (eval-guard (cdr x) s))
+
+       ; Propagate rejections.
        ((if (equal (erl-val-kind hd) :reject)) hd)
        ((if (equal (erl-val-kind tl) :reject)) tl)
+       
+       ; If any guard expression is not true, the entire guard fails.
        ((unless (and (equal (erl-val-kind hd) :atom) 
                      (equal (erl-val-atom->val hd) 'true)))
         hd))
       tl))
 
-; Return '(:atom true) if any guard expression in the sequence evaluates 
-; to '(:atom true). If any guard expressions evaluates to a rejection
-; return that rejection. Otherwise, return '(:atom false).
-(define eval-guard-seq-when-consp ((x guard-expr-lists-p) (bind bind-p))
+; Return '(:atom true) if there exists a guard in the sequence 
+; that evaluates to '(:atom true). If any guard evaluates to a 
+; rejection return that rejection. Otherwise, return '(:atom false).
+(define eval-guard-seq-when-consp ((x guard-expr-lists-p) (s erl-state-p))
   :returns (result erl-val-p)
   :measure (len (guard-expr-lists-fix x))
   (b* ((x (guard-expr-lists-fix x))
-       (bind (bind-fix bind))
+       (s (erl-state-fix s))
+       
+       ; If no guard evaluated to true, the guard sequence fails.
        ((if (null x)) (make-erl-val-atom :val 'false))
-       (hd (eval-guard (car x) bind))
-       (tl (eval-guard-seq-when-consp (cdr x) bind))
+
+       ; Evaluate the car and cdr of the guard sequence.
+       (hd (eval-guard (car x) s))
+       (tl (eval-guard-seq-when-consp (cdr x) s))
+
+       ; Propagate rejections.
        ((if (equal (erl-val-kind hd) :reject)) hd)
        ((if (equal (erl-val-kind tl) :reject)) tl)
+       
+       ; If any guard succeeds, the guard sequence succeeds.
        ((if (and (equal (erl-val-kind hd) :atom) 
                  (equal (erl-val-atom->val hd) 'true)))
         hd))
@@ -263,9 +311,9 @@
 ; to true. This is not reflected by the base case of eval-guard-seq-when-consp
 ; which checks if at least one of the guards in a sequence evaluates 
 ; to true.
-(define eval-guard-seq ((x guard-expr-lists-p) (bind bind-p))
+(define eval-guard-seq ((x guard-expr-lists-p) (s erl-state-p))
   :returns (result erl-val-p)
   (b* ((x (guard-expr-lists-fix x))
-       (bind (bind-fix bind))
+       (s (erl-state-fix s))
        ((if (null x)) (make-erl-val-atom :val 'true)))
-      (eval-guard-seq-when-consp x bind)))
+      (eval-guard-seq-when-consp x s)))

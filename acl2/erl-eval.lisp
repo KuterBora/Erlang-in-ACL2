@@ -1,7 +1,6 @@
 (in-package "ACL2")
 (include-book "termination")
 (include-book "eval-calls")
-(include-book "clause-processors/generalize" :dir :system)
 
 (set-induction-depth-limit 1)
 
@@ -24,10 +23,7 @@
        (k (erl-k->kont k))
        ((if (zp fuel)) 
         (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit))))
-       (s (erl-state-fix s))
-       (s.in (erl-state->in s))
-       (s.bind (erl-state->bind s))
-       (s.module (erl-state->module s)))
+       ((erl-state s) (erl-state-fix s)))
     (kont-case k
       ; Evaluate an expression.
       (:expr (let ((x k.expr))
@@ -46,13 +42,11 @@
                   (make-erl-s-klst
                     :s (update-erl-state->in
                         s 
-                        (make-erl-val-reject :err "erl-eval: ill-formed fun clauses"))))
-                 (name (acl2::new-symbol 'fun (omap::keys s.bind))))
+                        (make-erl-val-reject :err "erl-eval: ill-formed fun clauses")))))
                 (make-erl-s-klst
                   :s (update-erl-state->in 
                         s
                         (make-erl-val-fun
-                          :name name
                           :arity arity
                           :cls x.cls
                           :bind s.bind
@@ -105,15 +99,15 @@
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs)))))
           ; if x is an if clause, invoke the clause evaluator
           (:if
-            (b* (((mv v & body) (eval-clauses nil x.clauses s.bind))
-                 ((if (equal (erl-val-kind v) :reject))
-                  (make-erl-s-klst :s (update-erl-state->in s v)))
+            (b* (((mv (erl-state rs) body) (eval-clauses nil x.clauses s))
+                 ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))
                  ((if (null body))
                   (make-erl-s-klst
-                    :s (make-erl-state 
-                        :in (make-erl-val-excpt 
-                              :err (make-erl-err :class (make-err-class-error)
-                                                 :reason (make-exit-reason-if-clause)))))))
+                    :s (update-erl-state->in
+                        s
+                        (make-erl-val-excpt 
+                          :err (make-erl-err :class (make-err-class-error)
+                                             :reason (make-exit-reason-if-clause)))))))
                 (make-erl-s-klst
                   :s (update-erl-state->in s (make-erl-val-none))
                   :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
@@ -245,10 +239,10 @@
       
       ; Once rhs is evaluated, match it to lhs
       (:match
-        (b* (((mv match-result match-bind) (eval-match k.lhs s.in s.bind))
+        (b* (((erl-state ms) (eval-match k.lhs s))
              
-             ((if (and (equal (erl-val-kind match-result) :excpt)
-                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err match-result))) 
+             ((if (and (equal (erl-val-kind ms.in) :excpt)
+                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err ms.in))) 
                               :badmatch)))
               (make-erl-s-klst
                 :s (update-erl-state->in
@@ -256,13 +250,12 @@
                     (make-erl-val-excpt 
                       :err (make-erl-err :class (make-err-class-error) 
                                          :reason (make-exit-reason-badmatch :val s.in)))))))
-            (make-erl-s-klst :s (update-erl-state->in-bind s match-result match-bind))))
+            (make-erl-s-klst :s ms)))
       
       ; Once the expression is evaluated, invoke the clause-evaluator.
       (:case-of
-        (b* (((mv v b body) (eval-clauses (list s.in) k.clauses s.bind))
-             ((if (equal (erl-val-kind v) :reject))
-              (make-erl-s-klst :s (update-erl-state->in s v)))
+        (b* (((mv (erl-state rs) body) (eval-clauses (list s.in) k.clauses s))
+             ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))
              ((if (null body))
               (make-erl-s-klst
                 :s (update-erl-state->in
@@ -271,7 +264,7 @@
                       :err (make-erl-err :class (make-err-class-error)
                                          :reason (make-exit-reason-case-clause :val s.in)))))))
             (make-erl-s-klst
-              :s (update-erl-state->bind s b)
+              :s rs
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
       
@@ -323,7 +316,7 @@
                      s
                      (make-erl-val-reject :err "Local call: invalid arg list."))))
              ; Obtain the args from the state. They are reversed because they are
-             ; evaluated in order and accumulated with cons.
+             ; evaluated from left to right and stored in a cons list.
              (args (rev (erl-val-cons->lst s.in)))
              ((mv rs body) 
               (eval-local-call
@@ -372,7 +365,7 @@
       
       ; Evalute the arguments to an anonymous call after the fun expression has been evaluated.
       (:fun-call-args
-        (b* (((if (not (equal (erl-val-kind s.in) :fun)))
+        (b* (((if (not (erl-fun-p s.in)))
               (make-erl-s-klst
                 :s (update-erl-state->in
                   s

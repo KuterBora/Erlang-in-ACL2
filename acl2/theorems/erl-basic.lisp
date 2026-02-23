@@ -1,7 +1,7 @@
 (in-package "ACL2")
-(include-book "erl-eval")
-(include-book "eval-theorems")
-+
+(include-book "../erl-eval")
+(include-book "../eval-theorems")
+
 (set-induction-depth-limit 1)
 
 

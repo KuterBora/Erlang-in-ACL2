@@ -1,7 +1,7 @@
 (in-package "ACL2")
 (include-book "erl-ast")
 (include-book "ast-theorems")
-(include-book "erl-value")
+(include-book "erl-state")
 (include-book "eval-numeric")
 
 (set-induction-depth-limit 1)
@@ -96,183 +96,191 @@
 ; - If sucessful, return the right-hand side value and the new bindings,
 ;   otherwise a badmatch exception.
 ;
-(define eval-match ((p pattern-p) (val erl-val-p) (bind bind-p))
-  :returns (mv (v erl-val-p) (b bind-p))
+(define eval-match ((p pattern-p) (s erl-state-p))
+  :returns (rs erl-state-p)
   :measure (node-count p)
   :verify-guards nil
   (b* ((p (pattern-fix p))
-       (val (erl-val-fix val))
-       (bind (bind-fix bind)))
+       ((erl-state s) (erl-state-fix s))
+       
+       ; Exception to throw if there is a badmatch.
+       (badmatch (update-erl-state->in 
+                    s 
+                    (make-erl-val-excpt 
+                      :err (make-erl-err :class (make-err-class-error) 
+                                         :reason (make-exit-reason-badmatch :val s.in)))))
+      
+       ; Rejection to throw if there is an illegal pattern.
+       (badpattern (update-erl-state->in s (make-erl-val-reject :err "Illegal pattern."))))
+
       (if (arithm-expr-p p)
           (b* ((n (eval-numeric p))
-               ((unless (equal (erl-val-kind n) :integer))
-                (mv (make-erl-val-reject :err "Illegal pattern.") nil))
-               ((unless (equal n val))
-                (mv (make-erl-val-excpt 
-                      :err (make-erl-err :class (make-err-class-error) 
-                                         :reason (make-exit-reason-badmatch :val val)))
-                    nil)))
-              (mv val bind)) 
+               ((unless (equal (erl-val-kind n) :integer)) badpattern)
+               ((unless (equal n s.in)) badmatch))
+              s)
           (node-case p
             (:integer
-              (if (and (equal (erl-val-kind val) :integer) 
-                       (equal p.val (erl-val-integer->val val)))
-                  (mv val bind)
-                  (mv (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val val)))
-                      nil)))
+              (if (and (equal (erl-val-kind s.in) :integer) 
+                       (equal p.val (erl-val-integer->val s.in)))
+                  s
+                  badmatch))
             (:string
-              (if (and (equal (erl-val-kind val) :cons) 
+              (if (and (equal (erl-val-kind s.in) :cons) 
                        (equal (string=>erl-cons p.val)
-                              (erl-val-cons->lst val)))
-                  (mv val bind)
-                  (mv (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val val)))
-                      nil)))
+                              (erl-val-cons->lst s.in)))
+                  s
+                  badmatch))
             (:atom
-              (if (and (equal (erl-val-kind val) :atom) 
-                       (equal p.val (erl-val-atom->val val)))
-                  (mv val bind)
-                  (mv (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val val)))
-                      nil)))
+              (if (and (equal (erl-val-kind s.in) :atom) 
+                       (equal p.val (erl-val-atom->val s.in)))
+                  s
+                  badmatch))
             (:nil
-              (if (and (equal (erl-val-kind val) :cons) 
-                       (null (erl-val-cons->lst val)))
-                  (mv val bind)
-                  (mv (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val val)))
-                      nil)))
-            (:fun
-              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
+              (if (and (equal (erl-val-kind s.in) :cons) 
+                       (null (erl-val-cons->lst s.in)))
+                  s
+                  badmatch))
+            (:fun badpattern)
             (:cons
-              (b* (((unless (equal (erl-val-kind val) :cons))
-                    (mv (make-erl-val-excpt 
-                          :err (make-erl-err :class (make-err-class-error) 
-                                             :reason (make-exit-reason-badmatch :val val)))
-                        nil))
-                    ((if (null (erl-val-cons->lst val))) 
-                     (mv (make-erl-val-excpt 
-                            :err (make-erl-err :class (make-err-class-error) 
-                                               :reason (make-exit-reason-badmatch :val val)))
-                          nil))
-                    ((mv hd hd.bind) (eval-match p.hd (car (erl-val-cons->lst val)) bind))
-                    ((mv tl tl.bind) 
-                     (eval-match p.tl (make-erl-val-cons :lst (cdr (erl-val-cons->lst val))) bind))
-                    ((if (equal (erl-val-kind hd) :reject)) (mv hd nil))
-                    ((if (equal (erl-val-kind tl) :reject)) (mv tl nil))
-                    ((if (equal (erl-val-kind hd) :excpt)) (mv hd nil))
-                    ((if (equal (erl-val-kind tl) :excpt)) (mv tl nil))
-                    ((unless (omap::compatiblep hd.bind tl.bind))
-                     ; TODO: This is supposed to return the value that failed to match. 
-                     ; However, there is no easy way to figure this out.
-                     (mv (make-erl-val-excpt 
-                          :err (make-erl-err :class (make-err-class-error) 
-                                             :reason (make-exit-reason-badmatch :val val)))
-                         nil)))
-                  (mv val (omap::update* tl.bind hd.bind))))
+              (b* (((unless (equal (erl-val-kind s.in) :cons)) badmatch)
+                   
+                   ; If the left-hand side is nil when the right-hand side is not, 
+                   ; it is a badmatch.
+                   ((if (null (erl-val-cons->lst s.in))) badmatch)
+                    
+                   ; Match the car of the list.
+                   ((erl-state hd) 
+                    (eval-match p.hd (update-erl-state->in s (car (erl-val-cons->lst s.in)))))
+                    
+                   ; Match the cdr of the list.
+                   ((erl-state tl) 
+                    (eval-match 
+                      p.tl 
+                      (update-erl-state->in 
+                        s 
+                        (make-erl-val-cons :lst (cdr (erl-val-cons->lst s.in))))))
+                    
+                   ; Propagate rejections.
+                   ((if (equal (erl-val-kind hd.in) :reject)) hd)
+                   ((if (equal (erl-val-kind tl.in) :reject)) tl)
+
+                   ; Propagate exceptions.
+                   ((if (equal (erl-val-kind hd.in) :excpt)) hd)
+                   ((if (equal (erl-val-kind tl.in) :excpt)) tl)
+
+                   ; This is supposed to return the value that failed to match. 
+                   ; However, there is no easy way to figure this out.
+                   ; For now, it just returns the right-hand side value.
+                   ((unless (omap::compatiblep hd.bind tl.bind)) badmatch))
+                  (update-erl-state->bind s (omap::update* tl.bind hd.bind))))
             (:tuple
-              (b* (((unless (equal (erl-val-kind val) :tuple))
-                    (mv (make-erl-val-excpt 
-                          :err (make-erl-err :class (make-err-class-error) 
-                                             :reason (make-exit-reason-badmatch :val val)))
-                        nil))
-                    ((if (and (null (erl-val-tuple->lst val)) (null p.lst))) (mv val bind))
-                    ((if (or (null (erl-val-tuple->lst val)) (null p.lst)))
-                      (mv (make-erl-val-excpt 
-                            :err (make-erl-err :class (make-err-class-error) 
-                                               :reason (make-exit-reason-badmatch :val val)))
-                          nil))
-                    ((mv hd hd.bind) (eval-match (car p.lst) (car (erl-val-tuple->lst val)) bind))
-                    ((mv tl tl.bind) (eval-match (make-node-tuple :lst (cdr p.lst)) 
-                                                 (make-erl-val-tuple :lst (cdr (erl-val-tuple->lst val)))
-                                                 bind))
-                    ((if (equal (erl-val-kind hd) :reject)) (mv hd nil))
-                    ((if (equal (erl-val-kind tl) :reject)) (mv tl nil))
-                    ((if (equal (erl-val-kind hd) :excpt)) (mv hd nil))
-                    ((if (equal (erl-val-kind tl) :excpt)) (mv tl nil))
-                    ((unless (omap::compatiblep hd.bind tl.bind))
-                     ; TODO: This is supposed to return the value that failed to match. 
-                     ; However, there is no easy way to figure this out.
-                     (mv
-                      (make-erl-val-excpt 
-                          :err (make-erl-err :class (make-err-class-error) 
-                                             :reason (make-exit-reason-badmatch :val val)))
-                      nil)))
-                  (mv val (omap::update* tl.bind hd.bind))))
+              (b* (((unless (equal (erl-val-kind s.in) :tuple)) badmatch)
+
+                   ; Match is successful if both sides are empty tuples .
+                   ((if (and (null (erl-val-tuple->lst s.in)) (null p.lst))) s)
+                  
+                   ; Match fails if only one side is empty.
+                   ((if (or (null (erl-val-tuple->lst s.in)) (null p.lst))) badmatch)
+
+                   ; Attempt to match the first element of the tuple. 
+                   ((erl-state hd) 
+                    (eval-match 
+                      (car p.lst) 
+                      (update-erl-state->in s (car (erl-val-tuple->lst s.in)))))
+
+                   ; Attempt to match the rest of the tuple.
+                   ((erl-state tl)
+                    (eval-match 
+                      (make-node-tuple :lst (cdr p.lst)) 
+                      (update-erl-state->in 
+                        s 
+                        (make-erl-val-tuple :lst (cdr (erl-val-tuple->lst s.in))))))
+                   
+                   ; Propagate rejections.
+                   ((if (equal (erl-val-kind hd.in) :reject)) hd)
+                   ((if (equal (erl-val-kind tl.in) :reject)) tl)
+                  
+                   ; Propagate exceptions.
+                   ((if (equal (erl-val-kind hd.in) :excpt)) hd)
+                   ((if (equal (erl-val-kind tl.in) :excpt)) tl)
+                    
+                   ; This is supposed to return the value that failed to match. 
+                   ; However, there is no easy way to figure this out.
+                   ; For now, it just returns the right-hand side value.
+                   ((unless (omap::compatiblep hd.bind tl.bind)) badmatch))
+                  (update-erl-state->bind s (omap::update* tl.bind hd.bind))))
             (:var
-              (b* (((if (equal p.id '_)) (mv val bind))
-                   ((unless (omap::assoc p.id bind))
-                    (mv val (omap::update p.id val bind)))
-                    ((unless (equal (omap::lookup p.id bind) val))
-                     (mv
-                      (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val val)))
-                      nil)))
-                  (mv val bind)))
-            (:unop 
-              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
-            (:binop
-              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
+              (b* (; Wildcard matches any value.
+                   ((if (equal p.id '_)) s)
+                   
+                   ; If the variable is unbound, bind it to the right-hand side value.
+                   ((unless (omap::assoc p.id s.bind))
+                    (update-erl-state->bind s (omap::update p.id s.in s.bind)))
+
+                   ; If the variable is bound, it must be equal to the right-hand side value.
+                   ((unless (equal (omap::lookup p.id s.bind) s.in)) badmatch))
+                  s))
+            (:unop badpattern)
+            (:binop 
+              ; Some binops is patterns are allowed in Erlang, but currently none are supported.
+              badpattern)
             (:match 
-              (b* (((mv l l.bind) (eval-match p.lhs val bind))
-                   ((mv r r.bind) (eval-match p.rhs val bind))
-                   ((if (equal (erl-val-kind l) :reject)) (mv l nil))
-                   ((if (equal (erl-val-kind r) :reject)) (mv r nil))
-                   ((if (equal (erl-val-kind l) :excpt)) (mv l nil))
-                   ((if (equal (erl-val-kind r) :excpt)) (mv r nil))
-                   ((unless (omap::compatiblep r.bind l.bind))
-                     ; TODO: This is supposed to return the value that failed to match. 
-                     ; However, there is no easy way to figure this out.
-                     (mv
-                      (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val val)))
-                      nil)))
-                  (mv val (omap::update* r.bind l.bind))))
-            (:if
-              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
-            (:case-of
-              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
-            (:remote-call
-              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
-            (:call
-              (mv (make-erl-val-reject :err "Illegal pattern.") nil))
-            (:fun-call
-              (mv (make-erl-val-reject :err "Illegal pattern.") nil)))))
-    /// 
+              (b* (; Match both sides to the right-hand side value. 
+                   ((erl-state l) (eval-match p.lhs s))
+                   ((erl-state r) (eval-match p.rhs s))
+
+                   ; Propagate rejections.
+                   ((if (equal (erl-val-kind l.in) :reject)) l)
+                   ((if (equal (erl-val-kind r.in) :reject)) r)
+
+                   ; Propagate exceptions.
+                   ((if (equal (erl-val-kind l.in) :excpt)) l)
+                   ((if (equal (erl-val-kind r.in) :excpt)) r)
+
+                   ; This is supposed to return the value that failed to match. 
+                   ; However, there is no easy way to figure this out.
+                   ; For now, it just returns the right-hand side value.
+                   ((unless (omap::compatiblep r.bind l.bind)) badmatch))
+                  (update-erl-state->bind s (omap::update* r.bind l.bind))))
+            (:if badpattern)
+            (:case-of badpattern)
+            (:remote-call badpattern)
+            (:call badpattern)
+            (:fun-call badpattern))))
+    ///
       (verify-guards eval-match)
       (more-returns
-        (v (or (equal (erl-val-kind v) :reject)
-               (equal (erl-val-kind v) :excpt)
-               (equal (erl-val-kind v) (erl-val-kind val)))
+        (rs (or (equal (erl-val-kind (erl-state->in rs)) :reject)
+                (equal (erl-val-kind (erl-state->in rs)) :excpt)
+                (equal (erl-val-kind (erl-state->in rs)) 
+                       (erl-val-kind (erl-state->in s))))
           :name erl-val-kind-of-eval-match)))
 
 ; Match each pattern to the corresponding argument, accumulate the bindings.
 ; - When callfed by 'if' or 'case-of' clauses, this is simply a wrapper 
 ;   around eval-match
-(define match-args ((ps pattern-list-p) (vs erl-vlst-p) (bind bind-p))
-  :returns (mv (v erl-val-p) (b bind-p))
+(define match-args ((ps pattern-list-p) (vs erl-vlst-p) (s erl-state-p))
+  :returns (rs erl-state-p)
   :measure (len (pattern-list-fix ps))
   (b* ((ps (pattern-list-fix ps))
        (vs (erl-vlst-fix vs))
-       (bind (bind-fix bind))
-       ((if (and (null ps) (null vs))) (mv (make-erl-val-none) bind))
-       ((if (or (null ps) (null vs))) 
-        (mv (make-erl-val-reject :err "Match-Args expects same number of patterns and args") 
-            nil))
-       ((mv hd hd.bind) (eval-match (car ps) (car vs) bind))
-       ((if (equal (erl-val-kind hd) :reject)) (mv hd nil))
-       ((if (equal (erl-val-kind hd) :excpt)) (mv hd nil)))
-     (match-args (cdr ps) (cdr vs) hd.bind))
-  ///
-    (more-returns
-      (v (or (equal (erl-val-kind v) :reject)
-             (equal (erl-val-kind v) :excpt)
-             (equal (erl-val-kind v) :none))
-         :name val-kind-of-match-args)))
+       (s (erl-state-fix s))
+       
+       ; Match succeeds if both sides are nil.
+       ((if (and (null ps) (null vs))) s)
+
+       ; Match fails if only one side is nil.
+       ((if (or (null ps) (null vs)))
+        (update-erl-state->in
+          s 
+          (make-erl-val-reject :err "Match-Args expects same number of patterns and args")))
+
+       ; Match the head of the list.
+       ((erl-state hd) (eval-match (car ps) (update-erl-state->in s (car vs))))
+       
+       ; Propagate exceptions and rejections.
+       ((if (equal (erl-val-kind hd.in) :reject)) hd)
+       ((if (equal (erl-val-kind hd.in) :excpt))  hd))
+
+     ; Recursively match the rest of the list.
+     (match-args (cdr ps) (cdr vs) hd)))

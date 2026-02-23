@@ -2,6 +2,7 @@
 (include-book "erl-ast")
 (include-book "erl-value")
 
+(include-book "misc/total-order" :dir :system)
 (include-book "kestrel/utilities/strings/strings-codes" :dir :system)
 
 (set-induction-depth-limit 1)
@@ -293,16 +294,64 @@
         :enable (erl-and erl-or erl-xor)))
 
 
-; Erlang Term Comparison -------------------------------------------------------
+; Erlang Comparison Operators --------------------------------------------------
 
 ; Remarks:
-; - Erl-val represents strings as lists of integers, but this does not change the 
+; - Erl-val represents strings as lists of integers whixh does not change the 
 ;   Erlang rules for equivalence as "A" =:= [65].
 ; - 0 and -0 are not considered equivalent by =:= in Erlang. That is currently
-;   not the case in this interpreter.
+;   not supported.
 
+; Helper for anonymous function comparison.
+; The Erlang refernce manual gives an order for how functions can be compared
+; with other terms, explained in the definition of erl-comparison below. However,
+; the manual does not specify how funs are compared within each other. While
+; experimentation shows that there is an ordering for funs -- for example,
+; funs in the same module are compared by mathcing their clauses, including line 
+; numbers -- this evaluator will leave fun comparison as undefined behavior in
+; accordance with the Erlang manual.  
+(encapsulate
+  ; function that compares anonymous Erlang functions
+  (((erl-fun-compare * *) => * 
+      :formals (f1 f2) :guard (and (erl-fun-p f1) (erl-fun-p f2))))
 
-; helper to compare Erlang atoms that have been converted to list of integers
+  ; Witness function
+  (local (define erl-fun-compare ((f1 erl-fun-p) (f2 erl-fun-p))
+    :enabled t
+    (b* ((f1 (erl-fun-fix f1))
+         (f2 (erl-fun-fix f2))
+         ((if (<< f2 f1)) 1)
+         ((if (<< f1 f2)) -1))
+        0)))
+
+  ; Constarints
+  (defthm erl-fun-compare-is-integer (integerp (erl-fun-compare f1 f2)))
+  (defthm erl-fun-compare-is-irreflexive (equal (erl-fun-compare f f) 0))
+  (defthm erl-fun-compare-is-transitive 
+    (implies (and (equal (erl-fun-compare f1 f2) -1)
+                  (equal (erl-fun-compare f2 f3) -1))
+             (equal (erl-fun-compare f1 f3) -1)))
+  (defthm erl-fun-compare-is-asymmteric
+    (implies (equal (erl-fun-compare f1 f2) 1)
+             (equal (erl-fun-compare f2 f1) -1)))
+  (defthm erl-fun-compare-trichotomy
+    (or (equal (erl-fun-compare f1 f2) 1)
+        (equal (erl-fun-compare f1 f2) 0)
+        (equal (erl-fun-compare f1 f2) -1))))
+
+; ACL2 total ordering is used for the execution of erl-fun-compare.
+; This function has no bearing on theorems regarding the evaluator -- it simply
+; replaces the constrained function if it is tried to be executed.
+(define total-order-fun-compare ((f1 erl-fun-p) (f2 erl-fun-p))
+  (b* ((f1 (erl-fun-fix f1))
+       (f2 (erl-fun-fix f2))
+       ((if (<< f2 f1)) 1)
+       ((if (<< f1 f2)) -1))
+      0)
+  ///
+  (defattach (erl-fun-compare total-order-fun-compare)))
+
+; Helper to compare Erlang atoms that have been converted to list of integers
 ; - Return 0 if they are equal
 ; - Return 1 if left is greater than right
 ; - Return -1 if left is smaller than right
@@ -326,7 +375,7 @@
 ; - If an arg is not a valid Erlang value, return 3.
 ;
 ; TODO: I need to clean up the multicase. Maybe I should have a guard
-; that ensures a list or tuple does not contain error, as that should have been\
+; that ensures a list or tuple does not contain error, as that should have been
 ; checked by the caller already.
 ;
 ; The arguments can be of different data types. The following order is defined
@@ -386,6 +435,10 @@
                  (erl-compare-atom-string l r)))
           ((:atom :integer) 1)
           ((:atom &) -1)
+          ((:fun :fun) (erl-fun-compare left right))
+          ((:fun :integer) 1)
+          ((:fun :atom) 1)
+          ((:fun &) -1)
           ((:tuple :tuple)
            (let ((llst (erl-val-tuple->lst left))
                  (rlst (erl-val-tuple->lst right))) 
@@ -395,6 +448,7 @@
                (t (erl-compare-by-elements llst rlst)))))
           ((:tuple :integer) 1)
           ((:tuple :atom) 1)
+          ((:tuple :fun) 1)
           ((:tuple &) -1)
           ((:cons :cons) 
            (let ((llst (erl-val-cons->lst left))
@@ -402,6 +456,7 @@
             (erl-compare-by-elements llst rlst)))
           ((:cons :integer) 1)
           ((:cons :atom) 1)
+          ((:cons :fun) 1)
           ((:cons :tuple) 1)
           ((:cons &) -1)
           (:otherwise 3))))
@@ -422,40 +477,6 @@
                     ((equal curr 0) (erl-compare-by-elements (cdr left) (cdr right)))
                     (t curr))))))))
 
-; Some tests for erl-compare
-; (and
-;   (equal (erl-compare '(:integer 9) '(:integer 3)) 1)
-;   (equal (erl-compare '(:integer 3) '(:integer 3)) 0)
-;   (equal (erl-compare '(:integer 1) '(:integer 3)) -1)
-
-
-;   (equal (erl-compare '(:atom z) '(:atom foo)) 1)
-;   (equal (erl-compare '(:atom foo) '(:atom foo)) 0)
-;   (equal (erl-compare '(:atom bar) '(:atom foo)) -1)
-
-;   (equal (erl-compare '(:integer 100) '(:atom foo)) -1)
-;   (equal (erl-compare '(:integer 100) '(:tuple nil)) -1)
-;   (equal (erl-compare '(:tuple nil) '(:cons nil)) -1)
-
-;   (equal (erl-compare '(:tuple ((:integer 1))) '(:tuple ((:integer 0)))) 1)
-;   (equal (erl-compare '(:tuple ((:integer 1))) '(:tuple ((:integer 1)))) 0)
-;   (equal (erl-compare '(:tuple ((:integer 1))) '(:tuple ((:integer 2)))) -1)
-;   (equal (erl-compare '(:tuple ((:integer 1) (:integer 2))) 
-;                       '(:tuple ((:integer 1) (:integer 1)))) 
-;           1)
-;   (equal (erl-compare '(:tuple ((:integer 2))) 
-;                       '(:tuple ((:integer 1) (:integer 1)))) 
-;           -1)
-  
-;   (equal (erl-compare '(:cons ((:integer 1))) '(:cons ((:integer 0)))) 1)
-;   (equal (erl-compare '(:cons ((:integer 1))) '(:cons ((:integer 1)))) 0)
-;   (equal (erl-compare '(:cons ((:integer 1))) '(:cons ((:integer 2)))) -1)
-;   (equal (erl-compare '(:cons ((:integer 1) (:integer 2))) 
-;                       '(:cons ((:integer 1) (:integer 1)))) 
-;           1)
-;   (equal (erl-compare '(:cons ((:integer 2))) 
-;                       '(:cons ((:integer 1) (:integer 1)))) 
-;           1))
 
 ; Given a comparison binop, apply the corresponding Erlang operation.
 (define apply-erl-comp-binop ((op comp-binop-p) (left erl-val-p) (right erl-val-p))
