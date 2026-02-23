@@ -23,7 +23,13 @@
   ((s erl-state-p :default (make-erl-state))
    (klst erl-klst-p :default nil)))
 
-; Helpers ---------------------------------------------------------------------
+
+; Helpers for Setting Fields --------------------------------------------------
+
+; Remark: 
+; - fty::change might be good alternate, but defining these accessors 
+;   might provide more felixibility -- theorems can be proven and the functions
+;   can be disabled. 
 
 (define update-erl-state->in ((s erl-state-p) (in erl-val-p))
   :returns (rs erl-state-p)
@@ -34,6 +40,12 @@
                       :world (erl-state->world s)
                       :module (erl-state->module s))))
 
+(defrule update-erl-state->in-fields
+  (implies (and (erl-state-p s) (erl-val-p val))
+           (equal (erl-state->in (update-erl-state->in s val))
+                  val))
+  :enable update-erl-state->in)
+
 (define update-erl-state->bind ((s erl-state-p) (bind bind-p))
   :returns (rs erl-state-p)
   (b* ((s (erl-state-fix s))
@@ -42,6 +54,13 @@
                       :bind bind
                       :world (erl-state->world s)
                       :module (erl-state->module s))))
+
+(defrule update-erl-state->bind-fields
+  (implies (and (erl-state-p s) (bind-p b))
+           (equal (erl-state->in (update-erl-state->bind s b))
+                  (erl-state->in s)))
+  :enable update-erl-state->bind)
+
 
 (define update-erl-state->in-bind ((s erl-state-p) (in erl-val-p) (bind bind-p))
   :returns (rs erl-state-p)

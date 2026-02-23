@@ -84,15 +84,15 @@
        ; Check the module's defintions for the function
        ; The body of the function will not have access to current bindings
        ((if (omap::assoc fn fn-defns))
-        (b* (((mv v b body) 
+        (b* (((mv (erl-state rs) body) 
               (eval-clauses 
                args 
                (omap::lookup fn fn-defns)
-               nil))
-             ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
+               (update-erl-state->bind s nil)))
+             ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
              ((if (null body)) 
               (mv function-clause nil)))
-            (mv (update-erl-state->in-bind s v b) body)))
+            (mv rs body)))
       
        ; Check the module's imports for the function
        ((if (omap::assoc fn imports))
@@ -131,14 +131,14 @@
                  nil))
              
              ; The body of the function will not have access to current bindings
-             ((mv v b body)
+             ((mv (erl-state rs) body)
               (eval-clauses
                 args
                 (omap::lookup fn idefns)
-                nil))
-              ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
+                (update-erl-state->bind-mod s nil 'imod-name)))
+              ((if (equal (erl-val-kind rs.in) :reject)) (mv (update-erl-state->in s rs.in) nil))
               ((if (null body)) (mv function-clause nil)))
-            (mv (update-erl-state->in-bind-mod s v b imod-name) body)))
+            (mv (update-erl-state->in-bind-mod s rs.in rs.bind imod-name) body)))
 
        ; Check if the function is a BIF
        ((if (erl-bif-p fn)) (mv (update-erl-state->in s (eval-bif fn args)) nil)))
@@ -216,14 +216,14 @@
        ; - The function also needs to have been exported
        ; - The function will not have access to local bindings
        ((if (and (omap::assoc fn fn-defns) (member fn exports :test 'equal)))
-        (b* (((mv v b body) 
+        (b* (((mv (erl-state rs) body) 
               (eval-clauses 
                args
                (omap::lookup fn fn-defns)
-               nil))
-             ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
+               (update-erl-state->bind-mod s nil module)))
+             ((if (equal (erl-val-kind rs.in) :reject)) (mv (update-erl-state->in s rs.in) nil))
              ((if (null body)) (mv function-clause nil)))
-            (mv (update-erl-state->in-bind-mod s v b module) body))))
+            (mv (update-erl-state->in-bind-mod s rs.in rs.bind module) body))))
     (mv undef nil)))
 
 
@@ -295,14 +295,18 @@
                  :class (make-err-class-error)
                  :reason (make-exit-reason-function-clause)))))
 
-      ((mv v b body) (eval-clauses args (erl-val-fun->cls fun) nil))
-      ((if (equal (erl-val-kind v) :reject)) (mv (update-erl-state->in s v) nil))
+      ((mv (erl-state rs) body) 
+       (eval-clauses 
+        args 
+        (erl-val-fun->cls fun)
+        (update-erl-state->bind-mod s nil (erl-val-fun->module fun))))
+      ((if (equal (erl-val-kind rs.in) :reject)) (mv (update-erl-state->in s rs.in) nil))
       ((if (null body)) (mv function-clause nil))
 
       ; Remark: Badmatch exception are supposed to return the value that failed to 
       ; match. This is currently not supported. Instead, return the whole fun.
-      ((unless (omap::compatiblep b (erl-val-fun->bind fun))) 
-       (mv  
+      ((unless (omap::compatiblep rs.bind (erl-val-fun->bind fun))) 
+       (mv
         (update-erl-state->in 
            s 
            (make-erl-val-excpt 
@@ -311,10 +315,10 @@
                  :class (make-err-class-error)
                  :reason (make-exit-reason-badmatch :val fun))))
         nil)))
-    (mv 
+    (mv
       (update-erl-state->in-bind-mod 
         s 
-        v 
-        (omap::update* (erl-val-fun->bind fun) b)
+        rs.in 
+        (omap::update* (erl-val-fun->bind fun) rs.bind)
         (erl-val-fun->module fun))
       body)))
