@@ -48,7 +48,7 @@
        ((if (equal (erl-val-kind ms.in) :excpt)) (mv rs body))
        
        ; Evaluate the guard sequence.
-       (guard-result (eval-guard-seq guards ms.bind))
+       (guard-result (eval-guard-seq guards ms))
 
        ; Propagate rejections.
        ((if (equal (erl-val-kind guard-result) :reject)) 

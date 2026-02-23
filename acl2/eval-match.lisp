@@ -264,7 +264,7 @@
   :measure (len (pattern-list-fix ps))
   (b* ((ps (pattern-list-fix ps))
        (vs (erl-vlst-fix vs))
-       ((erl-state s) (erl-state-fix s))
+       (s (erl-state-fix s))
        
        ; Match succeeds if both sides are nil.
        ((if (and (null ps) (null vs))) s)

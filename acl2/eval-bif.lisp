@@ -1,14 +1,18 @@
 (in-package "ACL2")
-(include-book "erl-state")
+(include-book "erl-world")
 
 ; Evaluate BIF Calls -----------------------------------------------------------
 
 (define eval-bif ((fn erl-bif-p) (args erl-vlst-p))
   :returns (v erl-val-p)
-  (b* ((fn (fn-fix fn))
+  (b* (((fn fn) (fn-fix fn))
        (args (erl-vlst-fix args))
-       ((if (not (equal (len args) (fn->arity fn)))) 
+
+       ; The arity of the args must match the arity of the function
+       ((if (not (equal (len args) fn.arity))) 
         (make-erl-val-reject :err "eval-bif: bad arity")))
+     
+     ; Match and evaluate the BIF
       (cond
         ((equal fn (make-fn :name 'is_atom :arity 1))
          (if (equal (erl-val-kind (car args)) :atom)
