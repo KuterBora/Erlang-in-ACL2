@@ -2,31 +2,15 @@
 
 ## Setup
 
-1. **Install Erlang and ALC2**
-   - Erlang: TODO
-   - ACL2: TODO
-  
-2. **Clone the Repository**  
-   Clone this repository to your local machine:
-
-   ```bash
-   git clone <https://github.com/KuterBora/Erlang-in-ACL2>
-   ```
-   
-3. **Certify the Community Books**
-   TODO
-
-4. **Certify the Project Books**
-   TODO
+TODO
 
 ## Erlang in ACL2
 
-TODO: description of Erlang in ACL2
+TODO: description
 
 Top-level repo guide:
 - `acl2`: TODO
-- `erlang`: Scripts to parse and convert Erlang code to an ACL2 compatible AST.
-- `ref`: reference interpreter in Erlang.
+- `erl`: reference interpreter in Erlang.
 
 Here are some key files and folders in `acl2`:
 - `theorems` Contains theorems regarding Erlang code.
