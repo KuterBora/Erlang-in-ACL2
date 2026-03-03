@@ -23,6 +23,6 @@ Here are some key files and folders in `acl2`:
 - `erl-kont.lisp`: Defines continuations that encode the next step of the evaluator.
 - `erl-state.lisp` Defines Erlang-state which represents the current value, bindings, world, and messages of the evaluator.
 
-- `eval-termination.lisp`: Contains the termination proof for the evaluator.
+- `termination.lisp`: Contains the termination proof for the evaluator.
 - `erl-eval.lisp`: The Erlang evaluator.
 - `eval-theorems.lisp` Contains the core theorems regarding the evaluator.
