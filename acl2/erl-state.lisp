@@ -31,6 +31,8 @@
 ;   might provide more felixibility -- theorems can be proven and the functions
 ;   can be disabled. 
 
+;; TODO: complete the theorems
+
 (define update-erl-state->in ((s erl-state-p) (in erl-val-p))
   :returns (rs erl-state-p)
   (b* ((s (erl-state-fix s))
@@ -42,7 +44,7 @@
   ///
     (defrule update-erl-state->in-fields
       (implies (and (erl-state-p s) (erl-val-p val))
-              (equal (erl-state->in (update-erl-state->in s val))
+               (equal (erl-state->in (update-erl-state->in s val))
                       val))))
 
 (define update-erl-state->bind ((s erl-state-p) (bind bind-p))
@@ -56,7 +58,7 @@
   ///
     (defrule update-erl-state->bind-fields
       (implies (and (erl-state-p s) (bind-p b))
-              (equal (erl-state->in (update-erl-state->bind s b))
+               (equal (erl-state->in (update-erl-state->bind s b))
                       (erl-state->in s)))))
 
 (define update-erl-state->in-bind ((s erl-state-p) (in erl-val-p) (bind bind-p))
@@ -67,7 +69,12 @@
       (make-erl-state :in in
                       :bind bind
                       :world (erl-state->world s)
-                      :module (erl-state->module s))))
+                      :module (erl-state->module s)))
+  ///
+    (defrule update-erl-state->in-bind-fields
+      (implies (and (erl-state-p s) (bind-p b) (erl-val-p in))
+               (and (equal (erl-state->in (update-erl-state->in-bind s in b)) in)
+                    (equal (erl-state->bind (update-erl-state->in-bind s in b)) b)))))
 
 (define update-erl-state->mod ((s erl-state-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -98,3 +105,25 @@
                       :bind bind
                       :world (erl-state->world s)
                       :module mod)))
+
+
+; Helpers for Utility ---------------------------------------------------------
+
+; Any erl-state that does not contain a rejection, exception, or flimit.
+(define wf-state-p ((s erl-state-p))
+  :returns (ok booleanp)
+  (and (erl-state-p s)
+       (let ((kind (erl-val-kind (erl-state->in s))))
+            (and (not (equal kind :reject))
+                 (not (equal kind :excpt))
+                 (not (equal kind :flimit)))))
+  ///
+    (defrule wf-state-props
+      (implies 
+        (wf-state-p s)
+        (and (erl-state-p s)
+             (let ((kind (erl-val-kind (erl-state->in s))))
+                  (and (not (equal kind :reject))
+                       (not (equal kind :excpt))
+                      (not (equal kind :flimit))))))
+      :expand (wf-state-p s)))

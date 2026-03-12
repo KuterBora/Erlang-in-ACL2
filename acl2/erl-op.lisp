@@ -617,7 +617,9 @@
        ((if (equal (erl-val-kind left) :flimit)) left)
        ((if (equal (erl-val-kind right) :flimit)) right)
        ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right))
+       ((if (equal (erl-val-kind right) :reject)) right)
+       ((if (equal (erl-val-kind left) :excpt)) left)
+       ((if (equal (erl-val-kind right) :excpt)) right) )
       (cond
         ((arithm-binop-p op) (apply-erl-arithm-binop op left right))
         ((bool-binop-p op) (apply-erl-bool-binop op left right))
@@ -634,7 +636,17 @@
         :use ((:instance apply-erl-arithm-binop-of-flimit)
               (:instance apply-erl-bool-binop-of-flimit)
               (:instance apply-erl-comp-binop-of-flimit)
-              (:instance apply-erl-list-op-of-flimit))))
+              (:instance apply-erl-list-op-of-flimit)))
+      (defrule apply-erl-binop-of-flimit-2
+        (implies (and (erl-val-p left) (equal (erl-val-kind left) :flimit))
+                (equal (apply-erl-binop op left right) (make-erl-val-flimit))))
+      (defrule apply-erl-binop-of-excpt
+        (implies (and (erl-val-p left) 
+                      (erl-val-p right)
+                      (not (equal (erl-val-kind right) :flimit))
+                      (not (equal (erl-val-kind right) :reject))
+                      (equal (erl-val-kind left) :excpt))
+                (equal (apply-erl-binop op left right) left))))
 
 
 ; Apply Erlang Unary Operations ------------------------------------------------

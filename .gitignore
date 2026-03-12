@@ -3,4 +3,5 @@
 *.port
 *.lx64fsl
 *.cert.out
+*tmp.lisp
 Makefile-tmp
