@@ -21,9 +21,18 @@
   (b* ((k (erl-k-fix k))
        (fuel (erl-k->fuel k))
        (k (erl-k->kont k))
+       ((erl-state s) (erl-state-fix s))
+
+       ; If the state has an error, return right away.
+       ; TODO: exception handling (catch, try-catch)
+       ((if (or (equal (erl-val-kind s.in) :flimit)
+                (equal (erl-val-kind s.in) :reject)
+                (equal (erl-val-kind s.in) :excpt)))
+        (make-erl-s-klst :s s))
+
+       ; Return flimit if fuel had ran out.
        ((if (zp fuel)) 
-        (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit))))
-       ((erl-state s) (erl-state-fix s)))
+        (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit)))))
     (kont-case k
       ; Evaluate an expression.
       (:expr (let ((x k.expr))
@@ -448,14 +457,13 @@
   :returns (r erl-state-p)
   :well-founded-relation l<
   :measure (klst-measure (erl-klst-fix klst))
-  (b* ((s (erl-state-fix s))
+  (b* (((erl-state s) (erl-state-fix s))
        (klst (erl-klst-fix klst))
-       (s.in (erl-val-fix (erl-state->in s)))
        ; The evaluator has run out of fuel
        ((if (equal (erl-val-kind s.in) :flimit)) s)
        ; The evaluator has encountered an internal error
        ((if (equal (erl-val-kind s.in) :reject)) s)
-       ; TODO: exception handling (catch, try-catch)
+       ; TODO: remove this exception handling is added
        ((if (equal (erl-val-kind s.in) :excpt)) s)
        ((if (endp klst)) s)
        ((cons khd ktl) klst)

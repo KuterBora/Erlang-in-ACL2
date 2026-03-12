@@ -86,7 +86,7 @@
     :measure (list (acl2-count x) 0)))
 
 
-; Utility Functions/Structures -------------------------------------------------
+; Utility Functions/Types ------------------------------------------------------
 
 ; Erlang boolean
 (fty::defsubtype erl-boolean
