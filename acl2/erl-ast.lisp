@@ -29,7 +29,7 @@
 (fty::defsubtype arithm-unop
   :supertype symbolp
   :restriction 
-    (lambda (x) 
+    (lambda (x)
       (not (null (member x '(+ -)))))
   :fix-value '+)
 

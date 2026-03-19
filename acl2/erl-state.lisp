@@ -42,10 +42,12 @@
                       :world (erl-state->world s)
                       :module (erl-state->module s)))
   ///
-    (defrule update-erl-state->in-fields
+    (defrule update-erl-state->in-fields2
       (implies (and (erl-state-p s) (erl-val-p val))
-               (equal (erl-state->in (update-erl-state->in s val))
-                      val))))
+               (and (equal (erl-state->in (update-erl-state->in s val))
+                           val)
+                    (equal (erl-state->bind (update-erl-state->in s val))
+                           (erl-state->bind s))))))
 
 (define update-erl-state->bind ((s erl-state-p) (bind bind-p))
   :returns (rs erl-state-p)

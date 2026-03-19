@@ -119,9 +119,9 @@
 ;
 ; If evaluation succeeds for s and k, in the returned state
 ; - in will contain the result of the binop
-; - bind will contain any previous bindings and any new ones creeated
+; - bind will contain any previous bindings and any new ones created
 ;   in either operand.
-; - Rest if the field will remain unchanged
+; Rest: TODO
 
 (defrule apply-k-of-binop->in
   (implies 

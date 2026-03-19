@@ -166,7 +166,7 @@
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
         (make-erl-s-klst
-          :s (update-erl-state->bind s k.bind-0)
+          :s (update-erl-state->in-bind s (make-erl-val-none) k.bind-0)
           :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.cdr-expr))
                       (make-erl-k :fuel (1- fuel)
                                   :kont (make-kont-cons-merge :car-val s.in 
