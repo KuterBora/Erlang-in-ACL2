@@ -4,7 +4,6 @@
 
 ; Kont-Step for Atomic Expressions ---------------------------------------------
 
-
 ; The following theorems show the result of evaluating atomic expressions -- 
 ; integers, atoms, strings, empty lists, anononymous functions and variables.
 ;

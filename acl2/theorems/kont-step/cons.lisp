@@ -125,7 +125,7 @@
   (implies 
     (and (wf-state-p s)
          (erl-k-p k)
-         (> (erl-k->fuel k) 5)
+         (> (erl-k->fuel k) 2)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
     (b* (((erl-state s) s)
