@@ -273,7 +273,7 @@
                       :err (make-erl-err :class (make-err-class-error)
                                          :reason (make-exit-reason-case-clause :val s.in)))))))
             (make-erl-s-klst
-              :s rs
+              :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
       

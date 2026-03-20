@@ -138,7 +138,7 @@
          (a_res (apply-k (update-erl-state->in s (make-erl-val-none))
                          (list (make-erl-k :fuel (1- k.fuel) 
                                            :kont (make-kont-expr :expr a)))))
-         ((unless (wf-state-p a_res)) t) 
+         ((unless (wf-state-p a_res)) t)
          (b_res (apply-k (update-erl-state->bind a_res s.bind)
                          (list (make-erl-k :fuel (- k.fuel 2) 
                                            :kont (make-kont-expr :expr b)))))
