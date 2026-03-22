@@ -142,14 +142,14 @@
           
           ; if x is a fun call, first evaluate the fun expr and then arguments
           (:fun-call
-            (make-erl-s-klst 
+            (make-erl-s-klst
               :s (update-erl-state->in s (make-erl-val-none))
               :klst
                 (list (make-erl-k
                         :fuel (1- fuel)
                         :kont (make-kont-expr :expr x.fun))
                       (make-erl-k
-                        :fuel (1- fuel) 
+                        :fuel (1- fuel)
                         :kont (make-kont-fun-call-args :args x.args)))))
           ; if x is a local call, first evaluate the arguments and then handle the call
           (:call
@@ -395,7 +395,7 @@
       (:fun-call
         (b* (((if (not (equal (erl-val-kind s.in) :cons)))
               (make-erl-s-klst 
-                :s (update-erl-state->in 
+                :s (update-erl-state->in
                      s
                      (make-erl-val-reject :err "Fun call: invalid arg list."))))
              ; Obtain the args from the state. They are reversed because they are

@@ -25,10 +25,10 @@
           :fuel (1- (erl-k->fuel k))
           :kont (make-kont-function-args-start 
                   :args (node-call->args (kont-expr->expr (erl-k->kont k)))))
-        (make-erl-k :fuel (1- (erl-k->fuel k))
-                    :kont
-                      (make-kont-local-call 
-                        :call (node-call->fn (kont-expr->expr (erl-k->kont k))))))))
+        (make-erl-k
+          :fuel (1- (erl-k->fuel k))
+          :kont (make-kont-local-call 
+                  :call (node-call->fn (kont-expr->expr (erl-k->kont k))))))))
   :enable eval-k)
 
 (defrule eval-k-of-expr-local-call->s
@@ -98,7 +98,7 @@
 
 
 ; apply-k with a local-call expression continuation is equivalent to evaluating
-; the arguments in order, invoking the call evaluator to find the right the right
+; the arguments in order, invoking the call evaluator to find the first matching
 ; clause, executing the clause body, and then returning to the module and bindings
 ; before the call. -- assuming there are no excpetion rejection, or out-of-fuel errors.
 ;
@@ -142,4 +142,3 @@
                             :kont (make-kont-function-return 
                                     :bind (erl-state->bind args_res)
                                     :module (erl-state->module args_res)))))))))
-                                    
