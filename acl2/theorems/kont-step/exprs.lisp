@@ -6,23 +6,20 @@
 
 (defrule eval-k-exprs->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :exprs))
-    (equal 
-      (erl-s-klst->s (eval-k k s)) s))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :exprs))
+    (equal (erl-s-klst->s (eval-k k s)) s))
   :enable eval-k)
 
 (defrule eval-k-exprs->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :exprs)
-       (kont-exprs->exprs (erl-k->kont k)))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :exprs)
+         (kont-exprs->exprs (erl-k->kont k)))
     (equal 
       (erl-s-klst->klst (eval-k k s))
         (list (make-erl-k 
@@ -35,24 +32,21 @@
 
 (defrule eval-k-exprs-nil->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :exprs)
-       (null (kont-exprs->exprs (erl-k->kont k))))
-    (equal 
-      (erl-s-klst->klst (eval-k k s)) nil))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :exprs)
+         (null (kont-exprs->exprs (erl-k->kont k))))
+    (equal (erl-s-klst->klst (eval-k k s)) nil))
   :enable eval-k)
 
 (defrule kont-exprs-of-step
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :exprs)
-       (kont-exprs->exprs (erl-k->kont k)))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :exprs)
+         (kont-exprs->exprs (erl-k->kont k)))
     (equal 
       (apply-k s (list k))
       (apply-k

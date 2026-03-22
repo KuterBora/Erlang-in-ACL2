@@ -10,12 +10,11 @@
 ; Stepping the initial continuation
 (defrule eval-k-of-expr-remote-call->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :remote-call))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :remote-call))
     (equal 
       (erl-s-klst->klst (eval-k k s))
       (list
@@ -32,12 +31,11 @@
 
 (defrule eval-k-of-expr-remote-call->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :remote-call))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :remote-call))
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
@@ -47,17 +45,16 @@
 ; Stepping the remote-call continuation
 (defrule eval-k-of-remote-call->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :remote-call)
-       (equal (erl-val-kind (erl-state->in s)) :cons)
-       (mv-nth 1 (eval-remote-call
-                    (update-erl-state->in s (make-erl-val-none))
-                    (kont-remote-call->module (erl-k->kont k))
-                    (kont-remote-call->call (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s))))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :remote-call)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (mv-nth 1 (eval-remote-call
+                     (update-erl-state->in s (make-erl-val-none))
+                     (kont-remote-call->module (erl-k->kont k))
+                     (kont-remote-call->call (erl-k->kont k))
+                     (rev (erl-val-cons->lst (erl-state->in s))))))
     (equal
       (erl-s-klst->klst (eval-k k s))
       (list (make-erl-k 
@@ -77,17 +74,16 @@
 
 (defrule eval-k-of-remote-call->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :remote-call)
-       (equal (erl-val-kind (erl-state->in s)) :cons)
-       (mv-nth 1 (eval-remote-call
-                    (update-erl-state->in s (make-erl-val-none))
-                    (kont-remote-call->module (erl-k->kont k))
-                    (kont-remote-call->call (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s))))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :remote-call)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (mv-nth 1 (eval-remote-call
+                     (update-erl-state->in s (make-erl-val-none))
+                     (kont-remote-call->module (erl-k->kont k))
+                     (kont-remote-call->call (erl-k->kont k))
+                     (rev (erl-val-cons->lst (erl-state->in s))))))
     (equal
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in 

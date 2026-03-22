@@ -12,38 +12,35 @@
 ; Stepping the initial continuation
 (defrule eval-k-of-expr-empty-tuple->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
-       (null (node-tuple->lst (kont-expr->expr (erl-k->kont k)))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
+         (null (node-tuple->lst (kont-expr->expr (erl-k->kont k)))))
     (equal (erl-s-klst->klst (eval-k k s)) nil))
   :enable eval-k)
 
 (defrule eval-k-of-expr-empty-tuple->s
   (implies 
-    (and
-      (wf-state-p s)
-      (erl-k-p k)
-      (> (erl-k->fuel k) 0)
-      (equal (kont-kind (erl-k->kont k)) :expr)
-      (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
-      (null (node-tuple->lst (kont-expr->expr (erl-k->kont k)))))
+    (and (wf-state-p s)
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
+         (null (node-tuple->lst (kont-expr->expr (erl-k->kont k)))))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-tuple :lst nil))))
   :enable eval-k)
 
 (defrule eval-k-of-expr-tuple->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
-       (node-tuple->lst (kont-expr->expr (erl-k->kont k))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
+         (node-tuple->lst (kont-expr->expr (erl-k->kont k))))
     (equal 
       (erl-s-klst->klst (eval-k k s))
       (list (make-erl-k 
@@ -62,13 +59,12 @@
 
 (defrule eval-k-of-expr-tuple->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
-       (node-tuple->lst (kont-expr->expr (erl-k->kont k))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
+         (node-tuple->lst (kont-expr->expr (erl-k->kont k))))
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
@@ -78,28 +74,27 @@
 ; Stepping the tuple continuation                                        
 (defrule eval-k-of-tuple->klst
   (implies 
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :tuple))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :tuple))
     (equal (erl-s-klst->klst (eval-k k s))
            (list (make-erl-k 
                     :fuel (1- (erl-k->fuel k)) 
                     :kont (make-kont-expr :expr (kont-tuple->t-rem (erl-k->kont k))))
-                 (make-erl-k :fuel (1- (erl-k->fuel k))
-                             :kont (make-kont-tuple-merge 
-                                    :t-hd (erl-state->in s)
-                                    :t-bind (erl-state->bind s))))))
+                 (make-erl-k 
+                    :fuel (1- (erl-k->fuel k))
+                    :kont (make-kont-tuple-merge 
+                            :t-hd (erl-state->in s)
+                            :t-bind (erl-state->bind s))))))
   :enable eval-k)
 
 (defrule eval-k-of-tuple->s
   (implies 
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :tuple))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :tuple))
     (equal (erl-s-klst->s (eval-k k s))
            (update-erl-state->bind 
              s
@@ -110,26 +105,23 @@
 ; Stepping the tuple-merge continuation                                        
 (defrule eval-k-of-tuple-merge->klst
   (implies 
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :tuple-merge))
-    (equal (erl-s-klst->klst (eval-k k s))
-           nil))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :tuple-merge))
+    (equal (erl-s-klst->klst (eval-k k s)) nil))
   :enable eval-k)
 
 (defrule eval-k-of-tuple-merge->s
   (implies 
-    (and
-       (wf-state-p s)
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :tuple-merge)
-       (equal (erl-val-kind (erl-state->in s)) :tuple)
-       (omap::compatiblep
-        (erl-state->bind s) 
-        (kont-tuple-merge->t-bind (erl-k->kont k))))
+    (and (wf-state-p s)
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :tuple-merge)
+         (equal (erl-val-kind (erl-state->in s)) :tuple)
+         (omap::compatiblep
+          (erl-state->bind s) 
+          (kont-tuple-merge->t-bind (erl-k->kont k))))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in-bind 
             s

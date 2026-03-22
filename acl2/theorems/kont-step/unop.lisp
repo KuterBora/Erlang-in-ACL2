@@ -12,12 +12,11 @@
 ; Stepping the initial continuation
 (defrule eval-k-of-expr-unop->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :unop))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :unop))
     (equal 
       (erl-s-klst->klst (eval-k k s))
       (list 
@@ -32,12 +31,11 @@
 
 (defrule eval-k-of-expr-unop->s
   (implies 
-    (and
-      (wf-state-p s)
-      (erl-k-p k)
-      (> (erl-k->fuel k) 0)
-      (equal (kont-kind (erl-k->kont k)) :expr)
-      (equal (node-kind (kont-expr->expr (erl-k->kont k))) :unop))
+    (and (wf-state-p s)
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :unop))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-none))))
   :enable eval-k)
@@ -46,22 +44,19 @@
 ; Stepping the unop continuation                                            
 (defrule eval-k-of-unop->klst
   (implies 
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :unop))
-    (equal (erl-s-klst->klst (eval-k k s))
-           nil))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+          (equal (kont-kind (erl-k->kont k)) :unop))
+    (equal (erl-s-klst->klst (eval-k k s)) nil))
   :enable eval-k)
 
 (defrule eval-k-of-unop->s
   (implies 
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :unop))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :unop))
     (equal
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in

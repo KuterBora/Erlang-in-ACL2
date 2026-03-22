@@ -46,12 +46,11 @@
 ; Stepping the fun-call-args continuation
 (defrule eval-k-of-fun-call-args->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :fun-call-args)
-       (erl-fun-p (erl-state->in s)))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :fun-call-args)
+         (erl-fun-p (erl-state->in s)))
     (equal
       (erl-s-klst->klst (eval-k k s))
       (list (make-erl-k 
@@ -65,12 +64,11 @@
 
 (defrule eval-k-of-fun-call-args->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :fun-call-args)
-       (erl-fun-p (erl-state->in s)))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :fun-call-args)
+         (erl-fun-p (erl-state->in s)))
     (equal
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
@@ -80,16 +78,15 @@
 ; Stepping the fun-call continuation
 (defrule eval-k-of-fun-call->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :fun-call)
-       (equal (erl-val-kind (erl-state->in s)) :cons)
-       (mv-nth 1 (eval-fun-call
-                    (update-erl-state->in s (make-erl-val-none))
-                    (kont-fun-call->fun (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s))))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :fun-call)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (mv-nth 1 (eval-fun-call
+                     (update-erl-state->in s (make-erl-val-none))
+                     (kont-fun-call->fun (erl-k->kont k))
+                     (rev (erl-val-cons->lst (erl-state->in s))))))
     (equal
       (erl-s-klst->klst (eval-k k s))
       (list (make-erl-k 
@@ -108,16 +105,15 @@
 
 (defrule eval-k-of-fun-call->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :fun-call)
-       (equal (erl-val-kind (erl-state->in s)) :cons)
-       (mv-nth 1 (eval-fun-call
-                    (update-erl-state->in s (make-erl-val-none))
-                    (kont-fun-call->fun (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s))))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :fun-call)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (mv-nth 1 (eval-fun-call
+                     (update-erl-state->in s (make-erl-val-none))
+                     (kont-fun-call->fun (erl-k->kont k))
+                     (rev (erl-val-cons->lst (erl-state->in s))))))
     (equal
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in

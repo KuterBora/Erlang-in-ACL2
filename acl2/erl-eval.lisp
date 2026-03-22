@@ -287,7 +287,7 @@
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr k.exprs)))))))
       
       ; Start evaluating function arguments. If there are no arguments, return empty list.
-      (:function-args-start 
+      (:function-args-start
         (if (null k.args)
             (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-cons :lst nil)))
             (make-erl-s-klst 

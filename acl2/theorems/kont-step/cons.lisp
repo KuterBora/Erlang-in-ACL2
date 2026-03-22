@@ -10,12 +10,11 @@
 ; Stepping the initial continuation
 (defrule eval-k-of-expr-cons->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
     (equal 
       (erl-s-klst->klst (eval-k k s))
       (list 
@@ -32,12 +31,11 @@
 
 (defrule eval-k-of-expr-cons->s
   (implies 
-    (and
-      (wf-state-p s)
-      (erl-k-p k)
-      (> (erl-k->fuel k) 0)
-      (equal (kont-kind (erl-k->kont k)) :expr)
-      (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
+    (and (wf-state-p s)
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-none))))
   :enable eval-k)
@@ -46,11 +44,10 @@
 ; Stepping the cons continuation                                        
 (defrule eval-k-of-cons->klst
   (implies 
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :cons))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :cons))
     (equal (erl-s-klst->klst (eval-k k s))
            (list (make-erl-k 
                     :fuel (1- (erl-k->fuel k)) 
@@ -63,11 +60,10 @@
 
 (defrule eval-k-of-cons->s
   (implies 
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :cons))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :cons))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in-bind 
              s 
@@ -78,26 +74,24 @@
 ; Stepping the cons-merge continuation                                        
 (defrule eval-k-of-cons-merge->klst
   (implies 
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :cons-merge))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :cons-merge))
     (equal (erl-s-klst->klst (eval-k k s))
            nil))
   :enable eval-k)
 
 (defrule eval-k-of-cons-merge->s
   (implies 
-    (and
-       (wf-state-p s)
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :cons-merge)
-       (equal (erl-val-kind (erl-state->in s)) :cons)
-       (omap::compatiblep
-        (erl-state->bind s) 
-        (kont-cons-merge->car-bind (erl-k->kont k))))
+    (and (wf-state-p s)
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :cons-merge)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (omap::compatiblep
+           (erl-state->bind s) 
+           (kont-cons-merge->car-bind (erl-k->kont k))))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in-bind 
             s

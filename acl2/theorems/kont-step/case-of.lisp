@@ -90,23 +90,22 @@
 
 (defrule eval-k-of-case-of->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :case-of)
-       (not (equal (erl-val-kind (erl-state->in
-                    (mv-nth 
-                      0
-                      (eval-clauses 
-                          (list (erl-state->in s))
-                          (kont-case-of->clauses (erl-k->kont k))
-                          s))))
-                :reject))
-       (mv-nth 1 (eval-clauses 
-                  (list (erl-state->in s))
-                  (kont-case-of->clauses (erl-k->kont k))
-                  s)))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :case-of)
+         (not (equal (erl-val-kind (erl-state->in
+                       (mv-nth 
+                         0
+                         (eval-clauses 
+                           (list (erl-state->in s))
+                           (kont-case-of->clauses (erl-k->kont k))
+                           s))))
+                     :reject))
+         (mv-nth 1 (eval-clauses 
+                     (list (erl-state->in s))
+                     (kont-case-of->clauses (erl-k->kont k))
+                     s)))
     (equal (erl-s-klst->s (eval-k k s))
            (update-erl-state->in s (make-erl-val-none))))
   :enable eval-k)

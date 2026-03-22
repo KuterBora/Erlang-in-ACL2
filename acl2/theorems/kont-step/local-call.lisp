@@ -12,12 +12,11 @@
 ; Stepping the initial continuation
 (defrule eval-k-of-expr-local-call->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
     (equal 
       (erl-s-klst->klst (eval-k k s))
       (list
@@ -33,12 +32,11 @@
 
 (defrule eval-k-of-expr-local-call->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :expr)
-       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
@@ -48,16 +46,15 @@
 ; Stepping the local-call continuation
 (defrule eval-k-of-local-call->klst
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :local-call)
-       (equal (erl-val-kind (erl-state->in s)) :cons)
-       (mv-nth 1 (eval-local-call
-                    (update-erl-state->in s (make-erl-val-none))
-                    (kont-local-call->call (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s))))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :local-call)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (mv-nth 1 (eval-local-call
+                     (update-erl-state->in s (make-erl-val-none))
+                     (kont-local-call->call (erl-k->kont k))
+                     (rev (erl-val-cons->lst (erl-state->in s))))))
     (equal
       (erl-s-klst->klst (eval-k k s))
       (list (make-erl-k 
@@ -76,16 +73,15 @@
 
 (defrule eval-k-of-local-call->s
   (implies
-    (and
-       (wf-state-p s) 
-       (erl-k-p k)
-       (> (erl-k->fuel k) 0)
-       (equal (kont-kind (erl-k->kont k)) :local-call)
-       (equal (erl-val-kind (erl-state->in s)) :cons)
-       (mv-nth 1 (eval-local-call
-                    (update-erl-state->in s (make-erl-val-none))
-                    (kont-local-call->call (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s))))))
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :local-call)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+          (mv-nth 1 (eval-local-call
+                     (update-erl-state->in s (make-erl-val-none))
+                     (kont-local-call->call (erl-k->kont k))
+                     (rev (erl-val-cons->lst (erl-state->in s))))))
     (equal
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in 
