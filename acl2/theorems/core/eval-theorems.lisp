@@ -69,19 +69,19 @@
       (apply-k (apply-k s klst1) klst2)))
   :enable apply-k)
 
-; Given two continuations, evaluate the first in isolation.
-(defrule apply-k-of-pair
+; Given a list continuations, evaluate the first in isolation.
+(defrule apply-k-of-consp
   (implies 
-    (and (erl-k-p k1)
-         (erl-k-p k2)
-         (erl-state-p s))
-    (equal (apply-k s (list k1 k2))
-           (apply-k (apply-k s (list k1)) (list k2))))
-  :use (:instance apply-k-of-append 
+    (and (erl-klst-p klst)
+         (erl-state-p s)
+         (consp klst))
+    (equal (apply-k s klst)
+           (apply-k (apply-k s (list (car klst))) (cdr klst))))
+  :use (:instance apply-k-of-append
         (s s)
-        (klst1 (list k1))
-        (klst2 (list k2))
-        (klst (list k1 k2))))
+        (klst1 (list (car klst)))
+        (klst2 (cdr klst))
+        (klst klst)))
 
 ; Expand apply-k once, given a single continuation.
 (defrule apply-k-of-step
@@ -91,4 +91,5 @@
            (apply-k
             (erl-s-klst->s (eval-k k s))
             (erl-s-klst->klst (eval-k k s)))))
-  :expand (apply-k s (cons k nil)))
+  :expand (apply-k s (cons k nil))
+  :disable apply-k-of-consp)

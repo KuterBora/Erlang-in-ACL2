@@ -45,9 +45,7 @@
          (erl-k-p k)
          (natp n)
          (not (equal (erl-val-kind (erl-state->in (erl-s-klst->s (eval-k k s)))) :flimit)))
-    (equal (erl-s-klst->s (eval-k (erl-k (+ n (erl-k->fuel k))
-                                         (erl-k->kont k)) 
-                                  s))
+    (equal (erl-s-klst->s (eval-k (erl-k (+ n (erl-k->fuel k)) (erl-k->kont k)) s))
            (erl-s-klst->s (eval-k k s))))
   :enable eval-k)
 
@@ -63,7 +61,7 @@
            (apply-k s klst)))
   :enable (apply-k increase-fuel)
   :disable (increase-fuel-is-distributive-over-append
-            more-fuel-is-good-for-eval)
+            more-fuel-is-good-for-eval apply-k-of-step apply-k-of-consp)
   :expand (apply-k s (cons (erl-k (+ n (erl-k->fuel (car klst)))
                                    (erl-k->kont (car klst)))
                             (increase-fuel (cdr klst) n)))

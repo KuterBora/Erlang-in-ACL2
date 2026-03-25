@@ -142,14 +142,14 @@
           
           ; if x is a fun call, first evaluate the fun expr and then arguments
           (:fun-call
-            (make-erl-s-klst 
+            (make-erl-s-klst
               :s (update-erl-state->in s (make-erl-val-none))
               :klst
                 (list (make-erl-k
                         :fuel (1- fuel)
                         :kont (make-kont-expr :expr x.fun))
                       (make-erl-k
-                        :fuel (1- fuel) 
+                        :fuel (1- fuel)
                         :kont (make-kont-fun-call-args :args x.args)))))
           ; if x is a local call, first evaluate the arguments and then handle the call
           (:call
@@ -166,7 +166,7 @@
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
         (make-erl-s-klst
-          :s (update-erl-state->bind s k.bind-0)
+          :s (update-erl-state->in-bind s (make-erl-val-none) k.bind-0)
           :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.cdr-expr))
                       (make-erl-k :fuel (1- fuel)
                                   :kont (make-kont-cons-merge :car-val s.in 
@@ -273,7 +273,7 @@
                       :err (make-erl-err :class (make-err-class-error)
                                          :reason (make-exit-reason-case-clause :val s.in)))))))
             (make-erl-s-klst
-              :s rs
+              :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
       
@@ -287,7 +287,7 @@
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr k.exprs)))))))
       
       ; Start evaluating function arguments. If there are no arguments, return empty list.
-      (:function-args-start 
+      (:function-args-start
         (if (null k.args)
             (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-cons :lst nil)))
             (make-erl-s-klst 
@@ -395,7 +395,7 @@
       (:fun-call
         (b* (((if (not (equal (erl-val-kind s.in) :cons)))
               (make-erl-s-klst 
-                :s (update-erl-state->in 
+                :s (update-erl-state->in
                      s
                      (make-erl-val-reject :err "Fun call: invalid arg list."))))
              ; Obtain the args from the state. They are reversed because they are
