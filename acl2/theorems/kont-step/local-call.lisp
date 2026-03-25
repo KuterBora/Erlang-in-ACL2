@@ -10,7 +10,7 @@
 ; the call evaluator which will then provide the body of the function to execute.
 
 ; Stepping the initial continuation
-(defrule eval-k-of-expr-local-call->klst
+(local (defrule eval-k-of-expr-local-call->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -28,9 +28,9 @@
           :fuel (1- (erl-k->fuel k))
           :kont (make-kont-local-call 
                   :call (node-call->fn (kont-expr->expr (erl-k->kont k))))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-local-call->s
+(local (defrule eval-k-of-expr-local-call->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -40,11 +40,11 @@
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; Stepping the local-call continuation
-(defrule eval-k-of-local-call->klst
+(local (defrule eval-k-of-local-call->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -69,9 +69,9 @@
               :kont (make-kont-function-return 
                       :bind (erl-state->bind s) 
                       :module (erl-state->module s))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-local-call->s
+(local (defrule eval-k-of-local-call->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -90,7 +90,7 @@
                     (kont-local-call->call (erl-k->kont k))
                     (rev (erl-val-cons->lst (erl-state->in s)))))
         (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; apply-k with a local-call expression continuation is equivalent to evaluating

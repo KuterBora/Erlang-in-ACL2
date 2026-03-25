@@ -8,7 +8,7 @@
 ; containing their values.
 
 ; Stepping the initial continuation
-(defrule eval-k-of-function-args-start->klst
+(local (defrule eval-k-of-function-args-start->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -29,9 +29,9 @@
             (make-kont-function-args 
               :done nil 
               :rest (cdr (kont-function-args-start->args (erl-k->kont k))))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-function-args-start->s
+(local (defrule eval-k-of-function-args-start->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -40,9 +40,9 @@
          (kont-function-args-start->args (erl-k->kont k)))
     (equal (erl-s-klst->s (eval-k k s))
            (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-function-args-start-nil->klst
+(local (defrule eval-k-of-function-args-start-nil->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -50,9 +50,9 @@
          (equal (kont-kind (erl-k->kont k)) :function-args-start)
          (null (kont-function-args-start->args (erl-k->kont k))))
     (equal (erl-s-klst->klst (eval-k k s)) nil))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-function-args-start-nil->s
+(local (defrule eval-k-of-function-args-start-nil->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -61,11 +61,11 @@
          (null (kont-function-args-start->args (erl-k->kont k))))
     (equal (erl-s-klst->s (eval-k k s))
            (update-erl-state->in s (make-erl-val-cons :lst nil))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; Stepping the function-args continuation
-(defrule eval-k-of-function-args->klst
+(local (defrule eval-k-of-function-args->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -86,9 +86,9 @@
             (make-kont-function-args
               :done (cons (erl-state->in s) (kont-function-args->done (erl-k->kont k)))
               :rest (cdr (kont-function-args->rest (erl-k->kont k))))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-function-args->s
+(local (defrule eval-k-of-function-args->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -97,9 +97,9 @@
          (kont-function-args->rest (erl-k->kont k)))
     (equal (erl-s-klst->s (eval-k k s))
            (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-function-args-nil->klst
+(local (defrule eval-k-of-function-args-nil->klst
   (implies
     (and
        (wf-state-p s) 
@@ -108,9 +108,9 @@
        (equal (kont-kind (erl-k->kont k)) :function-args)
        (null (kont-function-args->rest (erl-k->kont k))))
     (equal (erl-s-klst->klst (eval-k k s)) nil))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-function-args-nil->s
+(local (defrule eval-k-of-function-args-nil->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -123,8 +123,9 @@
             (make-erl-val-cons 
               :lst (cons (erl-state->in s)
                          (kont-function-args->done (erl-k->kont k)))))))
-  :enable eval-k)
+  :enable eval-k))
 
+; Function Return Kont-Step ----------------------------------------------------
 
 ; Stepping the function-return continuation
 (defrule eval-k-of-function-return->klst
