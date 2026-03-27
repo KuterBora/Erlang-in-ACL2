@@ -57,20 +57,13 @@
     ; The expression would be `X` in `case X of ... end`
     (:case-of ((clauses erl-clause-list-p)))
 
-    ; List of function arguments to be evaluated
-    (:function-args-start ((args expr-list-p)))
-
-    ; Continue function argument evaluation. Each argument in rest needs to be
-    ; evaluated and moved to done.
-    (:function-args ((done erl-vlst-p) (rest expr-list-p)))
-
     ; Continue after argument evaluation is finished by calling the function.
     (:local-call ((call symbolp)))
     (:remote-call ((module symbolp) (call symbolp)))
     
     ; When there is a call to an anonymous function, first evaluate the fun expression,
     ; then the arguments, and finally the clauses.
-    (:fun-call-args ((args expr-list-p)))
+    (:fun-call-args ((args expr-p)))
     (:fun-call ((fun erl-val-p)))
 
     ; Continue after the function returns.

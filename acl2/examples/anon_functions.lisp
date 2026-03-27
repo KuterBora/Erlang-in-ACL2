@@ -24,16 +24,16 @@
                   (:fun (((cases (:var X)) 
                           (guards) 
                           (body (:binop + (:var X) (:integer 1)))))))
-                (:fun-call (:var F) ((:integer 1))))))))
+                (:fun-call (:var F) (:cons (:integer 1) (:nil))))))))
 
   (update-erl-state->in-bind
     (make-erl-state)
     '(:integer 2)
-    '((F :FUN 1
-         (((CASES (:VAR X))
-           (GUARDS)
-           (BODY (:BINOP + (:VAR X) (:INTEGER 1)))))
-         NIL LOCAL))))
+    '((f :fun 1
+         (((cases (:var X))
+           (guards)
+           (body (:binop + (:var X) (:integer 1)))))
+         nil local))))
 
 
 ; Remote Anonymous Function ----------------------------------------------------
@@ -58,7 +58,7 @@
               (guards)
               (body (:fun (((cases (:var X) (:var Y)) 
                             (guards) 
-                            (body (:call fn1 ((:var X) (:var Y))))))))))))
+                            (body (:call fn1 (:cons (:var X) (:cons (:var Y) (:nil)))))))))))))
         (local
           (attrs (module . local)
                 (export)
@@ -75,14 +75,13 @@
         :kont 
           (make-kont-exprs
             :exprs 
-              '((:match (:var F) (:remote-call funs makeFun nil))
-                (:fun-call (:var F) ((:integer 3) (:integer 1)))
-                )))))
+              '((:match (:var F) (:remote-call funs makeFun (:nil)))
+                (:fun-call (:var F) (:cons (:integer 3) (:cons (:integer 1) (:nil)))))))))
     (make-erl-state 
       :in '(:atom true)
-      :bind '((F :FUN 2
-                (((CASES (:VAR X) (:VAR Y))
-                  (GUARDS)
-                  (BODY (:CALL FN1 ((:VAR X) (:VAR Y))))))
-                NIL FUNS))
+      :bind '((f :fun 2
+                (((cases (:var X) (:var Y))
+                  (guards)
+                  (body (:call fn1 (:cons (:var X) (:cons (:var Y) (:nil)))))))
+                nil funs))
       :world (test-world))))

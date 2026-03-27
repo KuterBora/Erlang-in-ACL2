@@ -135,7 +135,7 @@
               :klst
                 (list (make-erl-k 
                         :fuel (1- fuel) 
-                        :kont (make-kont-function-args-start :args x.args))
+                        :kont (make-kont-expr :expr x.args))
                       (make-erl-k
                         :fuel (1- fuel)
                         :kont (make-kont-remote-call :module x.module :call x.fn)))))
@@ -158,7 +158,7 @@
               :klst
                 (list (make-erl-k 
                         :fuel (1- fuel) 
-                        :kont (make-kont-function-args-start :args x.args))
+                        :kont (make-kont-expr :expr x.args))
                       (make-erl-k
                         :fuel (1- fuel)
                         :kont (make-kont-local-call :call x.fn))))))))
@@ -255,7 +255,7 @@
                               :badmatch)))
               (make-erl-s-klst
                 :s (update-erl-state->in
-                    s 
+                    s
                     (make-erl-val-excpt 
                       :err (make-erl-err :class (make-err-class-error) 
                                          :reason (make-exit-reason-badmatch :val s.in)))))))
@@ -268,12 +268,12 @@
              ((if (null body))
               (make-erl-s-klst
                 :s (update-erl-state->in
-                    s
+                    rs
                     (make-erl-val-excpt 
                       :err (make-erl-err :class (make-err-class-error)
                                          :reason (make-exit-reason-case-clause :val s.in)))))))
             (make-erl-s-klst
-              :s (update-erl-state->in s (make-erl-val-none))
+              :s (update-erl-state->in rs (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
       
@@ -286,37 +286,6 @@
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car k.exprs)))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr k.exprs)))))))
       
-      ; Start evaluating function arguments. If there are no arguments, return empty list.
-      (:function-args-start
-        (if (null k.args)
-            (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-cons :lst nil)))
-            (make-erl-s-klst 
-              :s (update-erl-state->in s (make-erl-val-none))
-              :klst (list (make-erl-k 
-                            :fuel (1- fuel) 
-                            :kont (make-kont-expr :expr (car k.args)))
-                          (make-erl-k
-                            :fuel (1- fuel) 
-                            :kont (make-kont-function-args :done nil :rest (cdr k.args)))))))
-                       
-      ; If all arguments are evaluated, return the list of argument values.
-      ; Otherwise, evaluate the next argument.
-      ; - To return the argument values in an erl-state, wrap them in an erl-val-cons
-      (:function-args
-        (if (null k.rest)
-            (make-erl-s-klst 
-              :s (update-erl-state->in s (make-erl-val-cons :lst (cons s.in k.done))))
-            (make-erl-s-klst 
-              :s (update-erl-state->in s (make-erl-val-none))
-              :klst (list (make-erl-k 
-                            :fuel (1- fuel) 
-                            :kont (make-kont-expr :expr (car k.rest)))
-                          (make-erl-k 
-                            :fuel (1- fuel) 
-                            :kont (make-kont-function-args 
-                                    :done (cons s.in k.done)
-                                    :rest (cdr k.rest)))))))
-      
       ; Call a local function after the arguments have been evaluated
       (:local-call
         (b* (((if (not (equal (erl-val-kind s.in) :cons)))
@@ -324,9 +293,8 @@
                 :s (update-erl-state->in 
                      s
                      (make-erl-val-reject :err "Local call: invalid arg list."))))
-             ; Obtain the args from the state. They are reversed because they are
-             ; evaluated from left to right and stored in a cons list.
-             (args (rev (erl-val-cons->lst s.in)))
+             ; Obtain the args from the state.
+             (args (erl-val-cons->lst s.in))
              ((mv rs body) 
               (eval-local-call
                 (update-erl-state->in s (make-erl-val-none))
@@ -351,9 +319,8 @@
                 :s (update-erl-state->in 
                      s
                      (make-erl-val-reject :err "Remote call: invalid arg list."))))
-             ; Obtain the args from the state. They are reversed because they are
-             ; evaluated in order and accumulated with cons.
-             (args (rev (erl-val-cons->lst s.in)))
+             ; Obtain the args from the state.
+             (args (erl-val-cons->lst s.in))
              ((mv rs body) 
               (eval-remote-call
                 (update-erl-state->in s (make-erl-val-none))
@@ -386,7 +353,7 @@
               :klst
                 (list (make-erl-k 
                         :fuel (1- fuel) 
-                        :kont (make-kont-function-args-start :args k.args))
+                        :kont (make-kont-expr :expr k.args))
                       (make-erl-k
                         :fuel (1- fuel)
                         :kont (make-kont-fun-call :fun s.in))))))
@@ -398,9 +365,8 @@
                 :s (update-erl-state->in
                      s
                      (make-erl-val-reject :err "Fun call: invalid arg list."))))
-             ; Obtain the args from the state. They are reversed because they are
-             ; evaluated in order and accumulated with cons.
-             (args (rev (erl-val-cons->lst s.in)))
+             ; Obtain the args from the state.
+             (args (erl-val-cons->lst s.in))
              ((mv rs body) 
               (eval-fun-call (update-erl-state->in s (make-erl-val-none)) k.fun args))
              ; if the body is nil, return the value produced by call evaluation.
