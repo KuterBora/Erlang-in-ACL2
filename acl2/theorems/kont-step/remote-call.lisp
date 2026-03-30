@@ -8,7 +8,7 @@
 ; the call evaluator which will then provide the body of the function to execute.
 
 ; Stepping the initial continuation
-(defrule eval-k-of-expr-remote-call->klst
+(local (defrule eval-k-of-expr-remote-call->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -20,16 +20,16 @@
       (list
         (make-erl-k
           :fuel (1- (erl-k->fuel k))
-          :kont (make-kont-function-args-start 
-                  :args (node-remote-call->args (kont-expr->expr (erl-k->kont k)))))
+          :kont (make-kont-expr 
+            :expr (node-remote-call->args (kont-expr->expr (erl-k->kont k)))))
         (make-erl-k
           :fuel (1- (erl-k->fuel k))
           :kont (make-kont-remote-call
                   :module (node-remote-call->module (kont-expr->expr (erl-k->kont k)))
                   :call (node-remote-call->fn (kont-expr->expr (erl-k->kont k))))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-remote-call->s
+(local (defrule eval-k-of-expr-remote-call->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -39,11 +39,11 @@
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; Stepping the remote-call continuation
-(defrule eval-k-of-remote-call->klst
+(local (defrule eval-k-of-remote-call->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -54,7 +54,7 @@
                      (update-erl-state->in s (make-erl-val-none))
                      (kont-remote-call->module (erl-k->kont k))
                      (kont-remote-call->call (erl-k->kont k))
-                     (rev (erl-val-cons->lst (erl-state->in s))))))
+                     (erl-val-cons->lst (erl-state->in s)))))
     (equal
       (erl-s-klst->klst (eval-k k s))
       (list (make-erl-k 
@@ -64,15 +64,15 @@
                     (update-erl-state->in s (make-erl-val-none))
                     (kont-remote-call->module (erl-k->kont k))
                     (kont-remote-call->call (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s)))))))
+                    (erl-val-cons->lst (erl-state->in s))))))
             (make-erl-k
               :fuel (1- (erl-k->fuel k)) 
               :kont (make-kont-function-return 
                       :bind (erl-state->bind s) 
                       :module (erl-state->module s))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-remote-call->s
+(local (defrule eval-k-of-remote-call->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -83,7 +83,7 @@
                      (update-erl-state->in s (make-erl-val-none))
                      (kont-remote-call->module (erl-k->kont k))
                      (kont-remote-call->call (erl-k->kont k))
-                     (rev (erl-val-cons->lst (erl-state->in s))))))
+                     (erl-val-cons->lst (erl-state->in s)))))
     (equal
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in 
@@ -91,9 +91,9 @@
                     (update-erl-state->in s (make-erl-val-none))
                     (kont-remote-call->module (erl-k->kont k))
                     (kont-remote-call->call (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s)))))
+                    (erl-val-cons->lst (erl-state->in s))))
         (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; apply-k with a remote-call expression continuation is equivalent to evaluating
@@ -120,8 +120,7 @@
          (args (node-remote-call->args (kont-expr->expr k.kont)))
          (args_res (apply-k (update-erl-state->in s (make-erl-val-none))
                             (list (make-erl-k :fuel (1- k.fuel) 
-                                              :kont (make-kont-function-args-start 
-                                                      :args args)))))
+                                              :kont (make-kont-expr :expr args)))))
          ((unless (wf-state-p args_res)) t)
          ((unless (equal (erl-val-kind (erl-state->in args_res)) :cons)) t)
          ((mv (erl-state rs) body)
@@ -129,7 +128,7 @@
             (update-erl-state->in args_res (make-erl-val-none))
             (node-remote-call->module (kont-expr->expr k.kont))
             (node-remote-call->fn (kont-expr->expr k.kont))
-            (rev (erl-val-cons->lst (erl-state->in args_res)))))
+            (erl-val-cons->lst (erl-state->in args_res))))
          ((unless (wf-state-p rs)) t)
          ((unless body) t))
         (equal (apply-k s (list k))

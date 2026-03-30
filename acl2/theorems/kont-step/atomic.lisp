@@ -86,13 +86,15 @@
          (erl-clause-list->arity (node-fun->cls (kont-expr->expr (erl-k->kont k)))))
     (b* (((erl-state s) s)
          ((erl-k k)))
-        (update-erl-state->in 
-          s
-          (make-erl-val-fun
-            :arity (erl-clause-list->arity (node-fun->cls (kont-expr->expr k.kont)))
-            :cls (node-fun->cls (kont-expr->expr k.kont))
-            :bind s.bind
-            :module s.module))))
+        (equal
+          (apply-k s (list k))
+          (update-erl-state->in 
+            s
+            (make-erl-val-fun
+              :arity (erl-clause-list->arity (node-fun->cls (kont-expr->expr k.kont)))
+              :cls (node-fun->cls (kont-expr->expr k.kont))
+              :bind s.bind
+              :module s.module)))))
   :enable eval-k)
 
 (defrule apply-k-of-var
@@ -106,9 +108,11 @@
                       (erl-state->bind s)))
     (b* (((erl-state s) s)
          ((erl-k k)))
-        (update-erl-state->in
-          s 
-          (omap::lookup 
-            (node-var->id (kont-expr->expr k.kont)) 
-            s.bind))))
+        (equal
+          (apply-k s (list k))
+          (update-erl-state->in
+            s 
+            (omap::lookup 
+              (node-var->id (kont-expr->expr k.kont)) 
+              s.bind)))))
   :enable eval-k)

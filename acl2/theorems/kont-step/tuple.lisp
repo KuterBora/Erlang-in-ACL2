@@ -10,7 +10,7 @@
 
 
 ; Stepping the initial continuation
-(defrule eval-k-of-expr-empty-tuple->klst
+(local (defrule eval-k-of-expr-empty-tuple->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -19,9 +19,9 @@
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple)
          (null (node-tuple->lst (kont-expr->expr (erl-k->kont k)))))
     (equal (erl-s-klst->klst (eval-k k s)) nil))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-empty-tuple->s
+(local (defrule eval-k-of-expr-empty-tuple->s
   (implies 
     (and (wf-state-p s)
          (erl-k-p k)
@@ -31,9 +31,9 @@
          (null (node-tuple->lst (kont-expr->expr (erl-k->kont k)))))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-tuple :lst nil))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-tuple->klst
+(local (defrule eval-k-of-expr-tuple->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -55,9 +55,9 @@
                     (make-node-tuple 
                       :lst (cdr (node-tuple->lst (kont-expr->expr (erl-k->kont k)))))
                   :bind-0 (erl-state->bind s))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-tuple->s
+(local (defrule eval-k-of-expr-tuple->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -68,11 +68,11 @@
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; Stepping the tuple continuation                                        
-(defrule eval-k-of-tuple->klst
+(local (defrule eval-k-of-tuple->klst
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -87,9 +87,9 @@
                     :kont (make-kont-tuple-merge 
                             :t-hd (erl-state->in s)
                             :t-bind (erl-state->bind s))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-tuple->s
+(local (defrule eval-k-of-tuple->s
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -99,20 +99,20 @@
            (update-erl-state->bind 
              s
              (kont-tuple->bind-0 (erl-k->kont k)))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; Stepping the tuple-merge continuation                                        
-(defrule eval-k-of-tuple-merge->klst
+(local (defrule eval-k-of-tuple-merge->klst
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :tuple-merge))
     (equal (erl-s-klst->klst (eval-k k s)) nil))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-tuple-merge->s
+(local (defrule eval-k-of-tuple-merge->s
   (implies 
     (and (wf-state-p s)
          (erl-k-p k)
@@ -131,7 +131,7 @@
             (omap::update*
               (erl-state->bind s) 
               (kont-tuple-merge->t-bind (erl-k->kont k))))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; apply-k with a tuple expression continuation is equivalent to evaluating the 

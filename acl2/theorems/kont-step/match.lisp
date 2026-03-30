@@ -8,7 +8,7 @@
 ; to the lhs.
 
 ; Stepping the initial continuation
-(defrule eval-k-of-expr-match->klst
+(local (defrule eval-k-of-expr-match->klst
   (implies
     (and
        (wf-state-p s) 
@@ -27,9 +27,9 @@
                     :kont
                       (make-kont-match 
                         :lhs (node-match->lhs (kont-expr->expr (erl-k->kont k))))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-match->s
+(local (defrule eval-k-of-expr-match->s
   (implies 
     (and
       (wf-state-p s)
@@ -39,11 +39,11 @@
       (equal (node-kind (kont-expr->expr (erl-k->kont k))) :match))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; Stepping the match continuation
-(defrule eval-k-of-match->klst
+(local (defrule eval-k-of-match->klst
   (implies 
     (and
        (wf-state-p s) 
@@ -51,9 +51,9 @@
        (> (erl-k->fuel k) 0)
        (equal (kont-kind (erl-k->kont k)) :match))
     (equal (erl-s-klst->klst (eval-k k s)) nil))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-match->s
+(local (defrule eval-k-of-match->s
   (implies 
     (and
        (wf-state-p s) 
@@ -65,7 +65,7 @@
                           (erl-err->reason (erl-val-excpt->err (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s))))) 
                         :badmatch))))
     (equal (erl-s-klst->s (eval-k k s)) (eval-match (kont-match->lhs (erl-k->kont k)) s)))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; apply-k with a match expression continuation is equivalent to evaluating the 

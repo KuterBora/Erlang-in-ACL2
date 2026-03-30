@@ -22,8 +22,8 @@
       (list
         (make-erl-k
           :fuel (1- (erl-k->fuel k))
-          :kont (make-kont-function-args-start 
-                  :args (node-call->args (kont-expr->expr (erl-k->kont k)))))
+          :kont (make-kont-expr
+                  :expr (node-call->args (kont-expr->expr (erl-k->kont k)))))
         (make-erl-k
           :fuel (1- (erl-k->fuel k))
           :kont (make-kont-local-call 
@@ -54,7 +54,7 @@
          (mv-nth 1 (eval-local-call
                      (update-erl-state->in s (make-erl-val-none))
                      (kont-local-call->call (erl-k->kont k))
-                     (rev (erl-val-cons->lst (erl-state->in s))))))
+                     (erl-val-cons->lst (erl-state->in s)))))
     (equal
       (erl-s-klst->klst (eval-k k s))
       (list (make-erl-k 
@@ -63,7 +63,7 @@
                 (mv-nth 1 (eval-local-call
                     (update-erl-state->in s (make-erl-val-none))
                     (kont-local-call->call (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s)))))))
+                    (erl-val-cons->lst (erl-state->in s))))))
             (make-erl-k
               :fuel (1- (erl-k->fuel k)) 
               :kont (make-kont-function-return 
@@ -81,14 +81,14 @@
           (mv-nth 1 (eval-local-call
                      (update-erl-state->in s (make-erl-val-none))
                      (kont-local-call->call (erl-k->kont k))
-                     (rev (erl-val-cons->lst (erl-state->in s))))))
+                     (erl-val-cons->lst (erl-state->in s)))))
     (equal
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in 
         (mv-nth 0 (eval-local-call
                     (update-erl-state->in s (make-erl-val-none))
                     (kont-local-call->call (erl-k->kont k))
-                    (rev (erl-val-cons->lst (erl-state->in s)))))
+                    (erl-val-cons->lst (erl-state->in s))))
         (make-erl-val-none))))
   :enable eval-k))
 
@@ -117,15 +117,14 @@
          (args (node-call->args (kont-expr->expr k.kont)))
          (args_res (apply-k (update-erl-state->in s (make-erl-val-none))
                             (list (make-erl-k :fuel (1- k.fuel) 
-                                              :kont (make-kont-function-args-start 
-                                                      :args args)))))
+                                              :kont (make-kont-expr :expr args)))))
          ((unless (wf-state-p args_res)) t)
          ((unless (equal (erl-val-kind (erl-state->in args_res)) :cons)) t)
          ((mv (erl-state rs) body)
           (eval-local-call 
             (update-erl-state->in args_res (make-erl-val-none))
             (node-call->fn (kont-expr->expr k.kont))
-            (rev (erl-val-cons->lst (erl-state->in args_res)))))
+            (erl-val-cons->lst (erl-state->in args_res))))
          ((unless (wf-state-p rs)) t)
          ((unless body) t))
         (equal (apply-k s (list k))

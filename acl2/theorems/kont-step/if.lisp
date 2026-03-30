@@ -8,7 +8,7 @@
 ; pattern matching cases and then continuing with the body of the selected clause.
 
 ; Stepping the initial continuation
-(defrule eval-k-of-expr-if->klst
+(local (defrule eval-k-of-expr-if->klst
   (implies
     (and
        (wf-state-p s) 
@@ -46,9 +46,9 @@
                           (eval-clauses
                             nil
                             (node-if->clauses (kont-expr->expr (erl-k->kont k))) s))))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-if->s
+(local (defrule eval-k-of-expr-if->s
   (implies
     (and
        (wf-state-p s) 
@@ -70,7 +70,7 @@
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; apply-k with an if expression continuation is equivalent to finding the first

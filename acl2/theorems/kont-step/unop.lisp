@@ -10,7 +10,7 @@
 ; There are also some rules about excpetions, rejections, etc. 
 
 ; Stepping the initial continuation
-(defrule eval-k-of-expr-unop->klst
+(local (defrule eval-k-of-expr-unop->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -27,9 +27,9 @@
         (make-erl-k :fuel (1- (erl-k->fuel k))
                     :kont (make-kont-unop 
                         :op (node-unop->op (kont-expr->expr (erl-k->kont k))))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-unop->s
+(local (defrule eval-k-of-expr-unop->s
   (implies 
     (and (wf-state-p s)
          (erl-k-p k)
@@ -38,20 +38,20 @@
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :unop))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; Stepping the unop continuation                                            
-(defrule eval-k-of-unop->klst
+(local (defrule eval-k-of-unop->klst
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
          (> (erl-k->fuel k) 0)
           (equal (kont-kind (erl-k->kont k)) :unop))
     (equal (erl-s-klst->klst (eval-k k s)) nil))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-unop->s
+(local (defrule eval-k-of-unop->s
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -64,7 +64,7 @@
         (apply-erl-unop
             (kont-unop->op (erl-k->kont k)) 
             (erl-state->in s)))))
-  :enable eval-k)
+  :enable eval-k))
 
 ; apply-k with an unop continuation is equivalent to evaluating the 
 ; operand and then applying the unop -- assuming there are no excpetion,

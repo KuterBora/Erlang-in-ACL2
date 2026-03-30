@@ -10,7 +10,7 @@
 ; There are also some rules about excpetions, rejections, etc. 
 
 ; Stepping the initial continuation
-(defrule eval-k-of-expr-binop->klst
+(local (defrule eval-k-of-expr-binop->klst
   (implies 
     (and
        (wf-state-p s) 
@@ -30,9 +30,9 @@
                             :op (node-binop->op (kont-expr->expr (erl-k->kont k)))
                             :right (node-binop->right (kont-expr->expr (erl-k->kont k)))
                             :bind-0 (erl-state->bind s))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-expr-binop->s
+(local (defrule eval-k-of-expr-binop->s
   (implies 
     (and (wf-state-p s)
          (erl-k-p k)
@@ -41,10 +41,10 @@
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k)
+  :enable eval-k))
 
 ; Stepping the binop-expr1 continuation
-(defrule eval-k-of-binop-expr1->klst
+(local (defrule eval-k-of-binop-expr1->klst
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -62,9 +62,9 @@
                       :op (kont-binop-expr1->op (erl-k->kont k))
                       :val (erl-state->in s)
                       :left-bind (erl-state->bind s))))))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-binop-expr1->s
+(local (defrule eval-k-of-binop-expr1->s
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -73,10 +73,10 @@
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->bind s (kont-binop-expr1->bind-0 (erl-k->kont k)))))
-  :enable eval-k)
+  :enable eval-k))
 
 ; Stepping the binop-expr-2 continuation                                            
-(defrule eval-k-of-binop-expr2->klst
+(local (defrule eval-k-of-binop-expr2->klst
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -84,9 +84,9 @@
          (equal (kont-kind (erl-k->kont k)) :binop-expr2))
     (equal (erl-s-klst->klst (eval-k k s))
            nil))
-  :enable eval-k)
+  :enable eval-k))
 
-(defrule eval-k-of-binop-expr2->s
+(local (defrule eval-k-of-binop-expr2->s
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -106,7 +106,7 @@
         (omap::update*
           (erl-state->bind s) 
           (kont-binop-expr2->left-bind (erl-k->kont k))))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; apply-k with a binop continuation is equivalent to evaluating the 
