@@ -8,7 +8,7 @@
 ; and then merging the result.
 
 ; Stepping the initial continuation
-(local (defrule eval-k-of-expr-cons->klst
+(defrule eval-k-of-expr-cons->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -27,9 +27,10 @@
                       (make-kont-cons 
                         :cdr-expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))
                         :bind-0 (erl-state->bind s))))))
-  :enable eval-k))
+  :enable eval-k)
 
-(local (defrule eval-k-of-expr-cons->s
+
+(defrule eval-k-of-expr-cons->s
   (implies 
     (and (wf-state-p s)
          (erl-k-p k)
@@ -38,11 +39,11 @@
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k))
+  :enable eval-k)
 
 
 ; Stepping the cons continuation                                        
-(local (defrule eval-k-of-cons->klst
+(defrule eval-k-of-cons->klst
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -56,9 +57,9 @@
                              :kont (make-kont-cons-merge 
                                     :car-val (erl-state->in s)
                                     :car-bind (erl-state->bind s))))))
-  :enable eval-k))
+  :enable eval-k)
 
-(local (defrule eval-k-of-cons->s
+(defrule eval-k-of-cons->s
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -69,10 +70,10 @@
              s 
              (make-erl-val-none)
              (kont-cons->bind-0 (erl-k->kont k)))))
-  :enable eval-k))
+  :enable eval-k)
 
 ; Stepping the cons-merge continuation                                        
-(local (defrule eval-k-of-cons-merge->klst
+(defrule eval-k-of-cons-merge->klst
   (implies 
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -80,9 +81,9 @@
          (equal (kont-kind (erl-k->kont k)) :cons-merge))
     (equal (erl-s-klst->klst (eval-k k s))
            nil))
-  :enable eval-k))
+  :enable eval-k)
 
-(local (defrule eval-k-of-cons-merge->s
+(defrule eval-k-of-cons-merge->s-when-wf
   (implies 
     (and (wf-state-p s)
          (erl-k-p k)
@@ -101,8 +102,7 @@
             (omap::update* 
               (erl-state->bind s) 
               (kont-cons-merge->car-bind (erl-k->kont k))))))
-  :enable eval-k))
-
+  :enable eval-k)
 
 ; apply-k with a cons expression continuation is equivalent to evaluating the 
 ; car and cdr then merging the results -- assuming there are no excpetion,

@@ -99,7 +99,17 @@
       (make-erl-state :in (erl-state->in s)
                       :bind (erl-state->bind s)
                       :world (erl-state->world s)
-                      :module mod)))
+                      :module mod))
+  ///
+    (defrule update-erl-state->mod-fields
+      (implies (and (erl-state-p s) (symbolp mod))
+               (and (equal (erl-state->module (update-erl-state->mod s mod)) mod)
+                    (equal (erl-state->in (update-erl-state->mod s mod))
+                           (erl-state->in s))
+                    (equal (erl-state->bind (update-erl-state->mod s mod))
+                           (erl-state->bind s))
+                    (equal (erl-state->world (update-erl-state->mod s mod))
+                           (erl-state->world s))))))
 
 (define update-erl-state->bind-mod ((s erl-state-p) (bind bind-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -109,7 +119,16 @@
       (make-erl-state :in (erl-state->in s)
                       :bind bind
                       :world (erl-state->world s)
-                      :module mod)))
+                      :module mod))
+  ///
+    (defrule update-erl-state->bind-mod-fields
+      (implies (and (erl-state-p s) (bind-p b) (symbolp mod))
+               (and (equal (erl-state->module (update-erl-state->bind-mod s b mod)) mod)
+                    (equal (erl-state->bind (update-erl-state->bind-mod s b mod)) b)
+                    (equal (erl-state->in (update-erl-state->bind-mod s b mod))
+                           (erl-state->in s))   
+                    (equal (erl-state->world (update-erl-state->bind-mod s b mod))
+                           (erl-state->world s))))))
 
 (define update-erl-state->in-bind-mod ((s erl-state-p) (in erl-val-p) (bind bind-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -120,7 +139,16 @@
       (make-erl-state :in in
                       :bind bind
                       :world (erl-state->world s)
-                      :module mod)))
+                      :module mod))
+  ///
+    (defrule update-erl-state->in-bind-mod-fields
+      (implies 
+        (and (erl-state-p s) (erl-val-p in) (bind-p b) (symbolp mod))
+        (and (equal (erl-state->in (update-erl-state->in-bind-mod s in b mod)) in)
+             (equal (erl-state->bind (update-erl-state->in-bind-mod s in b mod)) b)   
+             (equal (erl-state->module (update-erl-state->in-bind-mod s in b mod)) mod)       
+             (equal (erl-state->world (update-erl-state->in-bind-mod s in b mod))
+                    (erl-state->world s))))))
 
 
 ; Helpers for Utility ---------------------------------------------------------
