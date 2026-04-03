@@ -9,8 +9,7 @@
 ; expression is equivalent to evaluating the arguments in order, and then invoking
 ; the call evaluator which will then provide the body of the function to execute.
 
-; Stepping the initial continuation
-(local (defrule eval-k-of-expr-local-call->klst
+(defrule eval-k-of-expr-local-call->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -28,9 +27,9 @@
           :fuel (1- (erl-k->fuel k))
           :kont (make-kont-local-call 
                   :call (node-call->fn (kont-expr->expr (erl-k->kont k))))))))
-  :enable eval-k))
+  :enable eval-k)
 
-(local (defrule eval-k-of-expr-local-call->s
+(defrule eval-k-of-expr-local-call->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -40,11 +39,9 @@
     (equal 
       (erl-s-klst->s (eval-k k s))
       (update-erl-state->in s (make-erl-val-none))))
-  :enable eval-k))
+  :enable eval-k)
 
-
-; Stepping the local-call continuation
-(local (defrule eval-k-of-local-call->klst
+(defrule eval-k-of-local-call->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -69,9 +66,9 @@
               :kont (make-kont-function-return 
                       :bind (erl-state->bind s) 
                       :module (erl-state->module s))))))
-  :enable eval-k))
+  :enable eval-k)
 
-(local (defrule eval-k-of-local-call->s
+(defrule eval-k-of-local-call->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -90,50 +87,60 @@
                     (kont-local-call->call (erl-k->kont k))
                     (erl-val-cons->lst (erl-state->in s))))
         (make-erl-val-none))))
-  :enable eval-k))
+  :enable eval-k)
 
-
-; apply-k with a local-call expression continuation is equivalent to evaluating
-; the arguments in order, invoking the call evaluator to find the first matching
-; clause, executing the clause body, and then returning to the module and bindings
-; before the call. -- assuming there are no excpetion rejection, or out-of-fuel errors.
-;
-; If evaluation succeeds for s and k, in the returned state
-; - in will contain the value obtained by evaluating the function.
-; - bind will contain any previous bindings and any new ones created by 
-;   evaluating the arguments.
-; - module will remain unchanged.
-; Rest: TODO
-
-(defrule apply-k-of-local-call
-  (implies 
-    (and (wf-state-p s)
+(defrule eval-k-of-local-call-invalid-args>klst
+  (implies
+    (and (wf-state-p s) 
          (erl-k-p k)
-         (> (erl-k->fuel k) 2)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
-    (b* (((erl-state s) s)
-         ((erl-k k))
-         (args (node-call->args (kont-expr->expr k.kont)))
-         (args_res (apply-k (update-erl-state->in s (make-erl-val-none))
-                            (list (make-erl-k :fuel (1- k.fuel) 
-                                              :kont (make-kont-expr :expr args)))))
-         ((unless (wf-state-p args_res)) t)
-         ((unless (equal (erl-val-kind (erl-state->in args_res)) :cons)) t)
-         ((mv (erl-state rs) body)
-          (eval-local-call 
-            (update-erl-state->in args_res (make-erl-val-none))
-            (node-call->fn (kont-expr->expr k.kont))
-            (erl-val-cons->lst (erl-state->in args_res))))
-         ((unless (wf-state-p rs)) t)
-         ((unless body) t))
-        (equal (apply-k s (list k))
-               (apply-k (update-erl-state->in rs (make-erl-val-none))
-                        (list (make-erl-k 
-                            :fuel (- k.fuel 2)
-                            :kont (make-kont-exprs :exprs body))
-                          (make-erl-k
-                            :fuel (- k.fuel 2)
-                            :kont (make-kont-function-return 
-                                    :bind (erl-state->bind args_res)
-                                    :module (erl-state->module args_res)))))))))
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :local-call)
+         (not (equal (erl-val-kind (erl-state->in s)) :cons)))
+    (equal (erl-s-klst->klst (eval-k k s)) nil))
+  :enable eval-k)
+
+(defrule eval-k-of-local-call-invalid-args>s
+  (implies
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :local-call)
+         (not (equal (erl-val-kind (erl-state->in s)) :cons)))
+    (equal (erl-s-klst->s (eval-k k s))
+           (update-erl-state->in 
+             s
+             (make-erl-val-reject :err "Local call: invalid arg list."))))
+  :enable eval-k)
+
+(defrule eval-k-of-local-call-no-clauses->klst
+  (implies
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :local-call)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (not (mv-nth 1 (eval-local-call
+                     (update-erl-state->in s (make-erl-val-none))
+                     (kont-local-call->call (erl-k->kont k))
+                     (erl-val-cons->lst (erl-state->in s))))))
+    (equal (erl-s-klst->klst (eval-k k s)) nil))
+  :enable eval-k)
+
+(defrule eval-k-of-local-call-no-clauses->s
+  (implies
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :local-call)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (not (mv-nth 1 (eval-local-call
+                     (update-erl-state->in s (make-erl-val-none))
+                     (kont-local-call->call (erl-k->kont k))
+                     (erl-val-cons->lst (erl-state->in s))))))
+    (equal
+      (erl-s-klst->s (eval-k k s))
+      (mv-nth 0 (eval-local-call
+                  (update-erl-state->in s (make-erl-val-none))
+                  (kont-local-call->call (erl-k->kont k))
+                  (erl-val-cons->lst (erl-state->in s))))))
+  :enable eval-k)

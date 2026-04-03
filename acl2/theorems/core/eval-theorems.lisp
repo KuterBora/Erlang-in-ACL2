@@ -27,7 +27,11 @@
     (implies 
       (and (erl-state-p s) 
            (equal (erl-val-kind (erl-state->in s)) :excpt))
-      (equal (apply-k s klst) s))))
+      (equal (apply-k s klst) s)))
+  
+  (defrule apply-k-of-not-wf
+    (implies (and (erl-state-p s) (not (wf-state-p s)))
+             (equal (apply-k s klst) s))))
 
 
 ; evak-k Rules -----------------------------------------------------------------
@@ -51,7 +55,17 @@
     (implies
       (and (erl-state-p s) 
            (equal (erl-val-kind (erl-state->in s)) :excpt))
-      (equal (erl-s-klst->s (eval-k k s)) s))))
+      (equal (erl-s-klst->s (eval-k k s)) s)))
+  
+  (defrule eval-k-of-not-wf
+    (implies (and (erl-state-p s) (not (wf-state-p s)))
+             (equal (erl-s-klst->s (eval-k k s)) s)))
+
+  (defrule eval-k-of-no-fuel
+    (implies (and (wf-state-p s) (zp (erl-k->fuel k)))
+             (equal 
+             (erl-s-klst->s (eval-k k s))
+             (update-erl-state->in s (make-erl-val-flimit))))))
 
 
 ; Stepping Rules ---------------------------------------------------------------

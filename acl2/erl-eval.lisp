@@ -25,10 +25,7 @@
 
        ; If the state has an error, return right away.
        ; TODO: exception handling (catch, try-catch)
-       ((if (or (equal (erl-val-kind s.in) :flimit)
-                (equal (erl-val-kind s.in) :reject)
-                (equal (erl-val-kind s.in) :excpt)))
-        (make-erl-s-klst :s s))
+       ((unless (wf-state-p s)) (make-erl-s-klst :s s))
 
        ; Return flimit if fuel had ran out.
        ((if (zp fuel)) 
@@ -268,7 +265,7 @@
              ((if (null body))
               (make-erl-s-klst
                 :s (update-erl-state->in
-                    rs
+                    s
                     (make-erl-val-excpt 
                       :err (make-erl-err :class (make-err-class-error)
                                          :reason (make-exit-reason-case-clause :val s.in)))))))
