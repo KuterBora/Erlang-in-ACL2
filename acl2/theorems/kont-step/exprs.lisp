@@ -39,3 +39,56 @@
          (null (kont-exprs->exprs (erl-k->kont k))))
     (equal (erl-s-klst->klst (eval-k k s)) nil))
   :enable eval-k)
+
+; Combined
+; (defrule eval-k-exprs->klst-no-constraints
+;   (implies
+;     (and (erl-state-p s)
+;          (> (erl-k->fuel k) 0)
+;          (erl-k-p k)
+;          (equal (kont-kind (erl-k->kont k)) :exprs))
+;     (equal
+;       (erl-s-klst->klst (eval-k k s))
+;       (cond
+;         ((not (wf-state-p s)) nil)
+;         ((not (> (erl-k->fuel k) 0)) nil)
+;         ((null (kont-exprs->exprs (erl-k->kont k))) nil)
+;         (t (list (make-erl-k 
+;                   :fuel (1- (erl-k->fuel k))
+;                   :kont (make-kont-expr :expr (car (kont-exprs->exprs (erl-k->kont k)))))
+;                  (make-erl-k
+;                   :fuel (1- (erl-k->fuel k))
+;                   :kont (make-kont-exprs :exprs (cdr (kont-exprs->exprs (erl-k->kont k))))))))))
+;   :enable eval-k)
+
+; (defrule eval-k-exprs->klst
+;   (implies
+;     (and (erl-state-p s)
+;          (erl-k-p k)
+;          (equal (kont-kind (erl-k->kont k)) :exprs))
+;     (equal
+;       (erl-s-klst->klst (eval-k k s))
+;       (cond
+;         ((not (wf-state-p s)) nil)
+;         ((not (> (erl-k->fuel k) 0)) nil)
+;         ((null (kont-exprs->exprs (erl-k->kont k))) nil)
+;         (t (list (make-erl-k 
+;                   :fuel (1- (erl-k->fuel k))
+;                   :kont (make-kont-expr :expr (car (kont-exprs->exprs (erl-k->kont k)))))
+;                  (make-erl-k
+;                   :fuel (1- (erl-k->fuel k))
+;                   :kont (make-kont-exprs :exprs (cdr (kont-exprs->exprs (erl-k->kont k))))))))))
+;   :enable eval-k)
+
+; (defrule eval-k-exprs->s
+;   (implies
+;     (and (erl-state-p s)
+;          (erl-k-p k)
+;          (equal (kont-kind (erl-k->kont k)) :exprs))
+;     (equal (erl-s-klst->s (eval-k k s))
+;            (cond
+;             ((not (wf-state-p s)) s)
+;             ((not (> (erl-k->fuel k) 0))
+;              (update-erl-state->in s (make-erl-val-flimit)))
+;             (t s))))
+;   :enable eval-k)

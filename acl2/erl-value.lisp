@@ -207,3 +207,16 @@
   (implies (erl-val-p v)
            (not (erl-val-p (cons v x))))
   :expand ((erl-val-p v) (erl-val-p (cons v x))))
+
+
+; Utility Theorems -------------------------------------------------------------
+
+(defrule bind-update-lookup
+  (equal (omap::lookup s (omap::update s x m)) x)
+  :enable omap::lookup)
+
+(defrule bind-update-update-lookup
+  (implies
+    (not (equal s1 s2))
+    (equal (omap::lookup s2 (omap::update s1 x1 (omap::update s2 x2 m))) x2))
+  :enable omap::lookup)

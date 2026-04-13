@@ -10,6 +10,7 @@
 ; calling the the clause-evaluator the result of evaluation and the clauses of 
 ; the case, and then continuing with the body of the selected clause.
 
+; expr-case-of
 (defrule eval-k-of-expr-case-of->klst
   (implies
     (and
@@ -43,7 +44,8 @@
       (erl-s-klst->s (eval-k k s)) (update-erl-state->in s (make-erl-val-none))))
   :enable eval-k)
 
-(defrule eval-k-of-case-of->klst
+; kont-case-of
+(defrule eval-k-of-case-of-ok->klst
   (implies
     (and
        (wf-state-p s) 
@@ -85,7 +87,7 @@
                             s))))))))
   :enable eval-k)
 
-(defrule eval-k-of-case-of->s
+(defrule eval-k-of-case-of-ok->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -207,3 +209,95 @@
                                   :reason (make-exit-reason-case-clause 
                                             :val (erl-state->in s)))))))
   :enable eval-k)
+
+
+; Combine the rules from above to a general rewrite rule
+(defrule eval-k-of-case-of->klst
+  (implies
+    (and
+       (wf-state-p s) 
+       (erl-k-p k)
+       (> (erl-k->fuel k) 0)
+       (equal (kont-kind (erl-k->kont k)) :case-of))
+    (equal
+      (erl-s-klst->klst (eval-k k s))
+      (cond 
+        ((equal (erl-val-kind (erl-state->in
+                    (mv-nth 
+                      0
+                      (eval-clauses 
+                          (list (erl-state->in s))
+                          (kont-case-of->clauses (erl-k->kont k))
+                          s))))
+                :reject)
+          nil)
+        ((not (mv-nth 
+              1 (eval-clauses 
+                  (list (erl-state->in s))
+                  (kont-case-of->clauses (erl-k->kont k))
+                  s)))
+          nil)
+        (t (list 
+            (make-erl-k 
+              :fuel (1- (erl-k->fuel k))
+              :kont (make-kont-expr 
+                :expr (car (mv-nth 
+                              1
+                              (eval-clauses 
+                                (list (erl-state->in s))
+                                (kont-case-of->clauses (erl-k->kont k))
+                                s)))))
+            (make-erl-k 
+              :fuel (1- (erl-k->fuel k))
+              :kont (make-kont-exprs
+                :exprs (cdr (mv-nth 
+                              1
+                              (eval-clauses 
+                                (list (erl-state->in s))
+                                (kont-case-of->clauses (erl-k->kont k))
+                                s))))))))))
+  :enable eval-k)
+
+(defrule eval-k-of-case-of->s
+  (implies
+    (and
+       (wf-state-p s) 
+       (erl-k-p k)
+       (> (erl-k->fuel k) 0)
+       (equal (kont-kind (erl-k->kont k)) :case-of))
+    (equal
+      (erl-s-klst->s (eval-k k s))
+      (cond 
+        ((equal (erl-val-kind (erl-state->in
+                    (mv-nth 
+                      0
+                      (eval-clauses 
+                          (list (erl-state->in s))
+                          (kont-case-of->clauses (erl-k->kont k))
+                          s))))
+                :reject)
+          (mv-nth 
+             0
+             (eval-clauses 
+               (list (erl-state->in s))
+               (kont-case-of->clauses (erl-k->kont k))
+               s)))
+        ((not (mv-nth 
+              1 (eval-clauses 
+                  (list (erl-state->in s))
+                  (kont-case-of->clauses (erl-k->kont k))
+                  s)))
+          (update-erl-state->in 
+            s
+            (make-erl-val-excpt 
+              :err (make-erl-err :class (make-err-class-error)
+                                  :reason (make-exit-reason-case-clause 
+                                            :val (erl-state->in s))))))
+        (t (update-erl-state->in
+            (mv-nth 
+              0
+              (eval-clauses 
+                (list (erl-state->in s))
+                (kont-case-of->clauses (erl-k->kont k))
+                s))
+            (make-erl-val-none)))))))

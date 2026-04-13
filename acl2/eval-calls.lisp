@@ -81,9 +81,9 @@
        ((if (omap::assoc fn module.fn-defns))
         (b* (((mv (erl-state rs) body) 
               (eval-clauses 
-               args 
-               (omap::lookup fn module.fn-defns)
-               (update-erl-state->bind s nil)))
+                args 
+                (omap::lookup fn module.fn-defns)
+                (update-erl-state->bind s nil)))
              ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
              ((if (null body)) 
               (mv function-clause nil)))

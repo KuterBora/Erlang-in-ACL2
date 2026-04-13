@@ -40,7 +40,7 @@
       (update-erl-state->in s (make-erl-val-none))))
   :enable eval-k)
 
-(defrule eval-k-of-remote-call->klst
+(defrule eval-k-of-remote-call-ok->klst
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -69,7 +69,7 @@
                       :module (erl-state->module s))))))
   :enable eval-k)
 
-(defrule eval-k-of-remote-call->s
+(defrule eval-k-of-remote-call-ok->s
   (implies
     (and (wf-state-p s) 
          (erl-k-p k)
@@ -151,3 +151,67 @@
                      (kont-remote-call->call (erl-k->kont k))
                      (erl-val-cons->lst (erl-state->in s))))))
   :enable eval-k)
+
+
+; Combine the rules from above to a general rewrite rule
+(defrule eval-k-of-remote->klst
+  (implies
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :remote-call))
+    (equal
+      (erl-s-klst->klst (eval-k k s))
+      (cond ((not (equal (erl-val-kind (erl-state->in s)) :cons)) nil)
+            ((not (mv-nth 1 (eval-remote-call
+                              (update-erl-state->in s (make-erl-val-none))
+                              (kont-remote-call->module (erl-k->kont k))
+                              (kont-remote-call->call (erl-k->kont k))
+                              (erl-val-cons->lst (erl-state->in s)))))
+              nil)
+            (t (list (make-erl-k 
+                      :fuel (1- (erl-k->fuel k))
+                      :kont (make-kont-exprs :exprs
+                        (mv-nth 1 (eval-remote-call
+                            (update-erl-state->in s (make-erl-val-none))
+                            (kont-remote-call->module (erl-k->kont k))
+                            (kont-remote-call->call (erl-k->kont k))
+                            (erl-val-cons->lst (erl-state->in s))))))
+                    (make-erl-k
+                      :fuel (1- (erl-k->fuel k)) 
+                      :kont (make-kont-function-return 
+                              :bind (erl-state->bind s) 
+                              :module (erl-state->module s))))))))
+  :enable eval-k)
+
+(defrule eval-k-of-remote->s
+  (implies
+    (and (wf-state-p s) 
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :remote-call))
+    (equal
+      (erl-s-klst->s (eval-k k s))
+      (cond ((not (equal (erl-val-kind (erl-state->in s)) :cons))
+             (update-erl-state->in 
+              s
+              (make-erl-val-reject :err "Remote call: invalid arg list.")))
+            ((not (mv-nth 1 (eval-remote-call
+                              (update-erl-state->in s (make-erl-val-none))
+                              (kont-remote-call->module (erl-k->kont k))
+                              (kont-remote-call->call (erl-k->kont k))
+                              (erl-val-cons->lst (erl-state->in s)))))
+             (mv-nth 
+              0 
+              (eval-remote-call
+                (update-erl-state->in s (make-erl-val-none))
+                (kont-remote-call->module (erl-k->kont k))
+                (kont-remote-call->call (erl-k->kont k))
+                (erl-val-cons->lst (erl-state->in s)))))
+            (t (update-erl-state->in 
+                 (mv-nth 0 (eval-remote-call
+                             (update-erl-state->in s (make-erl-val-none))
+                             (kont-remote-call->module (erl-k->kont k))
+                             (kont-remote-call->call (erl-k->kont k))
+                             (erl-val-cons->lst (erl-state->in s))))
+                 (make-erl-val-none)))))))

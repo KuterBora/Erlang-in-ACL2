@@ -31,8 +31,6 @@
 ;   might provide more felixibility -- theorems can be proven and the functions
 ;   can be disabled. 
 
-;; TODO: complete the theorems
-
 (define update-erl-state->in ((s erl-state-p) (in erl-val-p))
   :returns (rs erl-state-p)
   (b* ((s (erl-state-fix s))
@@ -150,6 +148,50 @@
                   (symbol-fix mod))       
            (equal (erl-state->world (update-erl-state->in-bind-mod s in b mod))
                   (erl-state->world s)))))
+
+
+; The following rules rewrite chains of updates to a normalized form and then 
+; simplify them. For example, updates to erl-state->bind are moved before 
+; updates to erl-state->in, and then updates of the same kind are simplified,
+; as the last update will always overwrite the previous.
+
+(defrule update-erl-state-normalize-bind-and-in
+  (equal (update-erl-state->in (update-erl-state->bind s b) v)
+         (update-erl-state->bind (update-erl-state->in s v) b))
+  :enable (update-erl-state->in update-erl-state->bind))
+
+(defrule update-erl-state->in-chain
+  (equal (update-erl-state->in (update-erl-state->in s v1) v2)
+         (update-erl-state->in s v2))
+  :enable update-erl-state->in)
+
+(defrule update-erl-state->bind-chain
+  (equal (update-erl-state->bind (update-erl-state->bind s b1) b2)
+         (update-erl-state->bind s b2))
+  :enable update-erl-state->bind)
+
+; (defrule update-erl-state-in-bind-chain-rule
+;   (equal (update-erl-state->bind 
+;            (update-erl-state->in 
+;              (update-erl-state->bind 
+;                (update-erl-state->in s v1) 
+;                 b1)
+;               v2)
+;             b2)
+;          (update-erl-state->bind (update-erl-state->in s v2) b2))
+;   :enable (update-erl-state->in update-erl-state->bind))
+
+; (defrule update-erl-state-in-bind-chain-rule-2
+;   (equal (update-erl-state->bind 
+;            (update-erl-state->in (update-erl-state->bind s b1) v)
+;             b2)
+;          (update-erl-state->bind (update-erl-state->in s v) b2))
+;   :enable (update-erl-state->in update-erl-state->bind))
+
+; (defrule update-erl-state-in-chain-rule
+;   (equal (update-erl-state->in (update-erl-state->in s v1) v2)
+;          (update-erl-state->in s v2))
+;   :enable (update-erl-state->in))
 
 
 ; Helpers for Utility ---------------------------------------------------------

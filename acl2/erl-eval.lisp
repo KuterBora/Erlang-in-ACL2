@@ -58,7 +58,7 @@
                           :bind s.bind
                           :module s.module)))))
           ; if x is a list, evaluate car and save cdr in a continuation.
-          (:cons 
+          (:cons
             (make-erl-s-klst
               :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.hd))

@@ -70,6 +70,44 @@
            (update-erl-state->in s (make-erl-val-none))))
   :enable eval-k)
 
+; merge the rules from above to a general rewrite rule
+(defrule eval-k-of-expr-tuple-ok->klst
+  (implies
+    (and (wf-state-p s)
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple))
+    (equal (erl-s-klst->klst (eval-k k s))
+           (if (node-tuple->lst (kont-expr->expr (erl-k->kont k)))
+               (list
+                (make-erl-k
+                  :fuel (1- (erl-k->fuel k))
+                  :kont (make-kont-expr
+                          :expr (car (node-tuple->lst
+                                      (kont-expr->expr (erl-k->kont k))))))
+                (make-erl-k
+                  :fuel (1- (erl-k->fuel k))
+                  :kont (make-kont-tuple
+                          :t-rem (make-node-tuple
+                                  :lst (cdr (node-tuple->lst
+                                              (kont-expr->expr (erl-k->kont k)))))
+                          :bind-0 (erl-state->bind s))))
+              nil))))
+
+(defrule eval-k-of-expr-tuple-ok->s
+  (implies
+    (and (wf-state-p s)
+         (erl-k-p k)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple))
+    (equal (erl-s-klst->s (eval-k k s))
+           (if (node-tuple->lst (kont-expr->expr (erl-k->kont k)))
+               (update-erl-state->in s (make-erl-val-none))
+               (update-erl-state->in s (make-erl-val-tuple :lst nil))))))
+
+
 ; kont-tuple
 (defrule eval-k-of-tuple->klst
   (implies 
