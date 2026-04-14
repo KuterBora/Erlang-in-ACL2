@@ -39,9 +39,7 @@
           (:atom    (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-atom :val x.val))))
           (:string  (make-erl-s-klst :s (update-erl-state->in s (string=>erl-cons x.val))))
           (:nil     (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-cons :lst nil))))
-          ; if x is a fun, create an anonymous function with a unique name
-          ; - The unique name is necessariy for comparison operations, i.e. two anonymous 
-          ;   functions with the same clauses but different names are not equal
+          ; if x is a fun, return the corresponding fun struct
           (:fun
             (b* ((arity (erl-clause-list->arity x.cls))
                  ((if (null arity))

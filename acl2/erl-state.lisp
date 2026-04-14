@@ -150,10 +150,10 @@
                   (erl-state->world s)))))
 
 
-; The following rules rewrite chains of updates to a normalized form and then 
-; simplify them. For example, updates to erl-state->bind are moved before 
-; updates to erl-state->in, and then updates of the same kind are simplified,
-; as the last update will always overwrite the previous.
+; The following rules rewrite chains of erl-state updates to a normalized form 
+; which then allows simplifications. For example, updates to erl-state->bind 
+; are moved before updates to erl-state->in, and then updates of the same 
+; kind are simplified, as the last update will always overwrite the previous.
 
 (defrule update-erl-state-normalize-bind-and-in
   (equal (update-erl-state->in (update-erl-state->bind s b) v)
@@ -170,28 +170,13 @@
          (update-erl-state->bind s b2))
   :enable update-erl-state->bind)
 
-; (defrule update-erl-state-in-bind-chain-rule
-;   (equal (update-erl-state->bind 
-;            (update-erl-state->in 
-;              (update-erl-state->bind 
-;                (update-erl-state->in s v1) 
-;                 b1)
-;               v2)
-;             b2)
-;          (update-erl-state->bind (update-erl-state->in s v2) b2))
-;   :enable (update-erl-state->in update-erl-state->bind))
-
-; (defrule update-erl-state-in-bind-chain-rule-2
-;   (equal (update-erl-state->bind 
-;            (update-erl-state->in (update-erl-state->bind s b1) v)
-;             b2)
-;          (update-erl-state->bind (update-erl-state->in s v) b2))
-;   :enable (update-erl-state->in update-erl-state->bind))
-
-; (defrule update-erl-state-in-chain-rule
-;   (equal (update-erl-state->in (update-erl-state->in s v1) v2)
-;          (update-erl-state->in s v2))
-;   :enable (update-erl-state->in))
+(defrule update-erl-state->in-bind-expand
+  (equal (update-erl-state->in-bind s v b)
+         (update-erl-state->bind (update-erl-state->in s v) b))
+  :enable 
+    (update-erl-state->in 
+     update-erl-state->bind 
+     update-erl-state->in-bind))
 
 
 ; Helpers for Utility ---------------------------------------------------------

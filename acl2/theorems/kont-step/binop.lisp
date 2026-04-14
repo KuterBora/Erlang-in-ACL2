@@ -1,7 +1,6 @@
 (in-package "ACL2")
 (include-book "../core/eval-theorems")
 
-
 ; Binop Kont-Step --------------------------------------------------------------
 
 ; The following theorems show that evaluating a continuation for a binop 
@@ -101,49 +100,7 @@
            nil))
   :enable eval-k)
 
-; (defrule eval-k-of-binop-expr2-compatible->s
-;   (implies
-;     (and (wf-state-p s)
-;          (erl-k-p k)
-;          (> (erl-k->fuel k) 0)
-;          (equal (kont-kind (erl-k->kont k)) :binop-expr2)
-;          (omap::compatiblep (erl-state->bind s)
-;                             (kont-binop-expr2->left-bind (erl-k->kont k))))
-;     (equal
-;       (erl-s-klst->s (eval-k k s))
-;       (update-erl-state->in-bind
-;         s
-;         (apply-erl-binop
-;           (kont-binop-expr2->op (erl-k->kont k))
-;           (kont-binop-expr2->val (erl-k->kont k))
-;           (erl-state->in s))
-;         (omap::update*
-;           (erl-state->bind s)
-;           (kont-binop-expr2->left-bind (erl-k->kont k))))))
-;   :enable eval-k)
-
-; (defrule eval-k-of-binop-expr2-incompatible->s
-;   (implies
-;     (and (wf-state-p s)
-;          (erl-k-p k)
-;          (> (erl-k->fuel k) 0)
-;          (equal (kont-kind (erl-k->kont k)) :binop-expr2)
-;          (not (omap::compatiblep (erl-state->bind s)
-;                                  (kont-binop-expr2->left-bind (erl-k->kont k)))))
-;     (equal
-;       (erl-s-klst->s (eval-k k s))
-;       (update-erl-state->in
-;         s
-;         (make-erl-val-excpt
-;           :err (make-erl-err
-;                  :class (make-err-class-error)
-;                  :reason (make-exit-reason-badmatch
-;                            :val (erl-state->in s)))))))
-;   :enable eval-k)
-
-
-; Combine
-(defrule eval-k-of-binop-expr2->s1
+(defrule eval-k-of-binop-expr2->s
   (implies
     (and (erl-state-p s)
          (erl-k-p k)
@@ -158,12 +115,12 @@
                   (erl-state->bind s)
                   (kont-binop-expr2->left-bind (erl-k->kont k))))
            (update-erl-state->in
-            s
-            (make-erl-val-excpt
-              :err (make-erl-err
-                    :class (make-err-class-error)
-                    :reason (make-exit-reason-badmatch
-                              :val (erl-state->in s))))))
+             s
+             (make-erl-val-excpt
+               :err (make-erl-err
+                      :class (make-err-class-error)
+                      :reason (make-exit-reason-badmatch
+                                :val (erl-state->in s))))))
           
           (t
             (update-erl-state->in-bind

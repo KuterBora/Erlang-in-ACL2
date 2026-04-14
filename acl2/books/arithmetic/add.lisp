@@ -18,7 +18,7 @@
 ;;
 ;; add(X, Y) when is_integer(X), is_integer(Y) -> X + Y.
 ;;
-(local (define test-w ()
+(define add-test-w ()
   :returns (w world-p)
   :enabled t
   '((local
@@ -33,15 +33,15 @@
           (body (:binop
                   + 
                   (:var X) 
-                  (:var Y))))))))))
+                  (:var Y)))))))))
 
-; While it is not necessary, this lemma speeds up the theorem below quite a bit.
-; ACL2 has an easier time dealing with the cases of eval-local-call and apply-k
-; separately.
+; While it is not necessary to admit the theorem below, this lemma speeds up 
+; the proof quite a bit. ACL2 has an easier time dealing with the cases of 
+; eval-local-call and apply-k separately.
 (local (defrule lemma-eval-local-call-of-add
   (implies
     (and (wf-state-p s)
-         (equal (erl-state->world s) (test-w))
+         (equal (erl-state->world s) (add-test-w))
          (equal (erl-state->module s) 'local)
          (erl-vlst-p args)
          (car args)
@@ -69,7 +69,7 @@
   (b* (; The starting state is well-formed
        ((unless (wf-state-p s)) t) 
        ((erl-state s) s)
-       ((unless (equal s.world (test-w))) t)
+       ((unless (equal s.world (add-test-w))) t)
        ((unless (equal s.module 'local)) t)
        
        ; The next continuation calls add(X, Y)
@@ -77,7 +77,7 @@
        ((erl-k k) k)
        ((unless (equal (kont-kind k.kont) :expr)) t)
        ((unless (equal (node-kind (kont-expr->expr k.kont)) :call)) t)
-       ((unless (equal 'add (node-call->fn (kont-expr->expr k.kont)))) t)
+       ((unless (equal (node-call->fn (kont-expr->expr k.kont)) 'add)) t)
 
        ; Result of the function call does not cause an error
        ((unless (wf-state-p (apply-k s (list k)))) t)
@@ -97,6 +97,7 @@
                       (kont-expr->expr k.kont)))))))
 
        ; TODO: remove this when the apply-k-of-module theorem is complete.
+       ; - in ../../theorems/state/module 
        ((unless (equal (erl-state->module args) 'local)) t)
 
        ; The argument must evaluate to a list of two integers.
@@ -104,8 +105,7 @@
        ((unless (equal (erl-val-kind (erl-state->in args)) :cons)) t)
        (vals (erl-val-cons->lst (erl-state->in args)))
        ((unless 
-          (and (erl-vlst-p vals)
-               (car vals)
+          (and (car vals)
                (cadr vals)
                (not (cddr vals))
                (equal (erl-val-kind (car vals)) :integer)
@@ -114,11 +114,10 @@
     (equal (erl-state->in (apply-k s (cons k nil)))
            (erl-val-integer (add (erl-val-integer->val (car vals))
                                  (erl-val-integer->val (cadr vals))))))
-  :enable (apply-erl-binop APPLY-ERL-ARITHM-BINOP erl-add add)
+  :enable (apply-erl-binop apply-erl-arithm-binop erl-add add)
   :case-split-limitations (5 4)
   :disable 
     (erl-k-p-when-member-equal-of-erl-klst-p default-<-2 default-<-1
      kont-expr->expr-of-kont-expr expr-fix-is-the-identity-on-expr
      expr-fix-is-the-identity-on-expr expr-call-ensures
      return-type-of-kont-expr))
-

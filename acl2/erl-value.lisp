@@ -220,3 +220,15 @@
     (not (equal s1 s2))
     (equal (omap::lookup s2 (omap::update s1 x1 (omap::update s2 x2 m))) x2))
   :enable omap::lookup)
+
+; This is useful for theorems that reason about the value of an erl-val-integer. 
+(encapsulate nil
+  (local (include-book "std/lists/len" :dir :system))
+  (defrule erl-val-integer-of-car-and-cdr
+    (implies (and (erl-val-p x)
+                  (equal (erl-val-kind x) :integer)
+                  (equal (erl-val-integer->val x) v))
+             (equal x `(:integer ,v)))
+    :enable (erl-val-kind erl-val-integer->val erl-val-p)
+    :expand (true-listp (cdr x))
+    :rule-classes :forward-chaining))
