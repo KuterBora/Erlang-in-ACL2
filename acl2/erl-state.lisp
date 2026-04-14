@@ -31,8 +31,6 @@
 ;   might provide more felixibility -- theorems can be proven and the functions
 ;   can be disabled. 
 
-;; TODO: complete the theorems
-
 (define update-erl-state->in ((s erl-state-p) (in erl-val-p))
   :returns (rs erl-state-p)
   (b* ((s (erl-state-fix s))
@@ -43,15 +41,14 @@
                       :module (erl-state->module s)))
   ///
     (defrule update-erl-state->in-fields
-      (implies (and (erl-state-p s) (erl-val-p val))
-               (and (equal (erl-state->in (update-erl-state->in s val))
-                           val)
-                    (equal (erl-state->bind (update-erl-state->in s val))
-                           (erl-state->bind s))
-                    (equal (erl-state->module (update-erl-state->in s val))
-                           (erl-state->module s))
-                    (equal (erl-state->world (update-erl-state->in s val))
-                           (erl-state->world s))))))
+      (and (equal (erl-state->in (update-erl-state->in s val))
+                  (erl-val-fix val))
+           (equal (erl-state->bind (update-erl-state->in s val))
+                  (erl-state->bind s))
+           (equal (erl-state->module (update-erl-state->in s val))
+                  (erl-state->module s))
+           (equal (erl-state->world (update-erl-state->in s val))
+                  (erl-state->world s)))))
 
 (define update-erl-state->bind ((s erl-state-p) (bind bind-p))
   :returns (rs erl-state-p)
@@ -63,15 +60,14 @@
                       :module (erl-state->module s)))
   ///
     (defrule update-erl-state->bind-fields
-      (implies (and (erl-state-p s) (bind-p b))
-               (and 
-                (equal (erl-state->in (update-erl-state->bind s b))
-                       (erl-state->in s))
-                (equal (erl-state->bind (update-erl-state->bind s b)) b)
-                (equal (erl-state->module (update-erl-state->bind s b))
-                       (erl-state->module s))
-                (equal (erl-state->world (update-erl-state->bind s b))
-                       (erl-state->world s))))))
+      (and (equal (erl-state->in (update-erl-state->bind s b))
+                  (erl-state->in s))
+           (equal (erl-state->bind (update-erl-state->bind s b))
+                  (bind-fix b))
+           (equal (erl-state->module (update-erl-state->bind s b))
+                  (erl-state->module s))
+           (equal (erl-state->world (update-erl-state->bind s b))
+                  (erl-state->world s)))))
 
 (define update-erl-state->in-bind ((s erl-state-p) (in erl-val-p) (bind bind-p))
   :returns (rs erl-state-p)
@@ -84,13 +80,14 @@
                       :module (erl-state->module s)))
   ///
     (defrule update-erl-state->in-bind-fields
-      (implies (and (erl-state-p s) (bind-p b) (erl-val-p in))
-               (and (equal (erl-state->in (update-erl-state->in-bind s in b)) in)
-                    (equal (erl-state->bind (update-erl-state->in-bind s in b)) b)
-                    (equal (erl-state->module (update-erl-state->in-bind s in b)) 
-                           (erl-state->module s))
-                    (equal (erl-state->world (update-erl-state->in-bind s in b)) 
-                           (erl-state->world s))))))
+      (and (equal (erl-state->in (update-erl-state->in-bind s in b))
+                  (erl-val-fix in))
+           (equal (erl-state->bind (update-erl-state->in-bind s in b))
+                  (bind-fix b))
+           (equal (erl-state->module (update-erl-state->in-bind s in b)) 
+                  (erl-state->module s))
+           (equal (erl-state->world (update-erl-state->in-bind s in b)) 
+                  (erl-state->world s)))))
 
 (define update-erl-state->mod ((s erl-state-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -99,7 +96,17 @@
       (make-erl-state :in (erl-state->in s)
                       :bind (erl-state->bind s)
                       :world (erl-state->world s)
-                      :module mod)))
+                      :module mod))
+  ///
+    (defrule update-erl-state->mod-fields
+      (and (equal (erl-state->module (update-erl-state->mod s mod))
+                  (symbol-fix mod))
+           (equal (erl-state->in (update-erl-state->mod s mod))
+                  (erl-state->in s))
+           (equal (erl-state->bind (update-erl-state->mod s mod))
+                  (erl-state->bind s))
+           (equal (erl-state->world (update-erl-state->mod s mod))
+                  (erl-state->world s)))))
 
 (define update-erl-state->bind-mod ((s erl-state-p) (bind bind-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -109,7 +116,17 @@
       (make-erl-state :in (erl-state->in s)
                       :bind bind
                       :world (erl-state->world s)
-                      :module mod)))
+                      :module mod))
+  ///
+    (defrule update-erl-state->bind-mod-fields
+      (and (equal (erl-state->module (update-erl-state->bind-mod s b mod))
+                  (symbol-fix mod))
+           (equal (erl-state->bind (update-erl-state->bind-mod s b mod))
+                  (bind-fix b))
+           (equal (erl-state->in (update-erl-state->bind-mod s b mod))
+                  (erl-state->in s))   
+           (equal (erl-state->world (update-erl-state->bind-mod s b mod))
+                  (erl-state->world s)))))
 
 (define update-erl-state->in-bind-mod ((s erl-state-p) (in erl-val-p) (bind bind-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -120,7 +137,46 @@
       (make-erl-state :in in
                       :bind bind
                       :world (erl-state->world s)
-                      :module mod)))
+                      :module mod))
+  ///
+    (defrule update-erl-state->in-bind-mod-fields
+      (and (equal (erl-state->in (update-erl-state->in-bind-mod s in b mod))
+                  (erl-val-fix in))
+           (equal (erl-state->bind (update-erl-state->in-bind-mod s in b mod))
+                  (bind-fix b))   
+           (equal (erl-state->module (update-erl-state->in-bind-mod s in b mod))
+                  (symbol-fix mod))       
+           (equal (erl-state->world (update-erl-state->in-bind-mod s in b mod))
+                  (erl-state->world s)))))
+
+
+; The following rules rewrite chains of erl-state updates to a normalized form 
+; which then allows simplifications. For example, updates to erl-state->bind 
+; are moved before updates to erl-state->in, and then updates of the same 
+; kind are simplified, as the last update will always overwrite the previous.
+
+(defrule update-erl-state-normalize-bind-and-in
+  (equal (update-erl-state->in (update-erl-state->bind s b) v)
+         (update-erl-state->bind (update-erl-state->in s v) b))
+  :enable (update-erl-state->in update-erl-state->bind))
+
+(defrule update-erl-state->in-chain
+  (equal (update-erl-state->in (update-erl-state->in s v1) v2)
+         (update-erl-state->in s v2))
+  :enable update-erl-state->in)
+
+(defrule update-erl-state->bind-chain
+  (equal (update-erl-state->bind (update-erl-state->bind s b1) b2)
+         (update-erl-state->bind s b2))
+  :enable update-erl-state->bind)
+
+(defrule update-erl-state->in-bind-expand
+  (equal (update-erl-state->in-bind s v b)
+         (update-erl-state->bind (update-erl-state->in s v) b))
+  :enable 
+    (update-erl-state->in 
+     update-erl-state->bind 
+     update-erl-state->in-bind))
 
 
 ; Helpers for Utility ---------------------------------------------------------
@@ -135,11 +191,9 @@
                  (not (equal kind :flimit)))))
   ///
     (defrule wf-state-props
-      (implies 
-        (wf-state-p s)
-        (and (erl-state-p s)
-             (let ((kind (erl-val-kind (erl-state->in s))))
-                  (and (not (equal kind :reject))
-                       (not (equal kind :excpt))
-                      (not (equal kind :flimit))))))
-      :expand (wf-state-p s)))
+      (iff (wf-state-p s)
+           (and (erl-state-p s)
+                (let ((kind (erl-val-kind (erl-state->in s))))
+                     (and (not (equal kind :reject))
+                          (not (equal kind :excpt))
+                          (not (equal kind :flimit))))))))

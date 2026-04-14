@@ -21,21 +21,22 @@
       (make-erl-k 
       :fuel 10000 
       :kont (make-kont-expr
-              :expr '(:call is_integer ((:integer 1)))))))
+              :expr '(:call is_integer (:cons (:integer 1) (:nil)))))))
   (make-erl-state :in '(:atom true)))
 
 (assert-equal
-  (apply-k 
+  (apply-k
     (make-erl-state)
     (list 
       (make-erl-k 
       :fuel 10000 
       :kont (make-kont-expr
               :expr '(:call element
-                            ((:integer 2)
-                             (:tuple ((:atom one)
-                                      (:atom two)
-                                      (:atom three)))))))))
+                            (:cons (:integer 2)
+                                   (:cons (:tuple ((:atom one)
+                                                   (:atom two)
+                                                   (:atom three)))
+                                          (:nil))))))))
   (make-erl-state :in '(:atom two)))
 
 
@@ -84,43 +85,45 @@
       :returns (w world-p)
       '((arithm-1
           (attrs (module . arithm-1)
-                (export ((name . add) (arity . 2))
-                        ((name . sum) (arity . 1)))
-                (import (((name . bogus-fn1) (arity . 0)) . local)
-                        (((name . bogus-fn2) (arity . 0)) . bad-mod)))
+                 (export ((name . add) (arity . 2))
+                         ((name . sum) (arity . 1)))
+                 (import (((name . bogus-fn1) (arity . 0)) . local)
+                         (((name . bogus-fn2) (arity . 0)) . bad-mod)))
           (fn-defns
             (((name . add) (arity . 2))
-            ((cases (:var X) (:var Y))
+             ((cases (:var X) (:var Y))
               (guards)
               (body (:binop + (:var X) (:var Y)))))
             (((name . sum) (arity . 1))
-            ((cases (:integer 0))
+             ((cases (:integer 0))
               (guards)
               (body (:integer 0)))
-            ((cases (:var X))
-              (guards ((:call is_integer ((:var X))) 
+             ((cases (:var X))
+              (guards ((:call is_integer (:cons (:var X) (:nil))) 
                       (:binop > (:var X) (:integer 0))))
               (body (:binop 
                       + 
                       (:var X) 
-                      (:call sum ((:binop - (:var X) (:integer 1))))))))))
+                      (:call sum (:cons (:binop - (:var X) (:integer 1)) 
+                                        (:nil)))))))))
         (arithm-2
           (attrs (module . arithm-2)
-                (export ((name . add*) (arity . 1)))
-                (import (((name . add) (arity . 2)) . arithm-1)))
+                 (export ((name . add*) (arity . 1)))
+                 (import (((name . add) (arity . 2)) . arithm-1)))
           (fn-defns
             (((name . add*) (arity . 1))
-            ((cases (:nil))
+             ((cases (:nil))
               (guards)
               (body (:integer 0)))
-            ((cases (:cons (:var Hd) (:var Tl)))
-              (guards ((:call is_integer ((:var Hd)))))
-              (body (:match (:var Rest) (:call add* ((:var Tl))))
-                    (:call add ((:var Hd) (:var Rest))))))))
+             ((cases (:cons (:var Hd) (:var Tl)))
+              (guards ((:call is_integer (:cons (:var Hd) (:nil)))))
+              (body (:match (:var Rest) (:call add* (:cons (:var Tl) (:nil))))
+                    (:call add (:cons (:var Hd)
+                                      (:cons (:var Rest) (:nil)))))))))
         (local
           (attrs (module . local)
-                (export)
-                (import))
+                 (export)
+                 (import))
           (fn-defns)))))
 
   ; Simple Local Function --------------------------------------------------------
@@ -135,8 +138,8 @@
         :fuel 10000 
         :kont (make-kont-expr
                 :expr '(:call add
-                              ((:integer 2)
-                              (:integer 2)))))))
+                              (:cons (:integer 2)
+                                     (:cons (:integer 2) (:nil))))))))
     (make-erl-state 
       :in '(:integer 4)
       :world (test-world)
@@ -156,8 +159,8 @@
                 :expr '(:remote-call 
                         arithm-1
                         add
-                        ((:integer 2)
-                          (:integer 2)))))))
+                        (:cons (:integer 2)
+                               (:cons (:integer 2) (:nil))))))))
     (make-erl-state 
       :in '(:integer 4)
       :world (test-world)))
@@ -174,7 +177,7 @@
         (make-erl-k
         :fuel 10000 
         :kont (make-kont-expr
-                :expr '(:call sum ((:integer 2)))))))
+                :expr '(:call sum (:cons (:integer 2) (:nil)))))))
     (make-erl-state
       :in '(:integer 3)
       :world (test-world)
@@ -191,7 +194,8 @@
         (make-erl-k
         :fuel 10000 
         :kont (make-kont-expr
-                :expr '(:remote-call arithm-1 sum ((:integer 5)))))))
+                :expr '(:remote-call arithm-1 sum (:cons (:integer 5) 
+                                                         (:nil)))))))
     (make-erl-state 
       :in '(:integer 15)
       :world (test-world)))
@@ -209,11 +213,12 @@
               '(:remote-call 
                 arithm-2 
                 add* 
-                ((:cons 
-                    (:integer 3)
-                    (:cons (:integer 6)
-                          (:cons (:integer 9)
-                                  (:nil))))))))))
+                (:cons (:cons 
+                        (:integer 3)
+                        (:cons (:integer 6)
+                               (:cons (:integer 9)
+                                      (:nil))))
+                       (:nil)))))))
     (make-erl-state 
       :in '(:integer 18)
       :world (test-world)))
@@ -231,7 +236,7 @@
         (make-erl-k
         :fuel 10000 
         :kont (make-kont-expr
-                :expr '(:call sum ((:integer -1)))))))
+                :expr '(:call sum (:cons (:integer -1) (:nil)))))))
     (make-erl-state 
       :in 
         '(:excpt ((class :error) (reason :function-clause) (stack)))
@@ -247,7 +252,8 @@
         (make-erl-k
         :fuel 10000 
         :kont (make-kont-expr
-                :expr '(:remote-call arithm-1 sum ((:integer -1)))))))
+                :expr '(:remote-call arithm-1 sum (:cons (:integer -1)
+                                                         (:nil)))))))
     (make-erl-state 
       :in '(:excpt ((class :error) (reason :function-clause) (stack)))
       :world (test-world)))
@@ -262,7 +268,7 @@
         (make-erl-k
         :fuel 10000 
         :kont (make-kont-expr
-                :expr '(:call bogus-fn1 nil)))))
+                :expr '(:call bogus-fn1 (:nil))))))
     (make-erl-state 
       :in 
         '(:excpt 
@@ -282,7 +288,7 @@
         (make-erl-k
         :fuel 10000 
         :kont (make-kont-expr
-                :expr '(:call bogus-fn2 nil)))))
+                :expr '(:call bogus-fn2 (:nil))))))
     (make-erl-state 
       :in 
         '(:excpt 
@@ -301,7 +307,7 @@
         (make-erl-k
         :fuel 10000 
         :kont (make-kont-expr
-                :expr '(:remote-call crock crock nil)))))
+                :expr '(:remote-call crock crock (:nil))))))
     (make-erl-state 
       :in 
         '(:excpt 
@@ -319,7 +325,7 @@
         (make-erl-k
         :fuel 10000 
         :kont (make-kont-expr
-                :expr '(:remote-call arithm-1 crock nil)))))
+                :expr '(:remote-call arithm-1 crock (:nil))))))
     (make-erl-state 
       :in 
         '(:excpt 
