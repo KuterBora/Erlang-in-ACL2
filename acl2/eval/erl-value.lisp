@@ -1,6 +1,7 @@
 (in-package "ACL2")
 (include-book "erl-ast")
-(include-book "kestrel/fty/defsubtype" :DIR :SYSTEM)
+(include-book "std/omaps/top" :dir :system)
+(include-book "kestrel/fty/defsubtype" :dir :system)
 (include-book "kestrel/utilities/strings/strings-codes" :dir :system)
 
 (set-induction-depth-limit 1)
@@ -211,6 +212,7 @@
 
 ; Utility Theorems -------------------------------------------------------------
 
+; These might be unnecessary after including the omap book.
 (defrule bind-update-lookup
   (equal (omap::lookup s (omap::update s x m)) x)
   :enable omap::lookup)

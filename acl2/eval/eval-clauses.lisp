@@ -2,7 +2,6 @@
 (include-book "eval-match")
 (include-book "eval-guards")
 
-
 ; Evaluate Erlang Clauses ------------------------------------------------------
 
 ; Returns the body of the first clause which has patterns that can match the 

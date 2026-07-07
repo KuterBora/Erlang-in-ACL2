@@ -24,10 +24,9 @@
        ((erl-state s) (erl-state-fix s))
 
        ; If the state has an error, return right away.
-       ; TODO: exception handling (catch, try-catch)
        ((unless (wf-state-p s)) (make-erl-s-klst :s s))
 
-       ; Return flimit if fuel had ran out.
+       ; Return flimit if fuel has ran out.
        ((if (zp fuel)) 
         (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit)))))
     (kont-case k
@@ -55,24 +54,19 @@
                           :cls x.cls
                           :bind s.bind
                           :module s.module)))))
-          ; if x is a list, evaluate car and save cdr in a continuation.
+          ; if x is a list, evaluate its car and save its cdr in a continuation.
           (:cons
             (make-erl-s-klst
               :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.hd))
                           (make-erl-k :fuel (1- fuel)
                                       :kont (make-kont-cons :cdr-expr x.tl :bind-0 s.bind)))))
-          ; if x is a tuple, evaluate the first element and save the rest in a continuation.
-          ; if the tuple is empty, return its value.
+          ; if x is a tuple, evaluate its elements first.
           (:tuple
-            (if (null x.lst)
-                (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-tuple :lst nil)))
-                (make-erl-s-klst 
-                  :s (update-erl-state->in s (make-erl-val-none))
-                  :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car x.lst)))
-                              (make-erl-k :fuel (1- fuel)
-                                          :kont (make-kont-tuple :t-rem (make-node-tuple :lst (cdr x.lst)) 
-                                                                 :bind-0 s.bind))))))
+            (make-erl-s-klst 
+              :s (update-erl-state->in s (make-erl-val-none))
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.lst))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-tuple)))))
           ; if x is a var, lookup its value. If the AST is well-formed, x should be bound.
           (:var
             (if (omap::assoc x.id s.bind)
@@ -185,34 +179,18 @@
               :s (update-erl-state->in 
                    s 
                    (make-erl-val-reject :err "cons-merge expects list, pairs are not supported")))))
-      
-      ; Evaluate the rest of the tuple, save the previous element in a continuation. 
+
+      ; Once all of its elements are evaluated, return the tuple.
       (:tuple
-        (make-erl-s-klst
-          :s (update-erl-state->bind s k.bind-0)
-          :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.t-rem))
-                      (make-erl-k :fuel (1- fuel)
-                                  :kont (make-kont-tuple-merge :t-hd s.in 
-                                                               :t-bind s.bind)))))
-      ; When every element of a tuple has been evaluated, start merging the results.
-      (:tuple-merge
-        (if (equal (erl-val-kind s.in) :tuple)
-            (if (omap::compatiblep s.bind k.t-bind)
-                (make-erl-s-klst 
-                  :s (update-erl-state->in-bind 
-                        s
-                        (make-erl-val-tuple :lst (cons k.t-hd (erl-val-tuple->lst s.in)))
-                        (omap::update* s.bind k.t-bind)))
-                (make-erl-s-klst
-                  :s (update-erl-state->in 
-                       s 
-                       (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val s.in))))))
+        (if (equal (erl-val-kind s.in) :cons)
+            (make-erl-s-klst 
+              :s (update-erl-state->in
+                    s
+                    (make-erl-val-tuple :lst (erl-val-cons->lst (erl-state->in s)))))
             (make-erl-s-klst 
               :s (update-erl-state->in 
                    s 
-                   (make-erl-val-reject :err "tuple-merge expects tuple")))))
+                   (make-erl-val-reject :err "tuple expects a list of elements.")))))
 
       ; Apply unop to the evalutaed operand.
       (:unop (make-erl-s-klst :s (update-erl-state->in s (apply-erl-unop k.op s.in))))
@@ -378,57 +356,91 @@
 
 
       ; Once a call returns, return to the correct module and scope
-      (:function-return (make-erl-s-klst :s (update-erl-state->bind-mod s k.bind k.module))))))
+      (:function-return (make-erl-s-klst :s (update-erl-state->bind-mod s k.bind k.module)))))
+  
+  ///
+    (defcong erl-k-equiv equal (eval-k k s) 1)
+    (defcong erl-state-equiv equal (eval-k k s) 2)
 
+    (more-returns
+      (ks :name len-of-eval-k->klst
+        (implies (erl-s-klst->klst ks)
+          (and (consp (erl-s-klst->klst ks))
+               (consp (cdr (erl-s-klst->klst ks)))
+               (not (cddr (erl-s-klst->klst ks))))))
 
-; calls to eval-k either return a tuple of two contunuations, or an empty list
-(defrule eval-k-decreases-fuel
-  (implies 
-    (and (erl-state-p s) (erl-k-p k))
-    (or (null (erl-s-klst->klst (eval-k k s)))
-        (and (tuplep 2 (erl-s-klst->klst (eval-k k s)))
-              (equal (erl-k->fuel (car (erl-s-klst->klst (eval-k k s)))) 
-                    (- (erl-k->fuel k) 1))
-              (equal (erl-k->fuel (cadr (erl-s-klst->klst (eval-k k s)))) 
-                    (- (erl-k->fuel k) 1))
-              (equal (cdr (erl-s-klst->klst (eval-k k s))) 
-                    (cons (cadr (erl-s-klst->klst (eval-k k s))) nil)))))
-  :enable eval-k)
+      (ks :name eval-k-decreases-fuel
+        (implies (erl-s-klst->klst ks)
+          (and (equal (erl-k->fuel (car (erl-s-klst->klst ks)))
+                      (- (erl-k->fuel k) 1))
+               (equal (erl-k->fuel (cadr (erl-s-klst->klst ks)))
+                      (- (erl-k->fuel k) 1)))))
 
+      (ks :name eval-k-decreases-klst-measure
+        (< (klst-measure (append (erl-s-klst->klst ks) kl))
+           (klst-measure (cons k kl)))
+        :hints
+          (("Goal" :in-theory (disable eval-k)
+                    :use (:functional-instance eval-op-decreases-klst-measure
+                            (eval-op eval-k))))))
+      
+    (defrule eval-k-of-bad-state
+      (implies (not (wf-state-p s))
+	       (equal (eval-k k s) (make-erl-s-klst :s (erl-state-fix s)))))
 
-; Eval-op decreases the klst-measure
-(defrule eval-k-decreases-klst-measure
-  (b* ((klst (erl-klst-fix klst))
-        (x (erl-state-fix x))
-        ((if (null klst)) t))
-    (l< (klst-measure (append (erl-s-klst->klst (eval-k (car klst) x))
-                              (cdr klst)))
-        (klst-measure klst)))
-  :enable eval-k
-  :use (:functional-instance eval-op-decreases-klst-measure  
-      (eval-op eval-k)
-      (eval-result-p erl-s-klst-p)
-      (eval-result->klst erl-s-klst->klst)
-      (erl-result-p erl-state-p)
-      (erl-result-fix erl-state-fix))) 
+    (defrule eval-k-of-flimit
+      (implies (and (wf-state-p s) (zp (erl-k->fuel k)))
+	       (equal (eval-k k s)
+                (make-erl-s-klst
+                  :s (update-erl-state->in (erl-state-fix s) (make-erl-val-flimit)))))))
 
 
 ; Recursively apply the next continuation to the state produced by the previous.
 (define apply-k ((s erl-state-p) (klst erl-klst-p))
   :returns (r erl-state-p)
   :well-founded-relation l<
-  :measure (klst-measure (erl-klst-fix klst))
+  :measure (klst-measure klst)
   (b* (((erl-state s) (erl-state-fix s))
        (klst (erl-klst-fix klst))
-       ; The evaluator has run out of fuel
-       ((if (equal (erl-val-kind s.in) :flimit)) s)
-       ; The evaluator has encountered an internal error
-       ((if (equal (erl-val-kind s.in) :reject)) s)
-       ; TODO: remove this exception handling is added
-       ((if (equal (erl-val-kind s.in) :excpt)) s)
+
+       ; Evaluation is complete when there are no more continuations.
        ((if (endp klst)) s)
+
        ((cons khd ktl) klst)
+
+       ; Propagate errors
+       ((unless (wf-state-p s)) (apply-k s ktl))
+
        ((erl-s-klst ks) (eval-k khd s)))
     (apply-k ks.s (append ks.klst ktl)))
-  :hints (("Goal" :use ((:instance eval-k-decreases-klst-measure (klst klst) (x s)))
-                  :in-theory (disable klst-measure eval-k-decreases-klst-measure))))
+  
+  ; for termination proof
+  :hints (("Goal" :in-theory (disable eval-k-decreases-klst-measure)
+                  :use ((:instance eval-k-decreases-klst-measure
+                          (k (car klst)) (kl (cdr klst))))))
+  ///
+    (local (in-theory (disable apply-k)))
+    
+    (defcong erl-state-equiv equal (apply-k s klst) 1
+      :hints(("Goal" :expand ((apply-k s klst) (apply-k s-equiv klst)))))
+    (defcong erl-klst-equiv equal (apply-k s klst) 2
+      :hints(("Goal" :expand ((apply-k s klst) (apply-k s klst-equiv)))))
+  
+    (defrule apply-k-of-nil (equal (apply-k s nil) (erl-state-fix s))
+      :hints(("Goal" :expand ((apply-k s nil)))))
+    
+    (defrule apply-k-of-not-consp
+      (implies (not (consp klst))
+               (equal (apply-k s klst) (erl-state-fix s)))
+      :hints(("Goal" :expand ((apply-k s klst)))))
+
+    (local (in-theory (enable apply-k)))
+
+    (defrule apply-k-of-bad-state
+      (implies (not (wf-state-p s))
+	             (equal (apply-k s klst) (erl-state-fix s))))
+               
+    (defrule apply-k-when-out-of-fuel
+      (implies (and (wf-state-p s) (consp klst) (zp (erl-k->fuel (car klst))))
+               (equal (apply-k s klst)
+                      (update-erl-state->in (erl-state-fix s) (make-erl-val-flimit))))))

@@ -133,7 +133,7 @@
             (mv rs body)))
 
        ; Check if the function is a BIF
-       ((if (erl-bif-p fn)) (mv (update-erl-state->in s (eval-bif fn args)) nil)))
+       ((if (erl-bif-p fn)) (mv (update-erl-state->in s (eval-bif fn args s)) nil)))
     (mv reject nil)))
 
 

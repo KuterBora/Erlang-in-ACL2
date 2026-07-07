@@ -3,8 +3,6 @@
 
 ; AST Theorems -----------------------------------------------------------------
 
-(set-induction-depth-limit 1)
-
 ; Sub-nodes of a cons expression are also expressions.
 (defrule expr-cons-ensures
   (implies (and (expr-p x) (equal (node-kind x) :cons))
@@ -29,37 +27,22 @@
 ; Sub-nodes of a tuple expression are also expressions.
 (defrule expr-tuple-ensures
   (implies (and (expr-p x) (equal (node-kind x) :tuple))
-           (expr-list-p (node-tuple->lst x)))
+           (and (expr-p (node-tuple->lst x))
+                (equal (node-kind (node-tuple->lst x)) :cons)))
   :enable expr-p)
 
 ; Sub-nodes of a tuple pattern are also patterns.
 (defrule pattern-tuple-ensures
   (implies (and (pattern-p x) (equal (node-kind x) :tuple))
-           (pattern-list-p (node-tuple->lst x)))
+           (and (pattern-p (node-tuple->lst x))
+                (equal (node-kind (node-tuple->lst x)) :cons)))
   :enable (arithm-expr-p pattern-p))
 
 ; Sub-nodes of a tuple guard are also guards.
 (defrule guard-tuple-ensures
   (implies (and (guard-expr-p x) (equal (node-kind x) :tuple))
-           (guard-expr-list-p (node-tuple->lst x)))
-  :enable guard-expr-p)
-
-; Creating a tuple with a list of expressions will produce an expression.
-(defrule expr-tuple-lst-ensures
-  (implies (expr-list-p lst)
-           (expr-p (node-tuple lst)))
-  :enable expr-p)
-
-; Creating a tuple with a list of patterns will produce a pattern.
-(defrule pattern-tuple-lst-ensures
-  (implies (pattern-list-p lst)
-           (pattern-p (node-tuple lst)))
-  :enable (arithm-expr-p pattern-p))
-
-; Creating a tuple with a list of guards will produce a guard.
-(defrule guard-tuple-lst-ensures
-  (implies (guard-expr-list-p lst)
-           (guard-expr-p (node-tuple lst)))
+           (and (guard-expr-p (node-tuple->lst x))
+                (equal (node-kind (node-tuple->lst x)) :cons)))
   :enable guard-expr-p)
   
 ; Sub-nodes of a binop expression are also expressions.

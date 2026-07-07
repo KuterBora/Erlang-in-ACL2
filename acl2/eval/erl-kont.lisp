@@ -2,8 +2,6 @@
 (include-book "erl-ast")
 (include-book "erl-value")
 
-(set-induction-depth-limit 1)
-
 ; Continuations ----------------------------------------------------------------
 
 (set-well-founded-relation l<)
@@ -26,15 +24,8 @@
       ((car-val erl-val-p)
        (car-bind bind-p)))
     
-    ; Continue after the first element of a tuple has been evaluated.
-    (:tuple
-      ((t-rem expr-p)
-       (bind-0 bind-p)))
-    
-    ; Continue after the rest of a tuple has been evaluated.
-    (:tuple-merge
-      ((t-hd erl-val-p)
-       (t-bind bind-p)))
+    ; Construct a tuple after all of its elements have been evaluated.
+    (:tuple ())
 
     ; Continue after the operand of an unop has been evaluated.
     (:unop ((op erl-unop-p)))
@@ -79,5 +70,8 @@
 (fty::deflist erl-klst
   :elt-type erl-k
   :true-listp t)
+
+(defcong erl-klst-equiv equal (consp kl) 1
+  :hints(("Goal" :in-theory (enable erl-klst-fix))))
 
 (set-well-founded-relation o<)

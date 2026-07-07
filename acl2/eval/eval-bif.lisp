@@ -1,12 +1,14 @@
 (in-package "ACL2")
-(include-book "erl-world")
+(include-book "erl-state")
 
 ; Evaluate BIF Calls -----------------------------------------------------------
 
-(define eval-bif ((fn erl-bif-p) (args erl-vlst-p))
+(define eval-bif ((fn erl-bif-p) (args erl-vlst-p) (s erl-state-p))
   :returns (v erl-val-p)
+  :ignore-ok t
   (b* (((fn fn) (fn-fix fn))
        (args (erl-vlst-fix args))
+       (s (erl-state-fix s))
 
        ; The arity of the args must match the arity of the function
        ((if (not (equal (len args) fn.arity))) 
@@ -96,13 +98,6 @@
              (if (or (equal cmp 0) (equal cmp -1))
                  left
                  right)))
-        ((equal fn (make-fn :name 'tuple_size :arity 1))
-         (b* (((unless (equal (erl-val-kind (car args)) :tuple))
-               (make-erl-val-excpt
-                 :err (make-erl-err :class (make-err-class-error)
-                                    :reason (make-exit-reason-badarg))))
-              (l (len (erl-val-tuple->lst (car args)))))
-             (make-erl-val-integer :val l)))
         ((equal fn (make-fn :name 'tl :arity 1))
          (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
                             (consp (erl-val-cons->lst (car args)))))
@@ -110,4 +105,11 @@
                  :err (make-erl-err :class (make-err-class-error)
                                     :reason (make-exit-reason-badarg)))))
              (make-erl-val-cons :lst (cdr (erl-val-cons->lst (car args))))))
+        ((equal fn (make-fn :name 'tuple_size :arity 1))
+         (b* (((unless (equal (erl-val-kind (car args)) :tuple))
+               (make-erl-val-excpt
+                 :err (make-erl-err :class (make-err-class-error)
+                                    :reason (make-exit-reason-badarg))))
+              (l (len (erl-val-tuple->lst (car args)))))
+             (make-erl-val-integer :val l)))
         (t (make-erl-val-reject :err "eval-bif: bad bif")))))

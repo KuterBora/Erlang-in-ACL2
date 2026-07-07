@@ -5,8 +5,6 @@
 (include-book "misc/total-order" :dir :system)
 (include-book "kestrel/utilities/strings/strings-codes" :dir :system)
 
-(set-induction-depth-limit 1)
-
 ; Arithemtic Erlang Operations -------------------------------------------------
 
 ; Remarks:

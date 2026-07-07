@@ -3,8 +3,6 @@
 (include-book "erl-value")
 (include-book "erl-op")
 
-(set-induction-depth-limit 1)
-
 ; Erlang World -----------------------------------------------------------------
 
 ; Representation of the Erlang modules known by the interpreter. For now, the

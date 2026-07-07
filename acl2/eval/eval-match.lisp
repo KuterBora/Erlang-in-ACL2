@@ -10,43 +10,24 @@
 
 (local (defrule node-count-of-pattern-cons->tl
   (implies (and (not (arithm-expr-p (pattern-fix p)))
-                (equal (node-kind (pattern-fix p)) :cons)
-                (equal (erl-val-kind val) :cons)
-                (erl-val-cons->lst val))
+                (equal (node-kind (pattern-fix p)) :cons))
            (< (node-count (node-cons->tl (pattern-fix p)))
               (node-count p)))
   :enable pattern-fix))
 
 (local (defrule node-count-of-pattern-cons->hd
   (implies (and (not (arithm-expr-p (pattern-fix p)))
-                (equal (node-kind (pattern-fix p)) :cons)
-                (equal (erl-val-kind val) :cons)
-                (erl-val-cons->lst val))
+                (equal (node-kind (pattern-fix p)) :cons))
            (< (node-count (node-cons->hd (pattern-fix p)))
               (node-count p)))
   :enable pattern-fix))
 
-(local (defrule node-count-of-pattern-tuple-car
+(local (defrule node-count-of-pattern-tuple->lst
   (implies (and (not (arithm-expr-p (pattern-fix p)))
-              (equal (node-kind (pattern-fix p))
-                     :tuple)
-              (equal (erl-val-kind val) :tuple)
-              (erl-val-tuple->lst val)
-              (node-tuple->lst (pattern-fix p)))
-            (< (node-count (car (node-tuple->lst (pattern-fix p))))
-               (node-count p)))
-  :enable pattern-fix))
-
-(local (defrule node-count-of-pattern-tuple-cdr
-  (implies (and (not (arithm-expr-p (pattern-fix p)))
-                (equal (node-kind (pattern-fix p))
-                      :tuple)
-                (equal (erl-val-kind val) :tuple)
-                (node-tuple->lst (pattern-fix p))
-                (erl-val-tuple->lst val))
-           (< (node-count (node-tuple (cdr (node-tuple->lst (pattern-fix p)))))
+                (equal (node-kind (pattern-fix p)) :tuple))
+           (< (node-count (node-tuple->lst (pattern-fix p)))
               (node-count p)))
-  :enable (pattern-fix node-count node-list-count)))
+  :enable pattern-fix))
 
 (local (defrule node-count-of-pattern-match->lhs
   (implies (and (not (arithm-expr-p (pattern-fix p)))
@@ -176,39 +157,20 @@
             (:tuple
               (b* (((unless (equal (erl-val-kind s.in) :tuple)) badmatch)
 
-                   ; Match is successful if both sides are empty tuples .
-                   ((if (and (null (erl-val-tuple->lst s.in)) (null p.lst))) s)
-                  
-                   ; Match fails if only one side is empty.
-                   ((if (or (null (erl-val-tuple->lst s.in)) (null p.lst))) badmatch)
+                   ; Match the elements of the tuple as if they were an Erlang list.
+                   ((erl-state lst)
+                    (eval-match
+                      p.lst
+                      (update-erl-state->in
+                        s
+                        (make-erl-val-cons :lst (erl-val-tuple->lst s.in)))))
 
-                   ; Attempt to match the first element of the tuple. 
-                   ((erl-state hd) 
-                    (eval-match 
-                      (car p.lst) 
-                      (update-erl-state->in s (car (erl-val-tuple->lst s.in)))))
-
-                   ; Attempt to match the rest of the tuple.
-                   ((erl-state tl)
-                    (eval-match 
-                      (make-node-tuple :lst (cdr p.lst)) 
-                      (update-erl-state->in 
-                        s 
-                        (make-erl-val-tuple :lst (cdr (erl-val-tuple->lst s.in))))))
-                   
                    ; Propagate rejections.
-                   ((if (equal (erl-val-kind hd.in) :reject)) hd)
-                   ((if (equal (erl-val-kind tl.in) :reject)) tl)
+                   ((if (equal (erl-val-kind lst.in) :reject)) lst)
                   
                    ; Propagate exceptions.
-                   ((if (equal (erl-val-kind hd.in) :excpt)) hd)
-                   ((if (equal (erl-val-kind tl.in) :excpt)) tl)
-                    
-                   ; This is supposed to return the value that failed to match. 
-                   ; However, there is no easy way to figure this out.
-                   ; For now, it just returns the right-hand side value.
-                   ((unless (omap::compatiblep hd.bind tl.bind)) badmatch))
-                  (update-erl-state->bind s (omap::update* tl.bind hd.bind))))
+                   ((if (equal (erl-val-kind lst.in) :excpt)) lst))
+                  (update-erl-state->in lst s.in)))
             (:var
               (b* (; Wildcard matches any value.
                    ((if (equal p.id '_)) s)

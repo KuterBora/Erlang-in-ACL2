@@ -3,8 +3,6 @@
 (include-book "erl-kont")
 (include-book "erl-world")
 
-(set-induction-depth-limit 1)
-
 ; Erlang State ----------------------------------------------------------------
 
 ; Representation of the current State of the Erlang program under evaluation
@@ -23,6 +21,8 @@
   ((s erl-state-p :default (make-erl-state))
    (klst erl-klst-p :default nil)))
 
+(defcong erl-s-klst-equiv equal (erl-s-klst->klst ks) 1)
+(defcong erl-s-klst-equiv equal (erl-s-klst->s ks) 1)
 
 ; Helpers for Setting Fields --------------------------------------------------
 
@@ -48,7 +48,9 @@
            (equal (erl-state->module (update-erl-state->in s val))
                   (erl-state->module s))
            (equal (erl-state->world (update-erl-state->in s val))
-                  (erl-state->world s)))))
+                  (erl-state->world s))))
+    
+    (defcong erl-state-equiv equal (update-erl-state->in s v) 1))
 
 (define update-erl-state->bind ((s erl-state-p) (bind bind-p))
   :returns (rs erl-state-p)
@@ -67,7 +69,9 @@
            (equal (erl-state->module (update-erl-state->bind s b))
                   (erl-state->module s))
            (equal (erl-state->world (update-erl-state->bind s b))
-                  (erl-state->world s)))))
+                  (erl-state->world s))))
+    
+    (defcong erl-state-equiv equal (update-erl-state->bind s b) 1))
 
 (define update-erl-state->in-bind ((s erl-state-p) (in erl-val-p) (bind bind-p))
   :returns (rs erl-state-p)
@@ -87,7 +91,9 @@
            (equal (erl-state->module (update-erl-state->in-bind s in b)) 
                   (erl-state->module s))
            (equal (erl-state->world (update-erl-state->in-bind s in b)) 
-                  (erl-state->world s)))))
+                  (erl-state->world s))))
+    
+    (defcong erl-state-equiv equal (update-erl-state->in-bind s v b) 1))
 
 (define update-erl-state->mod ((s erl-state-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -106,7 +112,9 @@
            (equal (erl-state->bind (update-erl-state->mod s mod))
                   (erl-state->bind s))
            (equal (erl-state->world (update-erl-state->mod s mod))
-                  (erl-state->world s)))))
+                  (erl-state->world s))))
+    
+    (defcong erl-state-equiv equal (update-erl-state->mod s m) 1))
 
 (define update-erl-state->bind-mod ((s erl-state-p) (bind bind-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -126,7 +134,9 @@
            (equal (erl-state->in (update-erl-state->bind-mod s b mod))
                   (erl-state->in s))   
            (equal (erl-state->world (update-erl-state->bind-mod s b mod))
-                  (erl-state->world s)))))
+                  (erl-state->world s))))
+    
+    (defcong erl-state-equiv equal (update-erl-state->bind-mod s b m) 1))
 
 (define update-erl-state->in-bind-mod ((s erl-state-p) (in erl-val-p) (bind bind-p) (mod symbolp))
   :returns (rs erl-state-p)
@@ -147,7 +157,9 @@
            (equal (erl-state->module (update-erl-state->in-bind-mod s in b mod))
                   (symbol-fix mod))       
            (equal (erl-state->world (update-erl-state->in-bind-mod s in b mod))
-                  (erl-state->world s)))))
+                  (erl-state->world s))))
+    
+    (defcong erl-state-equiv equal (update-erl-state->in-bind-mod s v b m) 1))
 
 
 ; The following rules rewrite chains of erl-state updates to a normalized form 
@@ -182,18 +194,21 @@
 ; Helpers for Utility ---------------------------------------------------------
 
 ; Any erl-state that does not contain a rejection, exception, or flimit.
-(define wf-state-p ((s erl-state-p))
+(define wf-state-p ((x erl-state-p))
   :returns (ok booleanp)
-  (and (erl-state-p s)
-       (let ((kind (erl-val-kind (erl-state->in s))))
-            (and (not (equal kind :reject))
-                 (not (equal kind :excpt))
-                 (not (equal kind :flimit)))))
+  (null (member (erl-val-kind (erl-state->in (erl-state-fix x)))
+                '(:flimit :reject :excpt)))
   ///
-    (defrule wf-state-props
-      (iff (wf-state-p s)
-           (and (erl-state-p s)
-                (let ((kind (erl-val-kind (erl-state->in s))))
-                     (and (not (equal kind :reject))
-                          (not (equal kind :excpt))
-                          (not (equal kind :flimit))))))))
+  (defcong erl-state-equiv equal (wf-state-p x) 1)
+  
+  (defrule wf-state-p-of-flimit
+    (implies (equal (erl-val-kind (erl-state->in s)) :flimit)
+             (not (wf-state-p s))))
+  
+  (defrule wf-state-p-of-reject
+    (implies (equal (erl-val-kind (erl-state->in s)) :reject)
+             (not (wf-state-p s))))
+  
+  (defrule wf-state-p-of-excpt
+    (implies (equal (erl-val-kind (erl-state->in s)) :excpt)
+             (not (wf-state-p s)))))

@@ -4,65 +4,46 @@
 (include-book "eval-bif")
 (include-book "erl-state")
 
-(set-induction-depth-limit 1)
-
 ; Erl Guard Count Decreases ----------------------------------------------------
 
 (local (defrule node-count-of-guard-cons->tl
-  (implies (equal (node-kind (guard-expr-fix x))
-                :cons)
+  (implies (equal (node-kind (guard-expr-fix x)) :cons)
            (< (node-count (node-cons->tl (guard-expr-fix x)))
               (node-count x)))
   :enable guard-expr-fix))
 
 (local (defrule node-count-of-guard-cons->hd
-  (implies (equal (node-kind (guard-expr-fix x))
-                :cons)
+  (implies (equal (node-kind (guard-expr-fix x)) :cons)
            (< (node-count (node-cons->hd (guard-expr-fix x)))
               (node-count x)))
   :enable guard-expr-fix))
 
+(local (defrule node-count-of-guard-tuple->lst
+  (implies (equal (node-kind (guard-expr-fix x)) :tuple)
+           (< (node-count (node-tuple->lst (guard-expr-fix x)))
+              (node-count x)))
+  :enable guard-expr-fix))
+
 (local (defrule node-count-of-guard-binop->left
-  (implies (equal (node-kind (guard-expr-fix x))
-                  :binop)
+  (implies (equal (node-kind (guard-expr-fix x)) :binop)
            (< (node-count (node-binop->left (guard-expr-fix x)))
               (node-count x)))
   :enable guard-expr-fix))
 
 (local (defrule node-count-of-guard-binop->right
-  (implies (equal (node-kind (guard-expr-fix x))
-                  :binop)
+  (implies (equal (node-kind (guard-expr-fix x)) :binop)
            (< (node-count (node-binop->right (guard-expr-fix x)))
               (node-count x)))
   :enable guard-expr-fix))
 
 (local (defrule node-count-of-guard-unop
-  (implies (equal (node-kind (guard-expr-fix x))
-                  :unop)
+  (implies (equal (node-kind (guard-expr-fix x)) :unop)
            (< (node-count (node-unop->expr (guard-expr-fix x)))
               (node-count x)))
   :enable guard-expr-fix))
 
-(local (defrule node-count-of-guard-tuple-cdr
-  (implies
-     (and (equal (node-kind (guard-expr-fix x))
-                 :tuple)
-          (node-tuple->lst (guard-expr-fix x)))
-     (< (node-count (node-tuple (cdr (node-tuple->lst (guard-expr-fix x)))))
-        (node-count x)))
-  :enable (guard-expr-fix node-count node-list-count)))
-
-(local (defrule node-count-of-guard-tuple-car
-  (implies (and (equal (node-kind (guard-expr-fix x))
-                      :tuple)
-                (node-tuple->lst (guard-expr-fix x)))
-           (< (node-count (car (node-tuple->lst (guard-expr-fix x))))
-              (node-count x)))
-  :enable guard-expr-fix))
-
 (local (defrule node-count-of-guard-call
-  (implies (equal (node-kind (guard-expr-fix x))
-                  :call)
+  (implies (equal (node-kind (guard-expr-fix x)) :call)
            (< (node-count (node-call->args (guard-expr-fix x)))
               (node-count x)))
   :enable guard-expr-fix))
@@ -128,25 +109,19 @@
                   ((unless (equal (erl-val-kind tl) :cons))
                     (make-erl-val-reject :err "Eval-Guard: tl of cons must be a list.")))
                 (make-erl-val-cons :lst (cons hd (erl-val-cons->lst tl)))))
-      (:tuple (b* (; If the tuple is empty, return empty tuple.
-                    ((if (null x.lst)) (make-erl-val-tuple :lst nil))
+      (:tuple (b* (; Evaluate the list.
+                   (lst (eval-guard-expr x.lst s))
+                   
+                   ; Propagate rejections.
+                   ((if (equal (erl-val-kind lst) :reject)) lst)
                     
-                    ; Evaluate the car and cdr of the list.
-                    (hd (eval-guard-expr (car x.lst) s))
-                    (tl (eval-guard-expr (make-node-tuple :lst (cdr x.lst)) s))
-                    
-                    ; Propagate rejections.
-                    ((if (equal (erl-val-kind hd) :reject)) hd)
-                    ((if (equal (erl-val-kind tl) :reject)) tl)
-                    
-                    ; Propagate exceptions.
-                    ((if (equal (erl-val-kind hd) :excpt)) hd)
-                    ((if (equal (erl-val-kind tl) :excpt)) tl)
-                    
-                    ; Tuple must be well-formed.
-                    ((unless (equal (erl-val-kind tl) :tuple))
+                   ; Propagate exceptions.
+                   ((if (equal (erl-val-kind lst) :excpt)) lst)
+   
+                   ; Tuple must be well-formed.
+                   ((if (not (equal (erl-val-kind lst) :cons)))
                     (make-erl-val-reject :err "Eval-Guard: ill-formed tuple.")))
-                  (make-erl-val-tuple :lst (cons hd (erl-val-tuple->lst tl)))))
+                  (make-erl-val-tuple :lst (erl-val-cons->lst lst))))
       (:var
         ; If the variable is bound, return its value, otherwise reject the AST.
         (if (omap::assoc x.id s.bind)
@@ -176,7 +151,7 @@
              ; if the function call is not a BIF, it is not allowed in a guard.
              ((unless (erl-bif-p fn)) 
               (make-erl-val-reject :err "Guard expressions can only have calls to BIFs.")))
-            (eval-bif fn (erl-val-cons->lst args-res))))
+            (eval-bif fn (erl-val-cons->lst args-res) s)))
       (:fun-call (make-erl-val-reject :err "Guard expressions can only have calls to BIFs."))))
   ///
     (verify-guards eval-guard-expr))

@@ -1,7 +1,7 @@
 (in-package "ACL2")
 (include-book "std/util/top" :dir :system)
-(include-book "centaur/fty/top" :DIR :SYSTEM)
-(include-book "kestrel/fty/defsubtype" :DIR :SYSTEM)
+(include-book "centaur/fty/top" :dir :system)
+(include-book "kestrel/fty/defsubtype" :dir :system)
 
 ; Erlang AST Types -------------------------------------------------------------
 
@@ -96,7 +96,7 @@
     (:fun ((cls node-clause-list-p)))
     (:cons ((hd node-p)
             (tl node-p)))
-    (:tuple ((lst node-list-p)))
+    (:tuple ((lst node-p)))
     (:var ((id symbolp)))
     (:unop ((op erl-unop-p) (expr node-p)))
     (:binop ((op erl-binop-p)
@@ -188,7 +188,9 @@
                 (:cons
                   (and (pattern-p (node-cons->hd x))
                        (pattern-p (node-cons->tl x))))
-                (:tuple (pattern-list-p (node-tuple->lst x)))
+                (:tuple
+                  (and (pattern-p (node-tuple->lst x))
+                       (equal (node-kind (node-tuple->lst x)) :cons)))
                 (:var t)
                 (:unop nil)
                 (:binop nil)
@@ -236,7 +238,8 @@
           (:cons
             (and (guard-expr-p (node-cons->hd x))
                  (guard-expr-p (node-cons->tl x))))
-          (:tuple (guard-expr-list-p (node-tuple->lst x)))
+          (:tuple (and (guard-expr-p (node-tuple->lst x))
+                       (equal (node-kind (node-tuple->lst x)) :cons)))
           (:var t)
           (:unop (guard-expr-p (node-unop->expr x)))
           (:binop (and (guard-expr-p (node-binop->left x))
@@ -245,7 +248,8 @@
           (:if nil)
           (:case-of nil)
           (:remote-call nil)
-          (:call (guard-expr-p (node-call->args x)))
+          (:call (and (guard-expr-p (node-call->args x))
+                      (equal (node-kind (node-call->args x)) :cons)))
           (:fun-call nil))))
 
   ; List of Erlang Expressions
@@ -296,7 +300,8 @@
           (:cons 
             (and (expr-p (node-cons->hd x))
                  (expr-p (node-cons->tl x))))
-          (:tuple (expr-list-p (node-tuple->lst x)))
+          (:tuple (and (expr-p (node-tuple->lst x))
+                       (equal (node-kind (node-tuple->lst x)) :cons)))
           (:var t)
           (:unop (expr-p (node-unop->expr x)))
           (:binop (and (expr-p (node-binop->left x))
@@ -307,10 +312,16 @@
           (:case-of 
             (and (expr-p (node-case-of->expr x))
                  (erl-clause-list-p (node-case-of->clauses x))))
-          (:remote-call (expr-p (node-remote-call->args x)))
-          (:call (expr-p (node-call->args x)))
-          (:fun-call (and (expr-p (node-fun-call->fun x))
-                          (expr-p (node-fun-call->args x)))))))
+          (:remote-call
+            (and (expr-p (node-remote-call->args x))
+                 (equal (node-kind (node-remote-call->args x)) :cons)))
+          (:call
+            (and (expr-p (node-call->args x))
+                 (equal (node-kind (node-call->args x)) :cons)))
+          (:fun-call
+            (and (expr-p (node-fun-call->fun x))
+                 (expr-p (node-fun-call->args x))
+                 (equal (node-kind (node-fun-call->args x)) :cons))))))
 
   ; List of Erlang Expressions
   (define expr-list-p ((x acl2::any-p))
