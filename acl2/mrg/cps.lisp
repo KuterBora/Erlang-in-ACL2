@@ -322,20 +322,20 @@
       (apply-k (apply-k v kl1) kl2))
     :prep-lemmas (
       (defrule lemma-1
-	(b* (((cons k kl) kl1)
-	     ((mv r ks) (eval-k v k)))
-	  (implies
-	    (equal
-	      (apply-k r (append ks kl kl2))
-	      (apply-k (apply-k r (append ks kl)) kl2))
-	    (equal (apply-k v (cons k (append kl kl2)))
-		   (apply-k (apply-k r (append ks kl)) kl2))))
-	:prep-lemmas (
-	  (defrule lemma-1a
-	    (equal (apply-k v (cons k kl))
-		   (apply-k (mv-nth 0 (eval-k v k))
-			    (append (mv-nth 1 (eval-k v k)) kl)))
-	    :expand ((apply-k v (cons k kl))))))))
+        (b* (((cons k kl) kl1)
+             ((mv r ks) (eval-k v k)))
+            (implies
+              (equal
+                (apply-k r (append ks kl kl2))
+                (apply-k (apply-k r (append ks kl)) kl2))
+              (equal (apply-k v (cons k (append kl kl2)))
+                     (apply-k (apply-k r (append ks kl)) kl2))))
+	    :prep-lemmas (
+        (defrule lemma-1a
+          (equal (apply-k v (cons k kl))
+          (apply-k (mv-nth 0 (eval-k v k))
+              (append (mv-nth 1 (eval-k v k)) kl)))
+          :expand ((apply-k v (cons k kl))))))))
 
 
   (local (in-theory (disable apply-k)))
@@ -358,9 +358,9 @@
 
   (defrule apply-k-of-append-bad
     (b* ((v1 (apply-k v0 kl1))
-	 (v2 (apply-k v0 (append kl1 kl2)))
-	 ((if (wf-val-p v1)) t))
-      (null (wf-val-p v2)))
+         (v2 (apply-k v0 (append kl1 kl2)))
+         ((if (wf-val-p v1)) t))
+        (null (wf-val-p v2)))
     :use((:instance apply-k-of-append (v v0))))
 
 ;; Let a be the AST for X op Y where X and Y are arbitrary AST nodes.
