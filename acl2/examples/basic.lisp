@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "../erl-eval")
+(include-book "../eval/top")
 (include-book "std/testing/assert-equal" :dir :system)
 
 ; This file contains some basic tests for the evaluator and the Erlang AST.
@@ -35,8 +35,8 @@
 
 ; Make tuple
 (assert-equal
-  (make-node-tuple :lst (list '(:integer 1) '(:atom a) '(:cons (:integer 1) (:cons (:integer 2) (:nil)))))
-  '(:tuple ((:integer 1) (:atom a) (:cons (:integer 1) (:cons (:integer 2) (:nil))))))
+  (make-node-tuple :lst '(:cons (:integer 1) (:cons (:atom a) (:cons (:cons (:integer 1) (:cons (:integer 2) (:nil))) (:nil)))))
+  '(:tuple (:cons (:integer 1) (:cons (:atom a) (:cons (:cons (:integer 1) (:cons (:integer 2) (:nil))) (:nil))))))
 
 ; Evaluate terms
 (assert-equal
@@ -79,15 +79,16 @@
             :fuel 10000 
             :kont (make-kont-expr 
                     :expr '(:tuple 
-                            ((:integer 1) 
-                             (:atom a) 
-                             (:cons (:integer 1) (:cons (:integer 2) (:nil)))))))))
+                             (:cons 
+                               (:integer 1) 
+                               (:cons
+                                  (:atom a)  
+                                  (:cons (:cons (:integer 1) (:cons (:integer 2) (:nil))) (:nil)))))))))
   (make-erl-state 
     :in (make-erl-val-tuple 
           :lst (list '(:integer 1)
                        '(:atom a) 
                        '(:cons ((:integer 1) (:integer 2)))))))
-
 
 
 ; Unop -------------------------------------------------------------------------
@@ -184,38 +185,6 @@
   '(:match (:cons (:var X) (:cons (:var Y) (:cons (:var Z) (:nil)))) 
            (:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))))) 
 
-; {X, Y, Z} = {int,int,int}.
-(assert-equal 
-  (make-node-match 
-    :lhs '(:tuple ((:var X) (:var Y) (:var Z))) 
-    :rhs '(:tuple ((:integer 1) (:integer 2) (:integer 3))))
-  '(:match (:tuple ((:var X) (:var Y) (:var Z)))
-           (:tuple ((:integer 1) (:integer 2) (:integer 3))))) 
-
-; {int + int, X} = {int, atom}.
-(assert-equal 
-  (make-node-match 
-    :lhs '(:tuple ((:binop + (:integer 1) (:integer 2)) (:var X))) 
-    :rhs '(:tuple ((:integer 3) (:atom abc))))
-  '(:match (:tuple ((:binop + (:integer 1) (:integer 2)) (:var X)))
-           (:tuple ((:integer 3) (:atom abc))))) 
-
-; {[int, int, X], Y = int} = {Z, int} = {[int, int, int], int}.
-(assert-equal 
-  (make-node-match 
-    :lhs '(:match (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:var X) (:nil)))) 
-                           (:match (:var Y) (:integer 3))))
-                  (:tuple ((:var Z) (:integer 3)))) 
-    
-    :rhs '(:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))) 
-                   (:integer 3))))
-  '(:match (:match (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:var X) (:nil)))) 
-                            (:match (:var Y) (:integer 3))))
-                   (:tuple ((:var Z) (:integer 3))))
-           (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))) 
-                    (:integer 3))))) 
-
-
 ; Match Evaluation
 
 ; var = int.
@@ -250,8 +219,8 @@
       (make-erl-k 
         :fuel 10000 
         :kont (make-kont-expr 
-                :expr '(:match (:tuple ((:var X) (:var Y) (:var Z)))
-                               (:tuple ((:integer 1) (:integer 2) (:integer 3))))))))
+                :expr '(:match (:tuple (:cons (:var X) (:cons (:var Y) (:cons (:var Z) (:nil)))))
+                               (:tuple (:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil))))))))))
   (make-erl-state :in '(:tuple ((:integer 1) (:integer 2) (:integer 3))) 
                   :bind '((X :integer 1) (Y :integer 2) (Z :integer 3))))
 
@@ -263,8 +232,8 @@
       (make-erl-k 
         :fuel 10000 
         :kont (make-kont-expr 
-                :expr '(:match (:tuple ((:binop + (:integer 1) (:integer 2)) (:var X)))
-                                (:tuple ((:integer 3) (:atom abc))))))))
+                :expr '(:match (:tuple (:cons (:binop + (:integer 1) (:integer 2)) (:cons (:var X) (:nil))))
+                                (:tuple (:cons (:integer 3) (:cons (:atom abc) (:nil)))))))))
   (make-erl-state :in '(:tuple ((:integer 3) (:atom abc))) 
                   :bind '((X :atom abc))))
 
@@ -279,11 +248,16 @@
           (make-kont-expr 
             :expr 
               '(:match 
-                  (:match (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:var X) (:nil)))) 
-                                   (:match (:var Y) (:integer 4))))
-                                           (:tuple ((:var Z) (:integer 4))))
-                  (:tuple ((:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))) 
-                           (:integer 4))))))))
+                  (:match
+                    (:tuple
+                      (:cons
+                        (:cons (:integer 1) (:cons (:integer 2) (:cons (:var X) (:nil))))
+                        (:cons (:match (:var Y) (:integer 4)) (:nil))))
+                    (:tuple (:cons (:var Z) (:cons (:integer 4) (:nil)))))
+                  (:tuple
+                    (:cons
+                      (:cons (:integer 1) (:cons (:integer 2) (:cons (:integer 3) (:nil)))) 
+                      (:cons (:integer 4) (:nil)))))))))
   (make-erl-state :in '(:tuple ((:cons ((:integer 1) (:integer 2) (:integer 3))) (:integer 4))) 
                   :bind '((X :integer 3) 
                           (Y :integer 4) 

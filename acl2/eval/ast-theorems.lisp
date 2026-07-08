@@ -28,21 +28,24 @@
 (defrule expr-tuple-ensures
   (implies (and (expr-p x) (equal (node-kind x) :tuple))
            (and (expr-p (node-tuple->lst x))
-                (equal (node-kind (node-tuple->lst x)) :cons)))
+                (or (equal (node-kind (node-tuple->lst x)) :cons)
+                    (equal (node-kind (node-tuple->lst x)) :nil))))
   :enable expr-p)
 
 ; Sub-nodes of a tuple pattern are also patterns.
 (defrule pattern-tuple-ensures
   (implies (and (pattern-p x) (equal (node-kind x) :tuple))
            (and (pattern-p (node-tuple->lst x))
-                (equal (node-kind (node-tuple->lst x)) :cons)))
+                (or (equal (node-kind (node-tuple->lst x)) :cons)
+                    (equal (node-kind (node-tuple->lst x)) :nil))))
   :enable (arithm-expr-p pattern-p))
 
 ; Sub-nodes of a tuple guard are also guards.
 (defrule guard-tuple-ensures
   (implies (and (guard-expr-p x) (equal (node-kind x) :tuple))
            (and (guard-expr-p (node-tuple->lst x))
-                (equal (node-kind (node-tuple->lst x)) :cons)))
+                (or (equal (node-kind (node-tuple->lst x)) :cons)
+                    (equal (node-kind (node-tuple->lst x)) :nil))))
   :enable guard-expr-p)
   
 ; Sub-nodes of a binop expression are also expressions.
@@ -123,21 +126,27 @@
   (implies (and (expr-p x) (equal (node-kind x) :remote-call))
            (and (symbolp (node-remote-call->module x))
                 (symbolp (node-remote-call->fn x))  
-                (expr-p (node-remote-call->args x))))
+                (expr-p (node-remote-call->args x))
+                (or (equal (node-kind (node-remote-call->args x)) :cons)
+                    (equal (node-kind (node-remote-call->args x)) :nil))))
   :enable expr-p)
 
 ; The args of a function call expression are an expression
 (defrule expr-call-ensures
   (implies (and (expr-p x) (equal (node-kind x) :call))
            (and (symbolp (node-call->fn x))  
-                (expr-p (node-call->args x))))
+                (expr-p (node-call->args x))
+                (or (equal (node-kind (node-call->args x)) :cons)
+                    (equal (node-kind (node-call->args x)) :nil))))
   :enable expr-p)
 
 ; The args of a bif call guard are a guard expression
 (defrule guard-expr-call-ensures
   (implies (and (guard-expr-p x) (equal (node-kind x) :call))
            (and (symbolp (node-call->fn x))  
-                (guard-expr-p (node-call->args x))))
+                (guard-expr-p (node-call->args x))
+                (or (equal (node-kind (node-call->args x)) :cons)
+                    (equal (node-kind (node-call->args x)) :nil))))
   :enable guard-expr-p)
 
 ; Clauses consist of pattern, guards, and a list of expressions.
@@ -164,5 +173,7 @@
 (defrule expr-fun-call-ensures
   (implies (and (expr-p x) (equal (node-kind x) :fun-call))
            (and (expr-p (node-fun-call->fun x))
-                (expr-p (node-fun-call->args x))))
+                (expr-p (node-fun-call->args x))
+                (or (equal (node-kind (node-fun-call->args x)) :cons)
+                    (equal (node-kind (node-fun-call->args x)) :nil))))
   :enable expr-p)

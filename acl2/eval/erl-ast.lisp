@@ -190,7 +190,8 @@
                        (pattern-p (node-cons->tl x))))
                 (:tuple
                   (and (pattern-p (node-tuple->lst x))
-                       (equal (node-kind (node-tuple->lst x)) :cons)))
+                       (or (equal (node-kind (node-tuple->lst x)) :cons)
+                           (equal (node-kind (node-tuple->lst x)) :nil))))
                 (:var t)
                 (:unop nil)
                 (:binop nil)
@@ -239,7 +240,8 @@
             (and (guard-expr-p (node-cons->hd x))
                  (guard-expr-p (node-cons->tl x))))
           (:tuple (and (guard-expr-p (node-tuple->lst x))
-                       (equal (node-kind (node-tuple->lst x)) :cons)))
+                       (or (equal (node-kind (node-tuple->lst x)) :cons)
+                           (equal (node-kind (node-tuple->lst x)) :nil))))
           (:var t)
           (:unop (guard-expr-p (node-unop->expr x)))
           (:binop (and (guard-expr-p (node-binop->left x))
@@ -249,7 +251,8 @@
           (:case-of nil)
           (:remote-call nil)
           (:call (and (guard-expr-p (node-call->args x))
-                      (equal (node-kind (node-call->args x)) :cons)))
+                      (or (equal (node-kind (node-call->args x)) :cons)
+                          (equal (node-kind (node-call->args x)) :nil))))
           (:fun-call nil))))
 
   ; List of Erlang Expressions
@@ -301,7 +304,8 @@
             (and (expr-p (node-cons->hd x))
                  (expr-p (node-cons->tl x))))
           (:tuple (and (expr-p (node-tuple->lst x))
-                       (equal (node-kind (node-tuple->lst x)) :cons)))
+                       (or (equal (node-kind (node-tuple->lst x)) :cons)
+                           (equal (node-kind (node-tuple->lst x)) :nil))))
           (:var t)
           (:unop (expr-p (node-unop->expr x)))
           (:binop (and (expr-p (node-binop->left x))
@@ -314,14 +318,17 @@
                  (erl-clause-list-p (node-case-of->clauses x))))
           (:remote-call
             (and (expr-p (node-remote-call->args x))
-                 (equal (node-kind (node-remote-call->args x)) :cons)))
+                 (or (equal (node-kind (node-remote-call->args x)) :cons)
+                     (equal (node-kind (node-remote-call->args x)) :nil))))
           (:call
             (and (expr-p (node-call->args x))
-                 (equal (node-kind (node-call->args x)) :cons)))
+                 (or (equal (node-kind (node-call->args x)) :cons)
+                     (equal (node-kind (node-call->args x)) :nil))))
           (:fun-call
             (and (expr-p (node-fun-call->fun x))
                  (expr-p (node-fun-call->args x))
-                 (equal (node-kind (node-fun-call->args x)) :cons))))))
+                 (or (equal (node-kind (node-fun-call->args x)) :cons)
+                     (equal (node-kind (node-fun-call->args x)) :nil)))))))
 
   ; List of Erlang Expressions
   (define expr-list-p ((x acl2::any-p))

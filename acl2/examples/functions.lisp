@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "../erl-eval")
+(include-book "../eval/top")
 (include-book "std/testing/assert-equal" :dir :system)
 
 ; This file contains some tests for evaluating local and remote function calls
@@ -33,9 +33,9 @@
       :kont (make-kont-expr
               :expr '(:call element
                             (:cons (:integer 2)
-                                   (:cons (:tuple ((:atom one)
-                                                   (:atom two)
-                                                   (:atom three)))
+                                   (:cons (:tuple (:cons (:atom one)
+                                                         (:cons (:atom two)
+                                                                (:cons (:atom three) (:nil)))))
                                           (:nil))))))))
   (make-erl-state :in '(:atom two)))
 

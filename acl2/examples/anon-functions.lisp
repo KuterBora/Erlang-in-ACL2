@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "../erl-eval")
+(include-book "../eval/top")
 (include-book "std/testing/assert-equal" :dir :system)
 
 ; This file contains some tests for evaluating anonymous function calls.

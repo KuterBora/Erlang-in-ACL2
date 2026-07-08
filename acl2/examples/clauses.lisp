@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "../erl-eval")
+(include-book "../eval/top")
 (include-book "std/testing/assert-equal" :dir :system)
 
 ; This file contains some tests for evaluating if and case clauses
@@ -197,40 +197,6 @@
 
 ; Erlang Case ------------------------------------------------------------------
 
-; case X of
-;   {One, 2} when One == 1 -> One + 2;
-;   {Two, 1 + 1} when Two == 2 -> Two * Two;
-;   {Nat, _} when is_integer(Nat), Nat >= 0 -> 'at_least_it_is_nat;
-;   {Int, _} when is_integer(Int) -> 'at_least_it_is_int;
-;   _ -> 'no_match
-; end
-
-; (make-node-case-of
-;   :expr '(:var X)
-;   :clauses
-;     (list
-;       (make-node-clause 
-;         :cases '((:tuple ((:var One) (:integer 2))))
-;         :guards '(((:binop == (:var One) (:integer 1))))
-;         :body '((:binop + (:var One) (:integer 2))))
-;       (make-node-clause
-;         :cases '((:tuple ((:var Two) (:binop + (:integer 1) (:integer 1)))))
-;         :guards '(((:binop == (:var Two) (:integer 2))))
-;         :body '((:binop * (:var Two) (:var Two))))
-;       (make-node-clause
-;         :cases '((:tuple ((:var Nat) (:var _))))
-;         :guards '(((:call is_integer ((:var Nat))) 
-;                    (:binop >= (:var Nat) (:integer 0))))
-;         :body '((:atom at_least_it_is_nat)))
-;       (make-node-clause
-;         :cases '((:tuple ((:var Int) (:var _))))
-;         :guards '(((:call is_integer ((:var Int)))))
-;         :body '((:atom at_least_it_int)))
-;       (make-node-clause
-;         :cases '((:var _))            
-;         :guards nil 
-;         :body '((:atom no_match_at_all)))))
-
 (assert-equal 
   (apply-k
     (make-erl-state :bind '((X :tuple ((:integer 1) (:integer 2)))))
@@ -242,18 +208,19 @@
             :expr
               '(:case-of 
                 (:var X)
-                (((cases (:tuple ((:var One) (:integer 2))))
+                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
                   (guards ((:binop == (:var One) (:integer 1))))
                   (body (:binop + (:var One) (:integer 2))))
-                 ((cases (:tuple ((:var Two)
-                                  (:binop + (:integer 1) (:integer 1)))))
+                 ((cases (:tuple
+                           (:cons (:var Two)
+                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
                   (guards ((:binop == (:var Two) (:integer 2))))
                   (body (:binop * (:var Two) (:var Two))))
-                 ((cases (:tuple ((:var Nat) (:var _))))
+                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Nat) (:nil)))
                            (:binop >= (:var Nat) (:integer 0))))
                   (body (:atom at_least_it_is_nat)))
-                 ((cases (:tuple ((:var Int) (:var _))))
+                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Int) (:nil)))))
                   (body (:atom at_least_it_is_int)))
                  ((cases (:var _))
@@ -275,21 +242,22 @@
             :expr
               '(:case-of 
                 (:var X)
-                (((cases (:tuple ((:var One) (:integer 2))))
+                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
                   (guards ((:binop == (:var One) (:integer 1))))
                   (body (:binop + (:var One) (:integer 2))))
-                ((cases (:tuple ((:var Two)
-                                  (:binop + (:integer 1) (:integer 1)))))
+                 ((cases (:tuple
+                           (:cons (:var Two)
+                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
                   (guards ((:binop == (:var Two) (:integer 2))))
                   (body (:binop * (:var Two) (:var Two))))
-                ((cases (:tuple ((:var Nat) (:var _))))
+                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                            (:binop >= (:var Nat) (:integer 0))))
+                           (:binop >= (:var Nat) (:integer 0))))
                   (body (:atom at_least_it_is_nat)))
-                ((cases (:tuple ((:var Int) (:var _))))
+                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Int) (:nil)))))
                   (body (:atom at_least_it_is_int)))
-                ((cases (:var _))
+                 ((cases (:var _))
                   (guards)
                   (body (:atom no_match_at_all)))))))))
   (make-erl-state 
@@ -308,21 +276,22 @@
             :expr
               '(:case-of 
                 (:var X)
-                (((cases (:tuple ((:var One) (:integer 2))))
+                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
                   (guards ((:binop == (:var One) (:integer 1))))
                   (body (:binop + (:var One) (:integer 2))))
-                ((cases (:tuple ((:var Two)
-                                  (:binop + (:integer 1) (:integer 1)))))
+                 ((cases (:tuple
+                           (:cons (:var Two)
+                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
                   (guards ((:binop == (:var Two) (:integer 2))))
                   (body (:binop * (:var Two) (:var Two))))
-                ((cases (:tuple ((:var Nat) (:var _))))
+                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                            (:binop >= (:var Nat) (:integer 0))))
+                           (:binop >= (:var Nat) (:integer 0))))
                   (body (:atom at_least_it_is_nat)))
-                ((cases (:tuple ((:var Int) (:var _))))
+                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Int) (:nil)))))
                   (body (:atom at_least_it_is_int)))
-                ((cases (:var _))
+                 ((cases (:var _))
                   (guards)
                   (body (:atom no_match_at_all)))))))))
   (make-erl-state 
@@ -341,21 +310,22 @@
             :expr
               '(:case-of 
                 (:var X)
-                (((cases (:tuple ((:var One) (:integer 2))))
+                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
                   (guards ((:binop == (:var One) (:integer 1))))
                   (body (:binop + (:var One) (:integer 2))))
-                ((cases (:tuple ((:var Two)
-                                  (:binop + (:integer 1) (:integer 1)))))
+                 ((cases (:tuple
+                           (:cons (:var Two)
+                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
                   (guards ((:binop == (:var Two) (:integer 2))))
                   (body (:binop * (:var Two) (:var Two))))
-                ((cases (:tuple ((:var Nat) (:var _))))
+                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                            (:binop >= (:var Nat) (:integer 0))))
+                           (:binop >= (:var Nat) (:integer 0))))
                   (body (:atom at_least_it_is_nat)))
-                ((cases (:tuple ((:var Int) (:var _))))
+                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Int) (:nil)))))
                   (body (:atom at_least_it_is_int)))
-                ((cases (:var _))
+                 ((cases (:var _))
                   (guards)
                   (body (:atom no_match_at_all)))))))))
   (make-erl-state 
@@ -374,21 +344,22 @@
             :expr
               '(:case-of 
                 (:var X)
-                (((cases (:tuple ((:var One) (:integer 2))))
+                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
                   (guards ((:binop == (:var One) (:integer 1))))
                   (body (:binop + (:var One) (:integer 2))))
-                ((cases (:tuple ((:var Two)
-                                  (:binop + (:integer 1) (:integer 1)))))
+                 ((cases (:tuple
+                           (:cons (:var Two)
+                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
                   (guards ((:binop == (:var Two) (:integer 2))))
                   (body (:binop * (:var Two) (:var Two))))
-                ((cases (:tuple ((:var Nat) (:var _))))
+                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                            (:binop >= (:var Nat) (:integer 0))))
+                           (:binop >= (:var Nat) (:integer 0))))
                   (body (:atom at_least_it_is_nat)))
-                ((cases (:tuple ((:var Int) (:var _))))
+                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
                   (guards ((:call is_integer (:cons (:var Int) (:nil)))))
                   (body (:atom at_least_it_is_int)))
-                ((cases (:var _))
+                 ((cases (:var _))
                   (guards)
                   (body (:atom no_match_at_all)))))))))
   (make-erl-state 
