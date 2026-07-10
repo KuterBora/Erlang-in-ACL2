@@ -1,44 +1,65 @@
 (in-package "ACL2")
-(include-book "../core/eval-theorems")
+(include-book "../core/top")
+(include-book "../state/top")
+
 
 ; Kont-Step for Consequitve Expressions ----------------------------------------
 
+; eval-k -----------------------------------------------------------------------
+
 (defrule eval-k-exprs->s
   (implies
-    (and (wf-state-p s) 
-         (erl-k-p k)
-         (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :exprs))
-    (equal (erl-s-klst->s (eval-k k s)) s))
+    (equal (erl-s-klst->s (eval-k k s)) (erl-state-fix s)))
   :enable eval-k)
 
 (defrule eval-k-exprs->klst
   (implies
-    (and (wf-state-p s) 
-         (erl-k-p k)
-         (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :exprs)
-         (kont-exprs->exprs (erl-k->kont k)))
+    (and (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :exprs))
     (equal 
       (erl-s-klst->klst (eval-k k s))
-        (list (make-erl-k 
-                :fuel (1- (erl-k->fuel k))
-                :kont
-                  (make-kont-expr 
-                    :expr (car (kont-exprs->exprs (erl-k->kont k)))))
-              (make-erl-k
-                :fuel (1- (erl-k->fuel k))
-                :kont
-                  (make-kont-exprs
-                    :exprs (cdr (kont-exprs->exprs (erl-k->kont k))))))))
+      (if (kont-exprs->exprs (erl-k->kont k))
+          (list (make-erl-k 
+                  :fuel (1- (erl-k->fuel k))
+                  :kont
+                    (make-kont-expr 
+                      :expr (car (kont-exprs->exprs (erl-k->kont k)))))
+                (make-erl-k
+                  :fuel (1- (erl-k->fuel k))
+                  :kont
+                    (make-kont-exprs
+                      :exprs (cdr (kont-exprs->exprs (erl-k->kont k))))))
+          nil)))
   :enable eval-k)
 
-(defrule eval-k-exprs-nil->klst
+
+; apply-k ----------------------------------------------------------------------
+
+(defrule apply-k-of-exprs
   (implies
-    (and (wf-state-p s) 
-         (erl-k-p k)
+    (and (erl-k-p k)
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :exprs)
-         (null (kont-exprs->exprs (erl-k->kont k))))
-    (equal (erl-s-klst->klst (eval-k k s)) nil))
-  :enable eval-k)
+         (consp (kont-exprs->exprs (erl-k->kont k))))
+    (equal (apply-k s (cons k nil))
+           (apply-k
+            (apply-k 
+              s
+              (list (make-erl-k 
+                      :fuel (1- (erl-k->fuel k))
+                      :kont
+                        (make-kont-expr 
+                          :expr (car (kont-exprs->exprs (erl-k->kont k)))))))
+            (list (make-erl-k
+                    :fuel (1- (erl-k->fuel k))
+                    :kont
+                      (make-kont-exprs
+                        :exprs (cdr (kont-exprs->exprs (erl-k->kont k)))))))))
+  :enable apply-k-of-step
+  :cases ((wf-state-p s)))
+
+; apply-k when wf --------------------------------------------------------------
+
+; no need, it seems

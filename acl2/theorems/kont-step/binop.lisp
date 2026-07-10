@@ -234,7 +234,7 @@
            :kont (make-kont-expr
                     :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))))
 
-(defrule apply-k-of-binop-expr2-compatible
+(local (defrule apply-k-of-binop-expr2-compatible
   (implies
     (and (wf-state-p s)
          (omap::compatiblep 
@@ -252,9 +252,9 @@
                 (omap::update*
                   (erl-state->bind s)
                   (kont-binop-expr2->left-bind (erl-k->kont k))))))
-  :enable apply-k-of-step)
+  :enable apply-k-of-step))
 
-(defrule apply-k-of-binop-expr2-incompatible
+(local (defrule apply-k-of-binop-expr2-incompatible
   (implies
     (and (wf-state-p s)
          (not (omap::compatiblep 
@@ -270,7 +270,7 @@
                     :class (make-err-class-error)
                     :reason (make-exit-reason-badmatch
                               :val (erl-state->in s)))))))
-  :enable apply-k-of-step)
+  :enable apply-k-of-step))
 
 (defrule apply-k-of-expr-binop
   (implies
@@ -359,7 +359,7 @@
   :disable (apply-k-of-expr-binop-1 apply-k-of-expr-binop-2)
   :use (:instance apply-k-of-expr-binop-2))
 
-(defrule apply-k-of-expr-binop-incompatible
+(local (defrule apply-k-of-expr-binop-incompatible
   (implies
     (and
       (wf-state-p s)
@@ -389,7 +389,7 @@
                                           :kont (make-kont-expr
                                                     :expr (node-binop->left
                                                             (kont-expr->expr (erl-k->kont k)))))))))))
-    (not (wf-state-p (apply-k s (cons k nil))))))
+    (not (wf-state-p (apply-k s (cons k nil)))))))
 
 (defrule binop-compatible
   (implies
