@@ -23,9 +23,6 @@
        (k (erl-k->kont k))
        ((erl-state s) (erl-state-fix s))
 
-       ; If the state has an error, return right away.
-       ((unless (wf-state-p s)) (make-erl-s-klst :s s))
-
        ; Return flimit if fuel has ran out.
        ((if (zp fuel)) 
         (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit)))))
@@ -97,7 +94,8 @@
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs)))))
           ; if x is an if clause, invoke the clause evaluator
           (:if
-            (b* (((mv (erl-state rs) body) (eval-clauses nil x.clauses s))
+            (b* (((mv (erl-state rs) body)
+                  (eval-clauses nil x.clauses (update-erl-state->in s (make-erl-val-none))))
                  ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))
                  ((if (null body))
                   (make-erl-s-klst
@@ -383,10 +381,6 @@
           (("Goal" :in-theory (disable eval-k)
                     :use (:functional-instance eval-op-decreases-klst-measure
                             (eval-op eval-k))))))
-      
-    (defrule eval-k-of-bad-state
-      (implies (not (wf-state-p s))
-	       (equal (eval-k k s) (make-erl-s-klst :s (erl-state-fix s)))))
 
     (defrule eval-k-of-flimit
       (implies (and (wf-state-p s) (zp (erl-k->fuel k)))
