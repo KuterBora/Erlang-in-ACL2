@@ -5,8 +5,6 @@
 
 ; Stepping Rules ---------------------------------------------------------------
 
-; Stepping rules for apply-k
-
 (defruled apply-k-of-append
     (equal
       (apply-k s (append kl1 kl2))
@@ -67,3 +65,24 @@
   (implies (wf-state-p (apply-k s (cons k nil)))
            (> (erl-k->fuel k) 0))
   :enable apply-k)
+
+
+; Lemmas about Stepping ---------------------------------------------------------
+
+(defrule insuffucient-fuel-for-step
+  (implies
+    (and (< (erl-k->fuel (car klst)) 2)
+         (consp klst)
+         (erl-s-klst->klst (eval-k (car klst) s)))
+    (not (wf-state-p (apply-k (erl-s-klst->s (eval-k (car klst) s))
+                              (append (erl-s-klst->klst (eval-k (car klst) s))
+                                      (cdr klst))))))
+  :enable apply-k)
+
+(defrule wf-state-implies-next-wf-state
+  (implies (and (consp klst) (wf-state-p (apply-k s klst)))
+           (wf-state-p (apply-k (erl-s-klst->s (eval-k (car klst) s))
+                                (erl-s-klst->klst (eval-k (car klst) s)))))
+  :expand (apply-k s klst)
+  :enable apply-k-of-append
+  :rule-classes :forward-chaining)
