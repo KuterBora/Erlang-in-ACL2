@@ -1,4 +1,4 @@
-; (in-package "ACL2")
+(in-package "ACL2")
 ; (include-book "../core/eval-theorems")
 
 ; ; Case-of Kont-Step ------------------------------------------------------------

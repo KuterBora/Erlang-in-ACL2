@@ -2,7 +2,6 @@
 (include-book "../core/top")
 (include-book "../state/top")
 
-
 ; Kont-Step for Consequitve Expressions ----------------------------------------
 
 ; eval-k -----------------------------------------------------------------------
@@ -39,8 +38,7 @@
 
 (defrule apply-k-of-exprs
   (implies
-    (and (erl-k-p k)
-         (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :exprs)
          (consp (kont-exprs->exprs (erl-k->kont k))))
     (equal (apply-k s (cons k nil))
@@ -60,6 +58,15 @@
   :enable apply-k-of-step
   :cases ((wf-state-p s)))
 
+(defrule apply-k-of-exprs-nil
+  (implies
+    (and (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :exprs)
+         (endp (kont-exprs->exprs (erl-k->kont k))))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
+  :enable apply-k-of-step
+  :cases ((wf-state-p s)))
+
 ; apply-k when wf --------------------------------------------------------------
 
-; no need, it seems
+; no need for this one, it seems
