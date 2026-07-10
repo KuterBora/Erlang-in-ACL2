@@ -9,6 +9,8 @@
 ; and then applying the binop, as would happen in Erlang's control flow.
 ; There are also some rules about excpetions, rejections, etc. 
 
+; eval-k -----------------------------------------------------------------------
+
 ; expr-binop
 (defrule eval-k-of-expr-binop->klst
   (implies
@@ -41,32 +43,6 @@
     (equal (erl-s-klst->s (eval-k k s)) (update-erl-state->in s (make-erl-val-none))))
   :enable eval-k)
 
-(local (defrule apply-k-of-expr-binop-1
-  (implies
-    (and (wf-state-p s)
-         (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
-    (equal (apply-k s (cons k nil))
-           (apply-k
-            (apply-k 
-              (update-erl-state->in s (make-erl-val-none))
-              (list (make-erl-k
-                      :fuel (1- (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-binop->left
-                                      (kont-expr->expr (erl-k->kont k)))))))
-            (list (make-erl-k
-                    :fuel (1- (erl-k->fuel k))
-                    :kont (make-kont-binop-expr1
-                            :op (node-binop->op
-                                  (kont-expr->expr (erl-k->kont k)))
-                            :right (node-binop->right
-                                      (kont-expr->expr (erl-k->kont k)))
-                            :bind-0 (erl-state->bind s)))))))
-  :enable apply-k-of-step
-  :cases ((wf-state-p s))))
-
 
 ; kont-binop-expr1
 (defrule eval-k-of-binop-expr1->klst
@@ -94,97 +70,11 @@
          (equal (kont-kind (erl-k->kont k)) :binop-expr1))
     (equal
       (erl-s-klst->s (eval-k k s))
-      (update-erl-state->bind
+      (update-erl-state->in-bind
         s
+        (make-erl-val-none)
         (kont-binop-expr1->bind-0 (erl-k->kont k)))))
   :enable eval-k)
-
-
-(defrule apply-k-of-binop-expr1
-  (implies
-    (and (wf-state-p s)
-         (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :binop-expr1))
-    (equal (apply-k s (cons k nil))
-           (apply-k (update-erl-state->bind s (kont-binop-expr1->bind-0 (erl-k->kont k)))
-                    (list
-                      (make-erl-k
-                        :fuel (1- (erl-k->fuel k))
-                        :kont (make-kont-expr
-                                :expr (kont-binop-expr1->right (erl-k->kont k))))
-                      (make-erl-k
-                        :fuel (1- (erl-k->fuel k))
-                        :kont (make-kont-binop-expr2
-                                :op (kont-binop-expr1->op (erl-k->kont k))
-                                :val (erl-state->in s)
-                                :left-bind (erl-state->bind s)))))))
-  :enable apply-k-of-step)
-
-(defrule apply-k-of-binop-expr1-wf
-  (implies
-    (and (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :binop-expr1)
-         (wf-state-p (apply-k s (cons k nil))))
-    (equal (apply-k s (cons k nil))
-           (apply-k (update-erl-state->bind s (kont-binop-expr1->bind-0 (erl-k->kont k)))
-                    (list
-                      (make-erl-k
-                        :fuel (1- (erl-k->fuel k))
-                        :kont (make-kont-expr
-                                :expr (kont-binop-expr1->right (erl-k->kont k))))
-                      (make-erl-k
-                        :fuel (1- (erl-k->fuel k))
-                        :kont (make-kont-binop-expr2
-                                :op (kont-binop-expr1->op (erl-k->kont k))
-                                :val (erl-state->in s)
-                                :left-bind (erl-state->bind s))))))))
-
-(local (defrule apply-k-of-expr-binop-2
-  (implies
-    (and (wf-state-p s)
-         (> (erl-k->fuel k) 2)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop)
-         (wf-state-p (apply-k (update-erl-state->in s (make-erl-val-none))
-                              (list (make-erl-k
-                                      :fuel (1- (erl-k->fuel k))
-                                      :kont (make-kont-expr
-                                              :expr (node-binop->left
-                                                      (kont-expr->expr (erl-k->kont k)))))))))
-    (equal (apply-k s (cons k nil))
-           (apply-k
-            (apply-k (update-erl-state->bind
-                      (apply-k (update-erl-state->in s (make-erl-val-none))
-                               (list (make-erl-k
-                                        :fuel (1- (erl-k->fuel k))
-                                        :kont (make-kont-expr
-                                                :expr (node-binop->left
-                                                        (kont-expr->expr (erl-k->kont k)))))))
-                      (erl-state->bind s))
-                    (list (make-erl-k
-                            :fuel (+ -2 (erl-k->fuel k))
-                            :kont (make-kont-expr
-                                    :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))
-            (list (make-erl-k
-                    :fuel (+ -2 (erl-k->fuel k))
-                    :kont (make-kont-binop-expr2
-                            :op (node-binop->op (kont-expr->expr (erl-k->kont k)))
-                            :val (erl-state->in
-                                   (apply-k (update-erl-state->in s (make-erl-val-none))
-                                            (list (make-erl-k
-                                                      :fuel (1- (erl-k->fuel k))
-                                                      :kont (make-kont-expr
-                                                              :expr (node-binop->left
-                                                                      (kont-expr->expr (erl-k->kont k))))))))
-                            :left-bind (erl-state->bind
-                                         (apply-k (update-erl-state->in s (make-erl-val-none))
-                                                  (list (make-erl-k
-                                                      :fuel (1- (erl-k->fuel k))
-                                                      :kont (make-kont-expr
-                                                              :expr (node-binop->left
-                                                                      (kont-expr->expr (erl-k->kont k))))))))))))))
-  :cases ((wf-state-p s))))
-
 
 ; kont-binop-expr2
 (defrule eval-k-of-binop-expr2->klst
@@ -223,6 +113,127 @@
               (kont-binop-expr2->left-bind (erl-k->kont k))))))))
   :enable eval-k)
 
+
+; apply-k  ---------------------------------------------------------------------
+
+(local (defrule apply-k-of-expr-binop-1
+  (implies
+    (and (wf-state-p s)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
+    (equal (apply-k s (cons k nil))
+           (apply-k
+            (apply-k 
+              s
+              (list (make-erl-k
+                      :fuel (1- (erl-k->fuel k))
+                      :kont (make-kont-expr
+                              :expr (node-binop->left
+                                      (kont-expr->expr (erl-k->kont k)))))))
+            (list (make-erl-k
+                    :fuel (1- (erl-k->fuel k))
+                    :kont (make-kont-binop-expr1
+                            :op (node-binop->op
+                                  (kont-expr->expr (erl-k->kont k)))
+                            :right (node-binop->right
+                                      (kont-expr->expr (erl-k->kont k)))
+                            :bind-0 (erl-state->bind s)))))))
+  :enable apply-k-of-step
+  :cases ((wf-state-p s))
+  :use
+    (:instance apply-k-of-expr-when-only-diff-val
+      (s1 (update-erl-state->in s (make-erl-val-none)))
+      (s2 s)
+      (k (make-erl-k 
+          :fuel (1- (erl-k->fuel k))
+          :kont 
+            (make-kont-expr 
+              :expr
+                (node-binop->left (kont-expr->expr (erl-k->kont k)))))))))
+
+(local (defruled apply-k-of-binop-expr1
+  (implies
+    (and (wf-state-p s)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :binop-expr1))
+    (equal (apply-k s (cons k nil))
+           (apply-k
+             (apply-k
+               (update-erl-state->bind s (kont-binop-expr1->bind-0 (erl-k->kont k)))
+               (list (make-erl-k
+                       :fuel (1- (erl-k->fuel k))
+                       :kont (make-kont-expr
+                               :expr (kont-binop-expr1->right (erl-k->kont k))))))
+             (list (make-erl-k
+                      :fuel (1- (erl-k->fuel k))
+                      :kont (make-kont-binop-expr2
+                              :op (kont-binop-expr1->op (erl-k->kont k))
+                              :val (erl-state->in s)
+                              :left-bind (erl-state->bind s)))))))
+  :enable apply-k-of-step
+  :use
+    (:instance apply-k-of-expr-when-only-diff-val
+      (s1 (update-erl-state->in-bind s (make-erl-val-none) (kont-binop-expr1->bind-0 (erl-k->kont k))))
+      (s2 (update-erl-state->bind s (kont-binop-expr1->bind-0 (erl-k->kont k))))
+      (k (make-erl-k
+            :fuel (1- (erl-k->fuel k))
+            :kont (make-kont-expr
+                    :expr (kont-binop-expr1->right (erl-k->kont k))))))))
+
+(local (defrule apply-k-of-expr-binop-2
+  (implies
+    (and (wf-state-p s)
+         (> (erl-k->fuel k) 2)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop)
+         (wf-state-p (apply-k s
+                              (list (make-erl-k
+                                      :fuel (1- (erl-k->fuel k))
+                                      :kont (make-kont-expr
+                                              :expr (node-binop->left
+                                                      (kont-expr->expr (erl-k->kont k)))))))))
+    (equal (apply-k s (cons k nil))
+           (apply-k
+            (apply-k s
+                    (list (make-erl-k
+                            :fuel (+ -2 (erl-k->fuel k))
+                            :kont (make-kont-expr
+                                    :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))
+            (list (make-erl-k
+                    :fuel (+ -2 (erl-k->fuel k))
+                    :kont (make-kont-binop-expr2
+                            :op (node-binop->op (kont-expr->expr (erl-k->kont k)))
+                            :val (erl-state->in
+                                   (apply-k s
+                                            (list (make-erl-k
+                                                      :fuel (1- (erl-k->fuel k))
+                                                      :kont (make-kont-expr
+                                                              :expr (node-binop->left
+                                                                      (kont-expr->expr (erl-k->kont k))))))))
+                            :left-bind (erl-state->bind
+                                         (apply-k s
+                                                  (list (make-erl-k
+                                                      :fuel (1- (erl-k->fuel k))
+                                                      :kont (make-kont-expr
+                                                              :expr (node-binop->left
+                                                                      (kont-expr->expr (erl-k->kont k))))))))))))))
+  :cases ((wf-state-p s))
+  :enable apply-k-of-binop-expr1
+  :use
+    (:instance apply-k-of-expr-when-only-diff-val
+      (s1 (update-erl-state->bind
+            (apply-k s (list (make-erl-k
+                              :fuel (1- (erl-k->fuel k))
+                              :kont (make-kont-expr
+                                      :expr (node-binop->left (kont-expr->expr (erl-k->kont k)))))))
+            (erl-state->bind s)))
+      (s2 s)
+      (k (make-erl-k
+           :fuel (+ -2 (erl-k->fuel k))
+           :kont (make-kont-expr
+                    :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))))
+
 (defrule apply-k-of-binop-expr2-compatible
   (implies
     (and (wf-state-p s)
@@ -260,144 +271,6 @@
                     :reason (make-exit-reason-badmatch
                               :val (erl-state->in s)))))))
   :enable apply-k-of-step)
-
-(defrule compatibility-of-apply-k-of-binop-expr2-wf
-  (implies
-    (and (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :binop-expr2)
-         (wf-state-p (apply-k s (cons k nil))))
-    (omap::compatiblep 
-      (erl-state->bind s)
-      (kont-binop-expr2->left-bind (erl-k->kont k))))
-  :disable apply-k-of-binop-expr2-incompatible
-  :use (:instance apply-k-of-binop-expr2-incompatible))
-
-(defrule apply-k-of-binop-expr2-wf
-  (implies
-    (and (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :binop-expr2)
-         (wf-state-p (apply-k s (cons k nil))))
-    (equal (apply-k s (cons k nil))
-        (update-erl-state->in-bind
-          s
-          (apply-erl-binop
-            (kont-binop-expr2->op (erl-k->kont k))
-            (kont-binop-expr2->val (erl-k->kont k))
-            (erl-state->in s))
-          (omap::update*
-            (erl-state->bind s)
-            (kont-binop-expr2->left-bind (erl-k->kont k)))))))
-
-(local (defrule apply-k-of-expr-binop-long
-  (implies
-    (and (> (erl-k->fuel k) 3)
-         (wf-state-p s)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop)
-         (wf-state-p
-           (apply-k
-             (update-erl-state->in s (make-erl-val-none))
-             (list (make-erl-k
-                     :fuel (1- (erl-k->fuel k))
-                     :kont (make-kont-expr
-                             :expr (node-binop->left
-                                     (kont-expr->expr (erl-k->kont k))))))))
-        (wf-state-p
-          (apply-k
-            (update-erl-state->bind
-              (apply-k (update-erl-state->in s (make-erl-val-none))
-                       (list (make-erl-k
-                                 :fuel (1- (erl-k->fuel k))
-                                 :kont (make-kont-expr
-                                         :expr (node-binop->left
-                                                 (kont-expr->expr (erl-k->kont k)))))))
-              (erl-state->bind s))
-            (list (make-erl-k
-                    :fuel (+ -2 (erl-k->fuel k))
-                    :kont (make-kont-expr
-                            :expr (node-binop->right (kont-expr->expr (erl-k->kont k))))))))
-        (omap::compatiblep
-          (erl-state->bind
-            (apply-k
-              (update-erl-state->bind
-                (apply-k (update-erl-state->in s (make-erl-val-none))
-                         (list (make-erl-k
-                                 :fuel (1- (erl-k->fuel k))
-                                 :kont (make-kont-expr
-                                          :expr (node-binop->left
-                                                  (kont-expr->expr (erl-k->kont k)))))))
-                (erl-state->bind s))
-              (list (make-erl-k
-                      :fuel (+ -2 (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-binop->right (kont-expr->expr (erl-k->kont k))))))))
-          (erl-state->bind
-              (apply-k (update-erl-state->in s (make-erl-val-none))
-                       (list (make-erl-k
-                               :fuel (1- (erl-k->fuel k))
-                               :kont (make-kont-expr
-                                       :expr (node-binop->left
-                                               (kont-expr->expr (erl-k->kont k))))))))))
-    (equal (apply-k s (cons k nil))
-           (update-erl-state->in-bind
-            (apply-k
-              (update-erl-state->bind
-                (apply-k (update-erl-state->in s (make-erl-val-none))
-                         (list (make-erl-k
-                                 :fuel (1- (erl-k->fuel k))
-                                 :kont (make-kont-expr
-                                         :expr (node-binop->left
-                                                 (kont-expr->expr (erl-k->kont k)))))))
-                (erl-state->bind s))
-              (list (make-erl-k
-                      :fuel (+ -2 (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))
-            (apply-erl-binop
-              (node-binop->op (kont-expr->expr (erl-k->kont k)))
-              (erl-state->in
-                (apply-k (update-erl-state->in s (make-erl-val-none))
-                         (list (make-erl-k
-                                 :fuel (1- (erl-k->fuel k))
-                                 :kont (make-kont-expr
-                                         :expr (node-binop->left
-                                                 (kont-expr->expr (erl-k->kont k))))))))
-              (erl-state->in
-                (apply-k
-                  (update-erl-state->bind
-                    (apply-k (update-erl-state->in s (make-erl-val-none))
-                             (list (make-erl-k
-                                     :fuel (1- (erl-k->fuel k))
-                                      :kont (make-kont-expr
-                                              :expr (node-binop->left
-                                                      (kont-expr->expr (erl-k->kont k)))))))
-                    (erl-state->bind s))
-              (list (make-erl-k
-                      :fuel (+ -2 (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))))
-            (omap::update*
-              (erl-state->bind
-                (apply-k
-                  (update-erl-state->bind
-                    (apply-k (update-erl-state->in s (make-erl-val-none))
-                             (list (make-erl-k
-                                     :fuel (1- (erl-k->fuel k))
-                                     :kont (make-kont-expr
-                                              :expr (node-binop->left
-                                                      (kont-expr->expr (erl-k->kont k)))))))
-                    (erl-state->bind s))
-                  (list (make-erl-k
-                          :fuel (+ -2 (erl-k->fuel k))
-                          :kont (make-kont-expr
-                                  :expr (node-binop->right (kont-expr->expr (erl-k->kont k))))))))
-              (erl-state->bind
-                  (apply-k (update-erl-state->in s (make-erl-val-none))
-                           (list (make-erl-k
-                                   :fuel (1- (erl-k->fuel k))
-                                   :kont (make-kont-expr
-                                            :expr (node-binop->left
-                                                    (kont-expr->expr (erl-k->kont k))))))))))))))
 
 (defrule apply-k-of-expr-binop
   (implies
@@ -450,26 +323,127 @@
                 (erl-state->bind (apply-k s (list (make-erl-k 
                                                     :fuel (1- (erl-k->fuel k))
                                                     :kont (make-kont-expr
-                                                            :expr (node-binop->left (kont-expr->expr (erl-k->kont k))))))))))))
-  :disable apply-k-of-expr-binop-long
-  :use
-    ((:instance apply-k-of-expr-binop-long)
-     (:instance apply-k-of-expr-when-only-diff-val
-       (s1 (update-erl-state->in s (make-erl-val-none)))
-       (s2 s)
-       (k (make-erl-k
-            :fuel (1- (erl-k->fuel k)) 
-            :kont (make-kont-expr :expr (node-binop->left (kont-expr->expr (erl-k->kont k)))))))
-     (:instance apply-k-of-expr-when-only-diff-val
-       (s1 (update-erl-state->bind
-            (apply-k s (list (make-erl-k
-                              :fuel (1- (erl-k->fuel k))
-                              :kont (make-kont-expr
-                                      :expr (node-binop->left (kont-expr->expr (erl-k->kont k)))))))
-            (erl-state->bind s)))
-       (s2 s)
-       (k (make-erl-k
-            :fuel (+ -2 (erl-k->fuel k))
-            :kont (make-kont-expr
-                    :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))))
+                                                            :expr (node-binop->left (kont-expr->expr (erl-k->kont k)))))))))))))
 
+; apply-k when wf --------------------------------------------------------------
+
+(defrule binop-left-well-formed
+  (implies
+    (and (> (erl-k->fuel k) 3)
+         (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
+    (wf-state-p
+      (apply-k
+        s
+        (list (make-erl-k
+                :fuel (1- (erl-k->fuel k))
+                :kont (make-kont-expr
+                        :expr (node-binop->left (kont-expr->expr (erl-k->kont k)))))))))
+  :disable apply-k-of-expr-binop-1
+  :use (:instance apply-k-of-expr-binop-1))
+
+(defrule binop-right-well-formed
+  (implies
+    (and (> (erl-k->fuel k) 3)
+         (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
+    (wf-state-p
+      (apply-k
+        s
+        (list (make-erl-k
+                :fuel (+ -2 (erl-k->fuel k))
+                :kont (make-kont-expr
+                        :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))))
+  :disable (apply-k-of-expr-binop-1 apply-k-of-expr-binop-2)
+  :use (:instance apply-k-of-expr-binop-2))
+
+(defrule apply-k-of-expr-binop-incompatible
+  (implies
+    (and
+      (wf-state-p s)
+      (> (erl-k->fuel k) 2)
+      (equal (kont-kind (erl-k->kont k)) :expr)
+      (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop)
+      (wf-state-p (apply-k s
+                          (list (make-erl-k
+                                  :fuel (1- (erl-k->fuel k))
+                                  :kont (make-kont-expr
+                                          :expr (node-binop->left
+                                                  (kont-expr->expr (erl-k->kont k))))))))
+      (wf-state-p (apply-k s
+                          (list (make-erl-k
+                                  :fuel (+ -2 (erl-k->fuel k))
+                                  :kont (make-kont-expr
+                                          :expr (node-binop->right
+                                                  (kont-expr->expr (erl-k->kont k))))))))
+      (not (omap::compatiblep
+            (erl-state->bind
+              (apply-k s (list (make-erl-k :fuel (+ -2 (erl-k->fuel k))
+                                          :kont (make-kont-expr
+                                                    :expr (node-binop->right 
+                                                            (kont-expr->expr (erl-k->kont k))))))))
+            (erl-state->bind
+              (apply-k s (list (make-erl-k :fuel (1- (erl-k->fuel k))
+                                          :kont (make-kont-expr
+                                                    :expr (node-binop->left
+                                                            (kont-expr->expr (erl-k->kont k)))))))))))
+    (not (wf-state-p (apply-k s (cons k nil))))))
+
+(defrule binop-compatible
+  (implies
+    (and (> (erl-k->fuel k) 3)
+         (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
+    (omap::compatiblep
+      (erl-state->bind
+        (apply-k s (list (make-erl-k :fuel (+ -2 (erl-k->fuel k))
+                                     :kont (make-kont-expr
+                                              :expr (node-binop->right 
+                                                      (kont-expr->expr (erl-k->kont k))))))))
+      (erl-state->bind
+        (apply-k s (list (make-erl-k :fuel (1- (erl-k->fuel k))
+                                     :kont (make-kont-expr
+                                              :expr (node-binop->left
+                                                      (kont-expr->expr (erl-k->kont k))))))))))
+  :disable (apply-k-of-expr-binop-1 apply-k-of-expr-binop-2 apply-k-of-expr-binop-incompatible)
+  :use (:instance apply-k-of-expr-binop-incompatible))
+
+
+(defrule apply-k-of-expr-binop-wf
+  (implies
+    (and (> (erl-k->fuel k) 3)
+         (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
+    (equal (apply-k s (cons k nil))
+           (update-erl-state->in-bind
+             (apply-k
+              s
+              (list (make-erl-k
+                      :fuel (+ -2 (erl-k->fuel k))
+                      :kont (make-kont-expr
+                              :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))
+             (apply-erl-binop
+               (node-binop->op (kont-expr->expr (erl-k->kont k)))
+               (erl-state->in
+                 (apply-k s (list (make-erl-k
+                                    :fuel (1- (erl-k->fuel k))
+                                    :kont (make-kont-expr
+                                             :expr (node-binop->left (kont-expr->expr (erl-k->kont k))))))))
+              (erl-state->in
+                (apply-k s (list (make-erl-k
+                                  :fuel (+ -2 (erl-k->fuel k))
+                                  :kont (make-kont-expr
+                                          :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))))
+             (omap::update*
+                (erl-state->bind (apply-k s (list (make-erl-k
+                                                  :fuel (+ -2 (erl-k->fuel k))
+                                                  :kont (make-kont-expr
+                                                            :expr (node-binop->right (kont-expr->expr (erl-k->kont k))))))))
+                (erl-state->bind (apply-k s (list (make-erl-k 
+                                                    :fuel (1- (erl-k->fuel k))
+                                                    :kont (make-kont-expr
+                                                            :expr (node-binop->left (kont-expr->expr (erl-k->kont k)))))))))))))

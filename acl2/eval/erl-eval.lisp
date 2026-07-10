@@ -196,7 +196,7 @@
       ; Evaluate the second operand of a binop, save the operator and value of the first operand                                                    
       (:binop-expr1 
         (make-erl-s-klst
-          :s (update-erl-state->bind s k.bind-0)
+          :s (update-erl-state->in-bind s (make-erl-val-none) k.bind-0)
           :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr k.right))
                       (make-erl-k :fuel (1- fuel) 
                                   :kont (make-kont-binop-expr2 :op k.op 
