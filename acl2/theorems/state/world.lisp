@@ -28,20 +28,20 @@
           (erl-state->world s))
   :enable eval-clauses))
 
-(local (defrule erl-state->world-of-eval-local-call
+(defrule erl-state->world-of-eval-local-call
   (equal (erl-state->world (mv-nth 0 (eval-local-call s c args)))
           (erl-state->world s))
-  :enable eval-local-call))
+  :enable eval-local-call)
 
-(local (defrule erl-state->world-of-eval-remote-call
+(defrule erl-state->world-of-eval-remote-call
   (equal (erl-state->world (mv-nth 0 (eval-remote-call s m c args)))
           (erl-state->world s))
-  :enable eval-remote-call))
+  :enable eval-remote-call)
 
-(local (defrule erl-state->world-of-eval-fun-call
+(defrule erl-state->world-of-eval-fun-call
   (equal (erl-state->world (mv-nth 0 (eval-fun-call s f args)))
           (erl-state->world s))
-  :enable eval-fun-call))
+  :enable eval-fun-call)
 
 ; The world field of an erl-state never changes during evaluation.
 (defrule apply-k-of-world

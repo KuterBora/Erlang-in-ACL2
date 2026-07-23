@@ -211,4 +211,9 @@
   
   (defrule wf-state-p-of-excpt
     (implies (equal (erl-val-kind (erl-state->in s)) :excpt)
-             (not (wf-state-p s)))))
+             (not (wf-state-p s))))
+  
+  (defrule wf-state-p-of-wf-val
+    (implies (and (equal (erl-val-kind (erl-state->in s)) k)
+                  (null (member k '(:flimit :reject :excpt))))
+             (wf-state-p s))))

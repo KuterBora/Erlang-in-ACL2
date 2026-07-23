@@ -39,3 +39,14 @@
             :err (make-erl-err :class (make-err-class-error)
                                :reason (make-exit-reason-if-clause)))))))
 
+(defrule update-bind-mod-to-update-in
+  (implies
+    (equal (erl-state->world s1) (erl-state->world s2))
+    (equal (update-erl-state->bind-mod
+             s2
+             (erl-state->bind s1)
+             (erl-state->module s1))
+           (update-erl-state->in s1 (erl-state->in s2))))
+  :enable (update-erl-state->in update-erl-state->bind
+           update-erl-state->mod update-erl-state->bind-mod))
+

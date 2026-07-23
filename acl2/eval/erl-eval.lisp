@@ -268,14 +268,14 @@
              (args (erl-val-cons->lst s.in))
              ((mv rs body) 
               (eval-local-call
-                (update-erl-state->in s (make-erl-val-none))
+                s
                 k.call 
                 args))
              ; if the body is nil, return the value produced by call evaluation.
              ((if (null body)) (make-erl-s-klst :s rs)))
             ; Otherwise, continue with the function body
             (make-erl-s-klst
-              :s (update-erl-state->in rs (make-erl-val-none))
+              :s rs
               :klst (list (make-erl-k 
                             :fuel (1- fuel)
                             :kont (make-kont-exprs :exprs body))
@@ -292,9 +292,9 @@
                      (make-erl-val-reject :err "Remote call: invalid arg list."))))
              ; Obtain the args from the state.
              (args (erl-val-cons->lst s.in))
-             ((mv rs body) 
+             ((mv rs body)
               (eval-remote-call
-                (update-erl-state->in s (make-erl-val-none))
+                s
                 k.module
                 k.call
                 args))
@@ -302,7 +302,7 @@
              ((if (null body)) (make-erl-s-klst :s rs)))
             ; Otherwise, continue with the function body
             (make-erl-s-klst
-              :s (update-erl-state->in rs (make-erl-val-none))
+              :s rs
               :klst (list (make-erl-k 
                             :fuel (1- fuel)
                             :kont (make-kont-exprs :exprs body))
@@ -339,12 +339,12 @@
              ; Obtain the args from the state.
              (args (erl-val-cons->lst s.in))
              ((mv rs body) 
-              (eval-fun-call (update-erl-state->in s (make-erl-val-none)) k.fun args))
+              (eval-fun-call s k.fun args))
              ; if the body is nil, return the value produced by call evaluation.
              ((if (null body)) (make-erl-s-klst :s rs)))
             ; Otherwise, continue with the function body
             (make-erl-s-klst
-              :s (update-erl-state->in rs (make-erl-val-none))
+              :s rs
               :klst (list (make-erl-k 
                             :fuel (1- fuel)
                             :kont (make-kont-exprs :exprs body))

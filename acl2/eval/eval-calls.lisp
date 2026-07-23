@@ -134,7 +134,10 @@
 
        ; Check if the function is a BIF
        ((if (erl-bif-p fn)) (mv (update-erl-state->in s (eval-bif fn args s)) nil)))
-    (mv reject nil)))
+    (mv reject nil))
+  
+  ///
+    (defcong erl-state-equiv equal (eval-local-call s f args) 1))
 
 
 ; Evaluate Remote Function Calls -----------------------------------------------
