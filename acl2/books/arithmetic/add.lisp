@@ -30,7 +30,7 @@
 
 
 ; Steps: 71056 with the expand hints
-; Steps: 96651 without the expand hints
+; Steps: 95846 without the expand hints
 ; Why does this happen?
 ;
 (defrule apply-k-of-add
@@ -61,9 +61,41 @@
     (equal (erl-state->in (apply-k s (cons k nil)))
            (erl-val-integer (+ (erl-val-integer->val (car vals))
                                (erl-val-integer->val (cadr vals))))))
-;  :expand ((apply-k s (cons k nil)) (eval-k k s)) :disable apply-k-of-local-call-when-match
- :disable apply-k-of-expr-local-call apply-k-of-local-call-when-match
- :enable (eval-local-call eval-clauses eval-clauses-when-consp
+ :enable (apply-k-of-local-call-when-match eval-local-call eval-clauses
+          eval-clauses-when-consp
+          match-args eval-match eval-guard-seq eval-guard-seq-when-consp
+          eval-guard eval-guard-expr eval-bif))
+
+(defrule apply-k-of-add
+  (b* (; The starting state is well-formed
+       ((unless (wf-state-p (apply-k s (cons k nil)))) t)
+       ((erl-state s) s)
+
+       ; The state has the world defined above.
+       ((unless (equal s.world (add-test-w))) t)
+       ((unless (equal s.module 'local)) t)
+       
+       ; The next continuation calls add(X, Y).
+       ((erl-k k) k)
+       ((unless (> (erl-k->fuel k) 5)) t)
+       ((unless (equal (kont-kind k.kont) :local-call)) t)
+       ((unless (equal (kont-local-call->call (erl-k->kont k)) 'add)) t)
+
+       ; The arguments have evaluated to a list of two integers.
+       ((unless (equal (erl-val-kind (erl-state->in s)) :cons)) t)
+       (vals (erl-val-cons->lst (erl-state->in s)))
+       ((unless
+          (and (car vals)
+               (cadr vals)
+               (not (cddr vals))
+               (equal (erl-val-kind (car vals)) :integer)
+               (equal (erl-val-kind (cadr vals)) :integer))) t))
+
+    (equal (erl-state->in (apply-k s (cons k nil)))
+           (erl-val-integer (+ (erl-val-integer->val (car vals))
+                               (erl-val-integer->val (cadr vals))))))
+ :enable (apply-k-of-local-call-when-match eval-local-call eval-clauses
+          eval-clauses-when-consp
           match-args eval-match eval-guard-seq eval-guard-seq-when-consp
           eval-guard eval-guard-expr eval-bif))
 

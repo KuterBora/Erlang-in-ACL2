@@ -98,7 +98,7 @@
 
 ; apply-k ----------------------------------------------------------------------
 
-(local (defrule apply-k-of-expr-local-call-1
+(defrule apply-k-of-expr-local-call
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 0)
@@ -128,9 +128,9 @@
             :fuel (1- (erl-k->fuel k))
             :kont (make-kont-expr
                     :expr (node-call->args
-                            (kont-expr->expr (erl-k->kont k)))))))))
+                            (kont-expr->expr (erl-k->kont k))))))))
 
-(local (defrule apply-k-of-local-call-bad-args
+(defrule apply-k-of-local-call-bad-args
   (implies
     (and (wf-state-p s)
          (not (equal (erl-val-kind (erl-state->in s)) :cons))
@@ -140,9 +140,9 @@
            (update-erl-state->in 
              s
              (make-erl-val-reject :err "Local call: invalid arg list."))))
-  :enable apply-k-of-step))
+  :enable apply-k-of-step)
 
-(local (defrule apply-k-of-local-call-no-match
+(defruled apply-k-of-local-call-no-match
   (implies
     (and (wf-state-p s)
          (equal (erl-val-kind (erl-state->in s)) :cons)
@@ -161,9 +161,9 @@
                 s
                 (kont-local-call->call (erl-k->kont k))
                 (erl-val-cons->lst (erl-state->in s))))))
-  :enable apply-k-of-step))
+  :enable apply-k-of-step)
 
-(local (defrule apply-k-of-local-call-when-match
+(defruled apply-k-of-local-call-when-match
   (implies
     (and (wf-state-p s)
          (equal (erl-val-kind (erl-state->in s)) :cons)
@@ -197,230 +197,34 @@
                       :kont (make-kont-function-return 
                               :bind (erl-state->bind s) 
                               :module (erl-state->module s)))))))
-  :enable apply-k-of-step))
-
-(local (defrule apply-k-of-local-call-when-wf-body
-  (implies
-    (and (wf-state-p s)
-         (equal (erl-val-kind (erl-state->in s)) :cons)
-         (mv-nth 
-           1 
-           (eval-local-call
-             s
-             (kont-local-call->call (erl-k->kont k))
-             (erl-val-cons->lst (erl-state->in s))))
-         (> (erl-k->fuel k) 2)
-         (equal (kont-kind (erl-k->kont k)) :local-call)
-         (wf-state-p
-           (apply-k
-             (mv-nth
-               0 
-               (eval-local-call
-                 s
-                 (kont-local-call->call (erl-k->kont k))
-                 (erl-val-cons->lst (erl-state->in s))))
-             (list (make-erl-k 
-                     :fuel (1- (erl-k->fuel k))
-                     :kont (make-kont-exprs
-                            :exprs
-                               (mv-nth
-                                1 
-                                (eval-local-call
-                                  s
-                                  (kont-local-call->call (erl-k->kont k))
-                                  (erl-val-cons->lst (erl-state->in s))))))))))
-    (equal (apply-k s (cons k nil))
-           (update-erl-state->in
-             s
-             (erl-state->in
-               (apply-k
-                 (mv-nth
-                   0 
-                   (eval-local-call
-                     s
-                     (kont-local-call->call (erl-k->kont k))
-                     (erl-val-cons->lst (erl-state->in s))))
-                 (list (make-erl-k 
-                         :fuel (1- (erl-k->fuel k))
-                         :kont (make-kont-exprs
-                                 :exprs
-                                   (mv-nth
-                                     1 
-                                     (eval-local-call
-                                       s
-                                       (kont-local-call->call (erl-k->kont k))
-                                       (erl-val-cons->lst (erl-state->in s))))))))))))
-  :disable update-bind-mod-to-update-in
-  :use
-    (:instance update-bind-mod-to-update-in
-      (s1 s)
-      (s2 (apply-k
-            (mv-nth
-              0 
-              (eval-local-call
-                s
-                (kont-local-call->call (erl-k->kont k))
-                (erl-val-cons->lst (erl-state->in s))))
-            (list (make-erl-k 
-                    :fuel (1- (erl-k->fuel k))
-                    :kont (make-kont-exprs
-                            :exprs
-                              (mv-nth
-                                1 
-                                (eval-local-call
-                                  s
-                                  (kont-local-call->call (erl-k->kont k))
-                                  (erl-val-cons->lst (erl-state->in s))))))))))))
-
-(defrule apply-k-of-expr-local-call-when-function-has-body
-  (implies
-    (and (> (erl-k->fuel k) 2)
-         (wf-state-p s)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call)
-         (equal (erl-val-kind
-                  (erl-state->in (apply-k s (list (make-erl-k
-                                     :fuel (1- (erl-k->fuel k))
-                                     :kont (make-kont-expr
-                                              :expr (node-call->args
-                                                      (kont-expr->expr (erl-k->kont k)))))))))
-                :cons)
-        (mv-nth 
-          1 
-          (eval-local-call
-            (apply-k
-              s
-              (list (make-erl-k
-                      :fuel (1- (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-call->args
-                                      (kont-expr->expr (erl-k->kont k)))))))
-            (node-call->fn (kont-expr->expr (erl-k->kont k)))
-            (erl-val-cons->lst
-              (erl-state->in (apply-k s (list (make-erl-k
-                                 :fuel (1- (erl-k->fuel k))
-                                 :kont (make-kont-expr
-                                         :expr (node-call->args
-                                                 (kont-expr->expr (erl-k->kont k))))))))))))
-    (equal
-      (apply-k s (cons k nil))
-      (apply-k
-        (mv-nth
-          0 
-          (eval-local-call
-            (apply-k
-              s
-              (list (make-erl-k
-                      :fuel (1- (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-call->args
-                                      (kont-expr->expr (erl-k->kont k)))))))
-            (node-call->fn (kont-expr->expr (erl-k->kont k)))
-            (erl-val-cons->lst
-              (erl-state->in (apply-k s (list (make-erl-k
-                                :fuel (1- (erl-k->fuel k))
-                                :kont (make-kont-expr
-                                        :expr (node-call->args
-                                                (kont-expr->expr (erl-k->kont k)))))))))))
-        (list
-          (make-erl-k 
-            :fuel (+ -2 (erl-k->fuel k))
-            :kont
-              (make-kont-exprs
-                :exprs
-                  (mv-nth
-                    1 
-                    (eval-local-call
-                      (apply-k
-                        s
-                        (list (make-erl-k
-                                :fuel (1- (erl-k->fuel k))
-                                :kont (make-kont-expr
-                                        :expr (node-call->args
-                                                (kont-expr->expr (erl-k->kont k)))))))
-                      (node-call->fn (kont-expr->expr (erl-k->kont k)))
-                      (erl-val-cons->lst
-                        (erl-state->in (apply-k s (list (make-erl-k
-                                          :fuel (1- (erl-k->fuel k))
-                                          :kont (make-kont-expr
-                                                  :expr (node-call->args
-                                                          (kont-expr->expr (erl-k->kont k)))))))))))))
-          (make-erl-k
-            :fuel (+ -2 (erl-k->fuel k)) 
-            :kont
-              (make-kont-function-return 
-                :bind
-                  (erl-state->bind
-                    (apply-k s (list (make-erl-k
-                                     :fuel (1- (erl-k->fuel k))
-                                     :kont (make-kont-expr
-                                              :expr (node-call->args
-                                                      (kont-expr->expr (erl-k->kont k)))))))) 
-                :module
-                  (erl-state->module
-                    (apply-k s (list (make-erl-k
-                                     :fuel (1- (erl-k->fuel k))
-                                     :kont (make-kont-expr
-                                              :expr (node-call->args
-                                                      (kont-expr->expr (erl-k->kont k)))))))))))))))
-
-(defrule apply-k-of-expr-local-call-when-function-has-no-body
-  (implies
-    (and (> (erl-k->fuel k) 2)
-         (wf-state-p s)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call)
-         (equal (erl-val-kind
-                  (erl-state->in (apply-k s (list (make-erl-k
-                                     :fuel (1- (erl-k->fuel k))
-                                     :kont (make-kont-expr
-                                              :expr (node-call->args
-                                                      (kont-expr->expr (erl-k->kont k)))))))))
-                :cons)
-        (not
-          (mv-nth 
-            1 
-            (eval-local-call
-              (apply-k
-                s
-                (list (make-erl-k
-                        :fuel (1- (erl-k->fuel k))
-                        :kont (make-kont-expr
-                                :expr (node-call->args
-                                        (kont-expr->expr (erl-k->kont k)))))))
-              (node-call->fn (kont-expr->expr (erl-k->kont k)))
-              (erl-val-cons->lst
-                (erl-state->in (apply-k s (list (make-erl-k
-                                  :fuel (1- (erl-k->fuel k))
-                                  :kont (make-kont-expr
-                                          :expr (node-call->args
-                                                  (kont-expr->expr (erl-k->kont k)))))))))))))
-    (equal
-      (apply-k s (cons k nil))
-      (mv-nth
-          0 
-          (eval-local-call
-            (apply-k
-              s
-              (list (make-erl-k
-                      :fuel (1- (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-call->args
-                                      (kont-expr->expr (erl-k->kont k)))))))
-            (node-call->fn (kont-expr->expr (erl-k->kont k)))
-            (erl-val-cons->lst
-              (erl-state->in (apply-k s (list (make-erl-k
-                                :fuel (1- (erl-k->fuel k))
-                                :kont (make-kont-expr
-                                        :expr (node-call->args
-                                                (kont-expr->expr (erl-k->kont k))))))))))))))
+  :enable apply-k-of-step)
 
 ; apply-k when wf --------------------------------------------------------------
 
-(defrule local-call-args-wf
+(local (defrule fuel-crock
   (implies
-    (and (> (erl-k->fuel k) 2)
-         (wf-state-p (apply-k s (cons k nil)))
+    (wf-state-p (apply-k s (cons k nil)))
+    (> (erl-k->fuel k) 0))
+  :enable apply-k))
+
+; expr-local-call
+(defrule expr-local-call-has-enough-fuel-when-wf
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
+    (> (erl-k->fuel k) 1))
+  :disable (apply-k-of-expr-local-call fuel-crock)
+  :use ((:instance fuel-crock
+          (s s)
+          (k (erl-k
+              (+ -1 (erl-k->fuel k))
+              (kont-expr (node-call->args (kont-expr->expr (erl-k->kont k)))))))
+        (:instance apply-k-of-expr-local-call)))
+
+(defrule expr-local-call-args-wf
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
     (wf-state-p
@@ -429,13 +233,12 @@
                          :kont (make-kont-expr
                                  :expr (node-call->args
                                          (kont-expr->expr (erl-k->kont k)))))))))
-  :disable (apply-k-of-expr-local-call-1)
-  :use (:instance apply-k-of-expr-local-call-1))
+  :disable (apply-k-of-expr-local-call)
+  :use (:instance apply-k-of-expr-local-call))
 
-(defrule local-call-args-are-cons-when-wf
+(defrule expr-local-call-args-are-cons-when-wf
   (implies
-    (and (> (erl-k->fuel k) 2)
-         (wf-state-p (apply-k s (cons k nil)))
+    (and (wf-state-p (apply-k s (cons k nil)))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
     (equal
@@ -446,193 +249,157 @@
                                  :expr (node-call->args
                                          (kont-expr->expr (erl-k->kont k)))))))))
         :cons))
-  :disable (apply-k-of-expr-local-call-1)
-  :use (:instance apply-k-of-expr-local-call-1))
+  :disable (apply-k-of-expr-local-call expr-local-call-has-enough-fuel-when-wf)
+  :use ((:instance apply-k-of-expr-local-call)
+        (:instance expr-local-call-has-enough-fuel-when-wf)))
+
+(defrule apply-k-of-expr-local-call-wf
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
+    (equal (apply-k s (cons k nil))
+           (apply-k
+             (apply-k 
+               s
+               (list (make-erl-k
+                       :fuel (1- (erl-k->fuel k))
+                       :kont (make-kont-expr
+                               :expr (node-call->args
+                                       (kont-expr->expr (erl-k->kont k)))))))
+             (list (make-erl-k
+                    :fuel (1- (erl-k->fuel k))
+                    :kont (make-kont-local-call 
+                            :call (node-call->fn
+                                    (kont-expr->expr (erl-k->kont k))))))))))
+
+; kont local call
+
+(defrule local-call-has-enough-fuel-when-wf
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :local-call))
+     (> (erl-k->fuel k) 0))
+:disable (apply-k-of-local-call-no-match
+          apply-k-of-local-call-when-match
+          erl-state-of-wf-apply-k)
+:use ((:instance apply-k-of-local-call-no-match)
+      (:instance apply-k-of-local-call-when-match)
+      (:instance fuel-crock)))
+
+(defrule local-call-args-are-cons-when-wf
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :local-call))
+    (equal (erl-val-kind (erl-state->in s)) :cons))
+  :expand (apply-k s (cons k nil))
+  :disable (local-call-has-enough-fuel-when-wf
+            eval-k-of-local-call->klst
+            eval-k-of-local-call->s)
+  :use ((:instance local-call-has-enough-fuel-when-wf)
+        (:instance eval-k-of-local-call->klst)
+        (:instance eval-k-of-local-call->s)))
 
 (defrule eval-local-call-wf-when-apply-local-call-wf
   (implies
-    (and (> (erl-k->fuel k) 2)
-         (wf-state-p (apply-k s (cons k nil)))
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :local-call))
     (wf-state-p
       (mv-nth 
         0
         (eval-local-call
-          (apply-k
-            s
-            (list (make-erl-k
-                    :fuel (1- (erl-k->fuel k))
-                    :kont (make-kont-expr
-                            :expr (node-call->args
-                                    (kont-expr->expr (erl-k->kont k)))))))
-          (node-call->fn (kont-expr->expr (erl-k->kont k)))
+          s
+          (kont-local-call->call (erl-k->kont k))
           (erl-val-cons->lst
-            (erl-state->in (apply-k s (list (make-erl-k
-                                :fuel (1- (erl-k->fuel k))
-                                :kont (make-kont-expr
-                                        :expr (node-call->args
-                                                (kont-expr->expr (erl-k->kont k)))))))))))))
-  :disable
-    (apply-k-of-expr-local-call-1
-     apply-k-of-expr-local-call-when-function-has-body
-     apply-k-of-expr-local-call-when-function-has-no-body)
-  :use ((:instance apply-k-of-expr-local-call-when-function-has-body)
-        (:instance apply-k-of-expr-local-call-when-function-has-no-body)))
+            (erl-state->in s))))))
+  :disable (apply-k-of-local-call-no-match
+            apply-k-of-local-call-when-match
+            apply-k-of-local-call-bad-args)
+  :use ((:instance apply-k-of-local-call-no-match)
+        (:instance apply-k-of-local-call-when-match)
+        (:instance apply-k-of-local-call-bad-args)))
 
-(defrule local-call-is-wf-before-return-when-apply-k-is-wf
+; !!!!
+(defruled apply-k-of-local-call-no-match-wf
   (implies
-    (and (> (erl-k->fuel k) 3)
-         (wf-state-p (apply-k s (cons k nil)))
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
-    (wf-state-p
-      (apply-k
-        (mv-nth
-          0 
-          (eval-local-call
-            (apply-k
-              s
-              (list (make-erl-k
-                      :fuel (1- (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-call->args
-                                      (kont-expr->expr (erl-k->kont k)))))))
-            (node-call->fn (kont-expr->expr (erl-k->kont k)))
-            (erl-val-cons->lst
-              (erl-state->in (apply-k s (list (make-erl-k
-                                :fuel (1- (erl-k->fuel k))
-                                :kont (make-kont-expr
-                                        :expr (node-call->args
-                                                (kont-expr->expr (erl-k->kont k)))))))))))
-        (list
-          (make-erl-k 
-            :fuel (+ -2 (erl-k->fuel k))
-            :kont
-              (make-kont-exprs
-                :exprs
-                  (mv-nth
-                    1 
-                    (eval-local-call
-                      (apply-k
-                        s
-                        (list (make-erl-k
-                                :fuel (1- (erl-k->fuel k))
-                                :kont (make-kont-expr
-                                        :expr (node-call->args
-                                                (kont-expr->expr (erl-k->kont k)))))))
-                      (node-call->fn (kont-expr->expr (erl-k->kont k)))
-                      (erl-val-cons->lst
-                        (erl-state->in (apply-k s (list (make-erl-k
-                                          :fuel (1- (erl-k->fuel k))
-                                          :kont (make-kont-expr
-                                                  :expr (node-call->args
-                                                          (kont-expr->expr (erl-k->kont k)))))))))))))))))
-  :disable
-    (apply-k-of-expr-local-call-1
-     apply-k-of-expr-local-call-when-function-has-body
-     apply-k-of-expr-local-call-when-function-has-no-body)
-  :use ((:instance apply-k-of-expr-local-call-when-function-has-body)
-        (:instance apply-k-of-expr-local-call-when-function-has-no-body)))
-
-
-(local (defrule bind-mod-of-eval-local-call-when-no-match
-  (implies
-    (and (not (mv-nth 1 (eval-local-call s f args)))
-         (wf-state-p (mv-nth 0 (eval-local-call s  f args))))
-    (equal (update-erl-state->bind-mod
-             (mv-nth 0 (eval-local-call s  f args))
-             (erl-state->bind s)
-             (erl-state->module s))
-           (mv-nth 0 (eval-local-call s  f args))))
-  :enable
-    (update-erl-state->bind-mod update-erl-state->bind
-     update-erl-state->mod update-erl-state->in eval-local-call)))
-
-
-(defrule apply-k-of-expr-local-call-wf
-  (implies
-    (and (> (erl-k->fuel k) 4)
-         (wf-state-p (apply-k s (cons k nil)))
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
-    (equal
-      (apply-k s (cons k nil))
-      (update-erl-state->bind-mod
-        (apply-k
-          (mv-nth
-            0 
-            (eval-local-call
-              (apply-k
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (not (mv-nth 
+                1 
+                (eval-local-call
+                  s
+                  (kont-local-call->call (erl-k->kont k))
+                  (erl-val-cons->lst (erl-state->in s)))))
+         (equal (kont-kind (erl-k->kont k)) :local-call))
+    (equal (apply-k s (cons k nil))
+           (mv-nth 
+              0 
+              (eval-local-call
                 s
-                (list (make-erl-k
-                        :fuel (1- (erl-k->fuel k))
-                        :kont (make-kont-expr
-                                :expr (node-call->args
-                                        (kont-expr->expr (erl-k->kont k)))))))
-              (node-call->fn (kont-expr->expr (erl-k->kont k)))
-              (erl-val-cons->lst
-                (erl-state->in (apply-k s (list (make-erl-k
-                                  :fuel (1- (erl-k->fuel k))
-                                  :kont (make-kont-expr
-                                          :expr (node-call->args
-                                                  (kont-expr->expr (erl-k->kont k)))))))))))
-          (list
-            (make-erl-k 
-              :fuel (+ -2 (erl-k->fuel k))
-              :kont
-                (make-kont-exprs
-                  :exprs
-                    (mv-nth
-                      1 
-                      (eval-local-call
-                        (apply-k
-                          s
-                          (list (make-erl-k
-                                  :fuel (1- (erl-k->fuel k))
-                                  :kont (make-kont-expr
-                                          :expr (node-call->args
-                                                  (kont-expr->expr (erl-k->kont k)))))))
-                        (node-call->fn (kont-expr->expr (erl-k->kont k)))
-                        (erl-val-cons->lst
-                          (erl-state->in (apply-k s (list (make-erl-k
-                                            :fuel (1- (erl-k->fuel k))
-                                            :kont (make-kont-expr
-                                                    :expr (node-call->args
-                                                            (kont-expr->expr (erl-k->kont k)))))))))))))))
-          (erl-state->bind
-            (apply-k
+                (kont-local-call->call (erl-k->kont k))
+                (erl-val-cons->lst (erl-state->in s))))))
+  :use (:instance apply-k-of-local-call-no-match))
+
+(defrule local-call-match-has-enough-fuel-when-wf
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (mv-nth 
+            1 
+            (eval-local-call
               s
-              (list (make-erl-k
-                      :fuel (1- (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-call->args
-                                      (kont-expr->expr (erl-k->kont k))))))))
-          (erl-state->module
-            (apply-k
-              s
-              (list (make-erl-k
-                      :fuel (1- (erl-k->fuel k))
-                      :kont (make-kont-expr
-                              :expr (node-call->args
-                                      (kont-expr->expr (erl-k->kont k)))))))))))
-  :disable
-    (apply-k-of-expr-local-call-1
-     apply-k-of-expr-local-call-when-function-has-body
-     apply-k-of-expr-local-call-when-function-has-no-body
-     apply-k-of-exprs
-     bind-mod-of-eval-local-call-when-no-match)
-  :use ((:instance apply-k-of-expr-local-call-when-function-has-body)
-        (:instance apply-k-of-expr-local-call-when-function-has-no-body)
-        (:instance bind-mod-of-eval-local-call-when-no-match
-          (s (apply-k s (list (erl-k (+ -1 (erl-k->fuel k))
-                                     (kont-expr
-                                      (node-call->args (kont-expr->expr (erl-k->kont k))))))))
-          (args
-            (erl-val-cons->lst
-              (erl-state->in
-                (apply-k s (list (erl-k (+ -1 (erl-k->fuel k))
-                                        (kont-expr
-                                          (node-call->args
-                                            (kont-expr->expr (erl-k->kont k))))))))))
-          (f (node-call->fn (kont-expr->expr (erl-k->kont k)))))))
+              (kont-local-call->call (erl-k->kont k))
+              (erl-val-cons->lst (erl-state->in s))))
+         (equal (kont-kind (erl-k->kont k)) :local-call))
+     (> (erl-k->fuel k) 2))
+  :disable (erl-state-of-wf-apply-k
+            fuel-crock
+            apply-k-of-exprs-wf)
+  :use ((:instance apply-k-of-local-call-no-match)
+        (:instance apply-k-of-local-call-when-match)
+        (:instance fuel-crock)
+        (:instance fuel-crock
+          (s (mv-nth 0
+              (eval-local-call s
+                                (kont-local-call->call (erl-k->kont k))
+                                (erl-val-cons->lst (erl-state->in s)))))
+          (k (erl-k
+              (+ -1 (erl-k->fuel k))
+              (kont-exprs
+                (mv-nth 1
+                        (eval-local-call s
+                                          (kont-local-call->call (erl-k->kont k))
+                                          (erl-val-cons->lst (erl-state->in s))))))))))
+
+; !!!
+(defruled apply-k-of-local-call-when-match-wf
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (mv-nth 
+           1 
+           (eval-local-call
+             s
+             (kont-local-call->call (erl-k->kont k))
+             (erl-val-cons->lst (erl-state->in s))))
+         (equal (kont-kind (erl-k->kont k)) :local-call))
+    (equal (apply-k s (cons k nil))
+           (apply-k
+             (mv-nth
+               0 
+               (eval-local-call
+                 s
+                 (kont-local-call->call (erl-k->kont k))
+                 (erl-val-cons->lst (erl-state->in s))))
+             (list (make-erl-k 
+                     :fuel (1- (erl-k->fuel k))
+                     :kont (make-kont-exprs :exprs
+                              (mv-nth
+                                1 
+                                (eval-local-call
+                                  s
+                                  (kont-local-call->call (erl-k->kont k))
+                                  (erl-val-cons->lst (erl-state->in s))))))
+                    (make-erl-k
+                      :fuel (1- (erl-k->fuel k)) 
+                      :kont (make-kont-function-return 
+                              :bind (erl-state->bind s) 
+                              :module (erl-state->module s)))))))
+  :use (:instance apply-k-of-local-call-when-match))

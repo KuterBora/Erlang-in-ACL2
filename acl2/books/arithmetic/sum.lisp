@@ -26,21 +26,20 @@
              (export)
              (import))
       (fn-defns
-        (((name . sum) (arity . 1))
+        (((name . sum) (arity . 1)) ;; sum(0) -> 0;
          ((cases (:integer 0))
           (guards)
           (body (:integer 0)))
-         ((cases (:var X))
+         ((cases (:var X)) ;; sum(X) when is_integer(X), X > 0 -> X + sum(X - 1).
           (guards ((:call is_integer (:cons (:var X) (:nil))) 
                    (:binop > (:var X) (:integer 0))))
-          (body (:binop 
-                  + 
+          (body (:binop
+                  +
                   (:var X) 
                   (:call 
-                    sum 
+                    sum
                     (:cons (:binop - (:var X) (:integer 1)) 
                            (:nil)))))))))))
-
 
 ; While it is not necessary to admit the theorem below, this lemma speeds up 
 ; the proof quite a bit. ACL2 has an easier time dealing with the cases of 
@@ -88,11 +87,12 @@
      apply-erl-comp-binop erl-compare))
 
 
+
 ; Base case of calling apply-k with sum
 (defrule apply-k-of-sum-base-case
   (implies 
     (and
-      ; there is enough fuel
+      (wf-state-p s)
       (> (erl-k->fuel k) 5)
 
       ; the module and the world are correct
@@ -104,7 +104,6 @@
       (equal (kont-local-call->call (erl-k->kont k)) 'sum)
       
       ; the arguments are well-formed
-      (wf-state-p s)
       (equal (erl-val-kind (erl-state->in s)) :cons)
       (car (erl-val-cons->lst (erl-state->in s)))
       (not (cdr (erl-val-cons->lst (erl-state->in s))))
@@ -113,12 +112,9 @@
       ; the first (and only) argument is 0
       (equal (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) 0))
 
-    (equal
-      (erl-state->in (apply-k s (cons k nil)))
-      (make-erl-val-integer :val 0)))
-    :disable apply-k-of-expr-local-call-when-function-has-no-body
-    :use (:instance apply-k-of-expr-local-call-when-function-has-no-body))
-
+    (equal (erl-state->in (apply-k s (list k)))
+           (erl-val-integer 0)))
+  :use ((:instance apply-k-of-local-call-when-match)))
 
 
 ; Induction schema for apply-k-of-sum
@@ -136,28 +132,102 @@
       (if (= (erl-val-integer->val 
                 (car (erl-val-cons->lst (erl-state->in args)))) 0)
           t
-          (apply-k-of-sum-induct
-            (update-erl-state->in-bind
-              args
-              (erl-val-cons
-                (list 
-                  (erl-val-integer
-                    (+ -1 
-                       (erl-val-integer->val 
-                         (car (erl-val-cons->lst (erl-state->in args))))))))
-              (omap::update 
-                'X
-                (car (erl-val-cons->lst (erl-state->in args)))
-                nil))
-            (erl-k (+ -5 (erl-k->fuel k))
-                   '(:local-call sum)))))))
+          (APPLY-K-of-sum-induct
+            (UPDATE-ERL-STATE->BIND
+              (UPDATE-ERL-STATE->IN
+                args
+                (ERL-VAL-CONS
+                  (LIST (ERL-VAL-INTEGER
+                              (+ -1
+                                (ERL-VAL-INTEGER->VAL
+                                      (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN args)))))))))
+              (OMAP::UPDATE 'X
+                            (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN args)))
+                            NIL))
+            (ERL-K (+ -5 (ERL-K->FUEL K))
+                        '(:LOCAL-CALL SUM)))))))
+
+(local (defrule fuel-crock
+  (implies
+    (wf-state-p (apply-k s (cons k nil)))
+    (> (erl-k->fuel k) 0))
+  :enable apply-k))
+
+(local (defrule fuel-crock-rev
+  (implies
+    (<= (erl-k->fuel k) 0)
+    (not (wf-state-p (apply-k s (cons k nil)))))
+  :enable apply-k))
 
 
-(defrule apply-k-of-sum
+
+(defrule crock-1
+  (implies
+    (and (not (wf-state-p s)) (equal (erl-val-kind v) :integer))
+    (equal (apply-erl-binop op v (erl-state->in s)) (erl-state->in s)))
+    :enable (wf-state-p apply-erl-binop erl-val-kind))
+
+(defrule crock-2
+  (implies
+    (and (wf-state-p s) (equal (erl-val-kind v) :integer))
+    (wf-state-p
+      (UPDATE-ERL-STATE->BIND
+          (UPDATE-ERL-STATE->IN S
+                                v)
+          (OMAP::UPDATE 'X v NIL)))))
+
+
+
+(defrule help-crock
   (implies 
     (and
-      ; there is enough fuel
-      (> (erl-k->fuel k) 100)
+      (< 8 (erl-k->fuel k))
+
+      ; the module and the world are correct
+      (equal (erl-state->world s) (sum-test-w))
+      (equal (erl-state->module s) 'local)
+      
+      ; the next continuation is a call to [sum]
+      (equal (kont-kind (erl-k->kont k)) :local-call)
+      (equal (kont-local-call->call (erl-k->kont k)) 'sum)
+      
+      ; the arguments are well-formed
+      (equal (erl-val-kind (erl-state->in s)) :cons)
+      (car (erl-val-cons->lst (erl-state->in s)))
+      (not (cdr (erl-val-cons->lst (erl-state->in s))))
+      (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
+
+      ; the first (and only) argument is greater than or equal to 0.
+      (> (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) 0)
+      
+      ; Let's assume the result is well-formed
+      (wf-state-p (apply-k s (cons k nil))))
+    (wf-state-p
+       (APPLY-K
+        (UPDATE-ERL-STATE->BIND
+        (UPDATE-ERL-STATE->IN
+          S
+          (ERL-VAL-CONS
+            (LIST (ERL-VAL-INTEGER
+                        (+ -1
+                          (ERL-VAL-INTEGER->VAL
+                                (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))))))))
+        (OMAP::UPDATE 'X
+                      (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
+                      NIL))
+        (LIST (ERL-K (+ -5 (ERL-K->FUEL K))
+                    '(:LOCAL-CALL SUM))))
+       ))
+
+  
+  :hints (
+    ("Goal" :use ((:instance apply-k-of-local-call-when-match-wf)))))
+
+
+(defrule help-crock-2
+  (implies 
+    (and
+      (< 8 (erl-k->fuel k))
 
       ; the module and the world are correct
       (equal (erl-state->world s) (sum-test-w))
@@ -174,17 +244,170 @@
       (not (cdr (erl-val-cons->lst (erl-state->in s))))
       (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
 
-      ; the first (and only) argument is 0
+      ; the first (and only) argument is greater than or equal to 0.
+      (> (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) 0)
+    
+      ; Let's assume the result is well-formed
+      (wf-state-p (apply-k s (cons k nil))))
+    (equal (erl-state->in (apply-k s (cons k nil)))
+          (APPLY-ERL-BINOP
+            '+
+            (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
+            (erl-state->in
+              (APPLY-K
+              (UPDATE-ERL-STATE->BIND
+              (UPDATE-ERL-STATE->IN
+                S
+                (ERL-VAL-CONS
+                  (LIST (ERL-VAL-INTEGER
+                              (+ -1
+                                (ERL-VAL-INTEGER->VAL
+                                      (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))))))))
+              (OMAP::UPDATE 'X
+                            (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
+                            NIL))
+              (LIST (ERL-K (+ -5 (ERL-K->FUEL K))
+                          '(:LOCAL-CALL SUM))))))))
+  
+  :disable help-crock
+
+  :cases ((omap::compatiblep
+          (erl-state->bind (APPLY-K
+                (UPDATE-ERL-STATE->BIND
+                (UPDATE-ERL-STATE->IN
+                  S
+                  (ERL-VAL-CONS
+                  (LIST (ERL-VAL-INTEGER
+                              (+ -1
+                                (ERL-VAL-INTEGER->VAL
+                                      (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))))))))
+                (OMAP::UPDATE 'X
+                              (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
+                              NIL))
+                (LIST (ERL-K (+ -5 (ERL-K->FUEL K))
+                            '(:LOCAL-CALL SUM)))))
+        (OMAP::UPDATE 'X
+            (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
+            NIL)))
+
+  :hints (
+    ("Goal" :use ((:instance apply-k-of-local-call-when-match)
+                  (:instance help-crock)))))
+
+
+
+
+
+
+
+
+
+
+
+(defrule apply-k-of-sum
+  (implies 
+    (and
+      (< (* 8 (+ 1 (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s))))))
+         (erl-k->fuel k))
+      ; the module and the world are correct
+      (equal (erl-state->world s) (sum-test-w))
+      (equal (erl-state->module s) 'local)
+      
+      ; the next continuation is a call to [sum]
+      (equal (kont-kind (erl-k->kont k)) :local-call)
+      (equal (kont-local-call->call (erl-k->kont k)) 'sum)
+      
+      ; the arguments are well-formed
+      (wf-state-p s)
+      (equal (erl-val-kind (erl-state->in s)) :cons)
+      (car (erl-val-cons->lst (erl-state->in s)))
+      (not (cdr (erl-val-cons->lst (erl-state->in s))))
+      (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
+
+      ; the first (and only) argument is greater than or equal to 0.
       (>= (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) 0)
       
       ; Let's assume the result is well-formed
-      (wf-state-p (apply-k s (cons k nil)))
-      )
+      (wf-state-p (apply-k s (cons k nil))))
     (equal
       (erl-state->in (apply-k s (cons k nil)))
       (make-erl-val-integer 
         :val
           (sum (erl-val-integer->val 
                  (car (erl-val-cons->lst (erl-state->in s))))))))
-  :induct (sum (erl-val-integer->val 
-                 (car (erl-val-cons->lst (erl-state->in s))))))
+  :induct (apply-k-of-sum-induct s k)
+  :in-theory (enable sum))
+
+
+(defrule apply-k-of-sum-2
+  (implies 
+    (and
+      (equal (* 8 (+ x 2)) (erl-k->fuel k))
+      ; the module and the world are correct
+      (equal (erl-state->world s) (sum-test-w))
+      (equal (erl-state->module s) 'local)
+      
+      ; the next continuation is a call to [sum]
+      (equal (kont-kind (erl-k->kont k)) :local-call)
+      (equal (kont-local-call->call (erl-k->kont k)) 'sum)
+      
+      ; the arguments are well-formed
+      (wf-state-p s)
+      (equal (erl-val-kind (erl-state->in s)) :cons)
+      (car (erl-val-cons->lst (erl-state->in s)))
+      (not (cdr (erl-val-cons->lst (erl-state->in s))))
+      (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
+
+      ; the first (and only) argument is greater than or equal to 0.
+      (natp x)
+      (equal (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) x)
+      
+      ; Let's assume the result is well-formed
+      (wf-state-p (apply-k s (cons k nil))))
+    (equal
+      (erl-state->in (apply-k s (cons k nil)))
+      (make-erl-val-integer 
+        :val (sum x))))
+  :do-not-induct t
+  :disable apply-k-of-sum
+  :use (:instance apply-k-of-sum (s s) (k k))
+)
+
+
+(defrule cfs 
+  (implies (natp n) (equal (sum n) (/ (* n (+ n 1)) 2)))
+    :enable sum)
+
+(defrule apply-k-of-sum-closed-form
+  (implies 
+    (and
+      (equal (* 8 (+ x 2)) (erl-k->fuel k))
+      ; the module and the world are correct
+      (equal (erl-state->world s) (sum-test-w))
+      (equal (erl-state->module s) 'local)
+      
+      ; the next continuation is a call to [sum]
+      (equal (kont-kind (erl-k->kont k)) :local-call)
+      (equal (kont-local-call->call (erl-k->kont k)) 'sum)
+      
+      ; the arguments are well-formed
+      (wf-state-p s)
+      (equal (erl-val-kind (erl-state->in s)) :cons)
+      (car (erl-val-cons->lst (erl-state->in s)))
+      (not (cdr (erl-val-cons->lst (erl-state->in s))))
+      (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
+
+      ; the first (and only) argument is greater than or equal to 0.
+      (natp x)
+      (equal (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) x)
+      
+      ; Let's assume the result is well-formed
+      (wf-state-p (apply-k s (cons k nil))))
+    (equal
+      (erl-state->in (apply-k s (cons k nil)))
+      (make-erl-val-integer 
+        :val  (/ (* x (+ x 1)) 2))))
+  :do-not-induct t
+  :disable apply-k-of-sum-2
+  :use (:instance apply-k-of-sum-2 (s s) (k k))
+)

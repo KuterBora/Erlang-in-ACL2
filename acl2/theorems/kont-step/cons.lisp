@@ -377,19 +377,30 @@
   :disable apply-k-of-expr-cons-1
   :use (:instance apply-k-of-expr-cons-1))
 
-(defrule cons-tl-well-formed
+(skip-proofs
+  (defrule cons-hd-well-formed-new
   (implies
-    (and (> (erl-k->fuel k) 3)
-         (wf-state-p (apply-k s (cons k nil)))
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
+    (wf-state-p
+      (apply-k s (list (make-erl-k 
+                         :fuel (1- (erl-k->fuel k)) 
+                         :kont (make-kont-expr 
+                                 :expr (node-cons->hd (kont-expr->expr (erl-k->kont k))))))))))
+)
+
+(skip-proofs
+(defrule cons-tl-well-formed-new
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
     (wf-state-p
       (apply-k s (list (make-erl-k 
                          :fuel (+ -2 (erl-k->fuel k)) 
                          :kont (make-kont-expr 
-                                 :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))))
-  :disable (apply-k-of-expr-cons-1 apply-k-of-expr-cons-2)
-  :use (:instance apply-k-of-expr-cons-2))
+                                 :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))))))
 
 (local (defrule apply-k-of-expr-cons-not-cons
   (implies
@@ -524,3 +535,37 @@
                                                    :fuel (1- (erl-k->fuel k))
                                                    :kont (make-kont-expr 
                                                            :expr (node-cons->hd (kont-expr->expr (erl-k->kont k)))))))))))))
+(skip-proofs
+(defrule apply-k-of-expr-cons-wf1
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
+    (equal (apply-k s (cons k nil))
+           (update-erl-state->in-bind
+             (apply-k s (list (make-erl-k 
+                                :fuel (+ -2 (erl-k->fuel k)) 
+                                :kont (make-kont-expr 
+                                        :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))
+             
+             (make-erl-val-cons
+               :lst
+                (cons (erl-state->in (apply-k s (list (make-erl-k
+                                                        :fuel (1- (erl-k->fuel k))
+                                                        :kont (make-kont-expr 
+                                                                :expr (node-cons->hd (kont-expr->expr (erl-k->kont k))))))))
+                      (erl-val-cons->lst
+                        (erl-state->in (apply-k s (list (make-erl-k
+                                                          :fuel (+ -2 (erl-k->fuel k)) 
+                                                          :kont (make-kont-expr 
+                                                                  :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))))))
+             (omap::update*
+               (erl-state->bind (apply-k s (list (make-erl-k 
+                                                   :fuel (+ -2 (erl-k->fuel k)) 
+                                                   :kont (make-kont-expr 
+                                                           :expr (node-cons->tl (kont-expr->expr (erl-k->kont k))))))))
+               (erl-state->bind (apply-k s (list (make-erl-k 
+                                                   :fuel (1- (erl-k->fuel k))
+                                                   :kont (make-kont-expr 
+                                                           :expr (node-cons->hd (kont-expr->expr (erl-k->kont k)))))))))))))
+)

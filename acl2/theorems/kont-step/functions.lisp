@@ -42,14 +42,21 @@
 
 ; apply-k when wf --------------------------------------------------------------
 
+; todo: may need the fuel crock
 (defrule apply-k-of-function-return-wf
   (implies
     (and (wf-state-p (apply-k s (cons k nil)))
-         (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :function-return))
-    (equal (apply-k s (cons k nil))
+    (equal (apply-k s (list k))
            (update-erl-state->bind-mod
              s
              (kont-function-return->bind (erl-k->kont k))
              (kont-function-return->module (erl-k->kont k)))))
+)
+
+(defrule apply-k-of-function-return-wf-2
+  (implies
+    (and (wf-state-p (apply-k s (cons k nil)))
+         (equal (kont-kind (erl-k->kont k)) :function-return))
+    (wf-state-p s))
   :enable apply-k-of-step)
