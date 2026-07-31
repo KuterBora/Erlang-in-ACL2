@@ -1,28 +1,45 @@
 (in-package "ACL2")
-(include-book "../core/eval-theorems")
+(include-book "../core/top")
+(include-book "../state/top")
 
 ; Function Return Kont-Step ----------------------------------------------------
 
+; eval-k -----------------------------------------------------------------------
+
 (defrule eval-k-of-function-return->klst
   (implies
-    (and (erl-k-p k)
-         (equal (kont-kind (erl-k->kont k)) :function-return))
+    (equal (kont-kind (erl-k->kont k)) :function-return)
     (equal (erl-s-klst->klst (eval-k k s)) nil))
   :enable eval-k)
 
 (defrule eval-k-of-function-return->s
   (implies
-    (and (erl-state-p s) 
-         (erl-k-p k)
+    (and (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :function-return))
     (equal
       (erl-s-klst->s (eval-k k s))
-      (cond 
-        ((not (wf-state-p s)) s)
-        ((not (> (erl-k->fuel k) 0)) 
-          (update-erl-state->in s (make-erl-val-flimit)))
-        (t (update-erl-state->bind-mod
-          s 
-          (kont-function-return->bind (erl-k->kont k))
-          (kont-function-return->module (erl-k->kont k)))))))
+      (update-erl-state->bind-mod
+        s
+        (kont-function-return->bind (erl-k->kont k))
+        (kont-function-return->module (erl-k->kont k)))))
   :enable eval-k)
+
+
+; apply-k ----------------------------------------------------------------------
+
+(defrule apply-k-of-function-return
+  (implies
+    (and (wf-state-p s)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :function-return))
+    (equal (apply-k s (cons k nil))
+           (update-erl-state->bind-mod
+             s
+             (kont-function-return->bind (erl-k->kont k))
+             (kont-function-return->module (erl-k->kont k)))))
+  :enable apply-k-of-step)
+
+
+; apply-k when wf --------------------------------------------------------------
+
+; no need

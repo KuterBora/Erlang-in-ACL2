@@ -1,15 +1,15 @@
 (in-package "ACL2")
-(include-book "eval-theorems")
+(include-book "../../eval/top")
 
 (set-induction-depth-limit 1)
 
 ; Fuel Theorems ----------------------------------------------------------------
 
 ; The following theorems show that if evaluating a value and klst terminates
-; without fault, then increasing the fuel of the continuations will not change the result.
-; It is easier, and more elegant, for ACL2 to prove this for the more general case where 
-; each k in the klst is given more fuel, rather than, for example, increasing the fuel of
-; only the first k. This is why increase-fuel and the corresponding theorems are defined.
+; without fault, then increasing the fuel of the continuations will not change the result
+; of evaluation. It is easier, and more elegant, for ACL2 to prove this for the more general
+; case where each k in the klst is given more fuel, rather than, for example, only the first k.
+; This is why increase-fuel and the corresponding theorems are defined.
 
 ; Increase the fuel of each continuation in klst by n.
 (define increase-fuel ((klst erl-klst-p) (n natp))
@@ -61,11 +61,11 @@
            (apply-k s klst)))
   :enable (apply-k increase-fuel)
   :disable (increase-fuel-is-distributive-over-append
-            more-fuel-is-good-for-eval apply-k-of-step apply-k-of-consp)
+            more-fuel-is-good-for-eval)
   :expand (apply-k s (cons (erl-k (+ n (erl-k->fuel (car klst)))
                                    (erl-k->kont (car klst)))
                             (increase-fuel (cdr klst) n)))
-  :hints (("Subgoal *1/8'''"
+  :hints (("Subgoal *1/5''"
       :use ((:instance increase-fuel-is-distributive-over-append
               (s s)
               (rest (cdr klst))
