@@ -86,37 +86,6 @@
      eval-guard eval-guard-expr eval-bif apply-erl-binop
      apply-erl-comp-binop erl-compare))
 
-
-
-; Base case of calling apply-k with sum
-(defrule apply-k-of-sum-base-case
-  (implies 
-    (and
-      (wf-state-p s)
-      (> (erl-k->fuel k) 5)
-
-      ; the module and the world are correct
-      (equal (erl-state->world s) (sum-test-w))
-      (equal (erl-state->module s) 'local)
-      
-      ; the next continuation is a call to [sum]
-      (equal (kont-kind (erl-k->kont k)) :local-call)
-      (equal (kont-local-call->call (erl-k->kont k)) 'sum)
-      
-      ; the arguments are well-formed
-      (equal (erl-val-kind (erl-state->in s)) :cons)
-      (car (erl-val-cons->lst (erl-state->in s)))
-      (not (cdr (erl-val-cons->lst (erl-state->in s))))
-      (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
-
-      ; the first (and only) argument is 0
-      (equal (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) 0))
-
-    (equal (erl-state->in (apply-k s (list k)))
-           (erl-val-integer 0)))
-  :use ((:instance apply-k-of-local-call-when-match)))
-
-
 ; Induction schema for apply-k-of-sum
 (local (define apply-k-of-sum-induct (args k)
   (declare (irrelevant k))
@@ -147,37 +116,103 @@
             (ERL-K (+ -5 (ERL-K->FUEL K))
                         '(:LOCAL-CALL SUM)))))))
 
-(local (defrule fuel-crock
-  (implies
-    (wf-state-p (apply-k s (cons k nil)))
-    (> (erl-k->fuel k) 0))
-  :enable apply-k))
-
-(local (defrule fuel-crock-rev
-  (implies
-    (<= (erl-k->fuel k) 0)
-    (not (wf-state-p (apply-k s (cons k nil)))))
-  :enable apply-k))
 
 
 
-(defrule crock-1
-  (implies
-    (and (not (wf-state-p s)) (equal (erl-val-kind v) :integer))
-    (equal (apply-erl-binop op v (erl-state->in s)) (erl-state->in s)))
-    :enable (wf-state-p apply-erl-binop erl-val-kind))
+(in-theory (disable
+  APPLY-K-OF-EXPR-LOCAL-CALL-WF
+  APPLY-K-OF-EXPR-CONS-WF
+  APPLY-K-OF-EXPR-BINOP-WF
+  APPLY-K-OF-FUNCTION-RETURN-WF-2
+  APPLY-K-OF-LOCAL-CALL-BAD-ARGS
+  APPLY-K-OF-CONS-MERGE-COMPATIBLE
+  APPLY-K-OF-CONS-MERGE-INCOMPATIBLE
+  APPLY-K-OF-CONS-MERGE-WHEN-NOT-CONS
+  APPLY-K-OF-EXPR-CONS-1
+  APPLY-K-OF-EXPR-BINOP-1
+  APPLY-K-OF-EXPRS-WF
+  APPLY-K-OF-EXPR-BINOP-WHEN-LEFT-BAD
+  
+  APPLY-K-OF-EXPR-BINOP-2-WHEN-LEFT-BAD
+  APPLY-K-OF-EXPR-CONS-2
 
-(defrule crock-2
-  (implies
-    (and (wf-state-p s) (equal (erl-val-kind v) :integer))
-    (wf-state-p
-      (UPDATE-ERL-STATE->BIND
-          (UPDATE-ERL-STATE->IN S
-                                v)
-          (OMAP::UPDATE 'X v NIL)))))
+  APPLY-K-OF-FUNCTION-RETURN-WF
+  APPLY-K-OF-EXPRS-NIL-WF
+
+   APPLY-K-OF-EXPR-BINOP-WHEN-RIGHT-BAD
+
+
+   APPLY-K-OF-EXPR-FUN APPLY-K-OF-STRING APPLY-K-OF-EXPR-ATOM
+   APPLY-K-OF-EXPR-FUN-WF APPLY-K-OF-STRING-WF APPLY-K-OF-EXPR-ATOM-WF
+  APPLY-K-OF-EXPR-ATOM-WF
+
+  APPLY-K-OF-EXPR-CONS-NOT-CONS APPLY-K-OF-EXPR-CONS-INCOMPATIBLE
+  APPLY-K-OF-EXPR-BINOP-INCOMPATIBLE WF-STATE-P-OF-REJECT
+  APPLY-ERL-BINOP-OF-EXCPT APPLY-ERL-BINOP-OF-FLIMIT-2
+  APPLY-K-OF-NOT-CONSP
+
+  DEFAULT-<-2 DEFAULT-<-1
+
+
+  ERL-VAL-P-WHEN-ERL-FUN-P-REWRITE
+
+  (:TYPE-PRESCRIPTION NFIX)
+
+  APPLY-K-OF-EXPR-NIL-WF
+  APPLY-K-OF-EXPR-VAR-WF
+  APPLY-K-OF-EXPR-INTEGER-WF
+
+))
+
+; Base case of calling apply-k with sum
+(defrule apply-k-of-sum-base-case
+  (implies 
+    (and
+      (wf-state-p s)
+      (> (erl-k->fuel k) 5)
+
+      ; the module and the world are correct
+      (equal (erl-state->world s) (sum-test-w))
+      (equal (erl-state->module s) 'local)
+      
+      ; the next continuation is a call to [sum]
+      (equal (kont-kind (erl-k->kont k)) :local-call)
+      (equal (kont-local-call->call (erl-k->kont k)) 'sum)
+      
+      ; the arguments are well-formed
+      (equal (erl-val-kind (erl-state->in s)) :cons)
+      (car (erl-val-cons->lst (erl-state->in s)))
+      (not (cdr (erl-val-cons->lst (erl-state->in s))))
+      (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
+
+      ; the first (and only) argument is 0
+      (equal (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) 0))
+
+    (equal (erl-state->in (apply-k s (list k)))
+           (erl-val-integer 0)))
+  :use ((:instance apply-k-of-local-call-when-match)))
 
 
 
+
+; (local (defrule fuel-crock
+;   (implies
+;     (wf-state-p (apply-k s (cons k nil)))
+;     (> (erl-k->fuel k) 0))
+;   :enable apply-k))
+
+; (local (defrule fuel-crock-rev
+;   (implies
+;     (<= (erl-k->fuel k) 0)
+;     (not (wf-state-p (apply-k s (cons k nil)))))
+;   :enable apply-k))
+
+
+
+; steps: 105791
+;         69984
+;         56981
+;         36646
 (defrule help-crock
   (implies 
     (and
@@ -224,6 +259,13 @@
     ("Goal" :use ((:instance apply-k-of-local-call-when-match-wf)))))
 
 
+
+
+
+
+; 119083
+; 117962
+
 (defrule help-crock-2
   (implies 
     (and
@@ -269,8 +311,7 @@
               (LIST (ERL-K (+ -5 (ERL-K->FUEL K))
                           '(:LOCAL-CALL SUM))))))))
   
-  :disable help-crock
-
+  :disable (help-crock apply-k-of-sum-base-case)
   :cases ((omap::compatiblep
           (erl-state->bind (APPLY-K
                 (UPDATE-ERL-STATE->BIND
@@ -292,8 +333,8 @@
 
   :hints (
     ("Goal" :use ((:instance apply-k-of-local-call-when-match)
-                  (:instance help-crock)))))
-
+                  (:instance help-crock)))
+    ))
 
 
 
@@ -373,7 +414,7 @@
   :use (:instance apply-k-of-sum (s s) (k k))
 )
 
-
+(include-book "arithmetic/top" :dir :system)
 (defrule cfs 
   (implies (natp n) (equal (sum n) (/ (* n (+ n 1)) 2)))
     :enable sum)
@@ -391,13 +432,11 @@
       (equal (kont-local-call->call (erl-k->kont k)) 'sum)
       
       ; the arguments are well-formed
-      (wf-state-p s)
-      (equal (erl-val-kind (erl-state->in s)) :cons)
       (car (erl-val-cons->lst (erl-state->in s)))
       (not (cdr (erl-val-cons->lst (erl-state->in s))))
       (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
 
-      ; the first (and only) argument is greater than or equal to 0.
+      ; the first (and only) argument is a natp
       (natp x)
       (equal (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s)))) x)
       
@@ -407,7 +446,5 @@
       (erl-state->in (apply-k s (cons k nil)))
       (make-erl-val-integer 
         :val  (/ (* x (+ x 1)) 2))))
-  :do-not-induct t
   :disable apply-k-of-sum-2
-  :use (:instance apply-k-of-sum-2 (s s) (k k))
-)
+  :use (:instance apply-k-of-sum-2 (s s) (k k)))

@@ -116,7 +116,7 @@
 
 ; apply-k  ---------------------------------------------------------------------
 
-(local (defrule apply-k-of-expr-binop-1
+(defrule apply-k-of-expr-binop-1
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 0)
@@ -150,9 +150,9 @@
           :kont 
             (make-kont-expr 
               :expr
-                (node-binop->left (kont-expr->expr (erl-k->kont k)))))))))
+                (node-binop->left (kont-expr->expr (erl-k->kont k))))))))
 
-(local (defruled apply-k-of-binop-expr1
+(defruled apply-k-of-binop-expr1
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 0)
@@ -179,9 +179,9 @@
       (k (make-erl-k
             :fuel (1- (erl-k->fuel k))
             :kont (make-kont-expr
-                    :expr (kont-binop-expr1->right (erl-k->kont k))))))))
+                    :expr (kont-binop-expr1->right (erl-k->kont k)))))))
 
-(local (defrule apply-k-of-expr-binop-2
+(defrule apply-k-of-expr-binop-2
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 2)
@@ -232,9 +232,9 @@
       (k (make-erl-k
            :fuel (+ -2 (erl-k->fuel k))
            :kont (make-kont-expr
-                    :expr (node-binop->right (kont-expr->expr (erl-k->kont k)))))))))
+                    :expr (node-binop->right (kont-expr->expr (erl-k->kont k))))))))
 
-(local (defrule apply-k-of-expr-binop-2-when-left-bad
+(defrule apply-k-of-expr-binop-2-when-left-bad
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 2)
@@ -252,9 +252,9 @@
                             :fuel (1- (erl-k->fuel k))
                             :kont (make-kont-expr
                                     :expr (node-binop->left
-                                            (kont-expr->expr (erl-k->kont k)))))))))))
+                                            (kont-expr->expr (erl-k->kont k))))))))))
 
-(local (defrule apply-k-of-binop-expr2-compatible
+(defrule apply-k-of-binop-expr2-compatible
   (implies
     (and (wf-state-p s)
          (omap::compatiblep 
@@ -272,9 +272,9 @@
                 (omap::update*
                   (erl-state->bind s)
                   (kont-binop-expr2->left-bind (erl-k->kont k))))))
-  :enable apply-k-of-step))
+  :enable apply-k-of-step)
 
-(local (defrule apply-k-of-binop-expr2-incompatible
+(defrule apply-k-of-binop-expr2-incompatible
   (implies
     (and (wf-state-p s)
          (not (omap::compatiblep 
@@ -290,7 +290,7 @@
                     :class (make-err-class-error)
                     :reason (make-exit-reason-badmatch
                               :val (erl-state->in s)))))))
-  :enable apply-k-of-step))
+  :enable apply-k-of-step)
 
 (defrule apply-k-of-expr-binop
   (implies
@@ -389,7 +389,7 @@
     (> (erl-k->fuel k) 0))
   :enable apply-k))
 
-(local (defrule apply-k-of-binop-has-enough-fuel-when-wf-1
+(defrule apply-k-of-binop-has-enough-fuel-when-wf-1
   (implies
     (and (wf-state-p (apply-k s (cons k nil)))
          (equal (kont-kind (erl-k->kont k)) :expr)
@@ -400,7 +400,7 @@
         (:instance fuel-crock
           (s s)
           (k (erl-k (+ -1 (erl-k->fuel k))
-                          (kont-expr (node-binop->left (kont-expr->expr (erl-k->kont k))))))))))
+                          (kont-expr (node-binop->left (kont-expr->expr (erl-k->kont k)))))))))
 
 (defrule binop-left-well-formed
   (implies
@@ -444,7 +444,7 @@
   :disable (apply-k-of-expr-binop-1 apply-k-of-expr-binop-2 APPLY-K-OF-EXPR-BINOP-WHEN-RIGHT-BAD)
   :use (:instance apply-k-of-expr-binop-2))
 
-(local (defrule apply-k-of-expr-binop-incompatible
+(defrule apply-k-of-expr-binop-incompatible
   (implies
     (and
       (wf-state-p s)
@@ -477,7 +477,7 @@
     (not (wf-state-p (apply-k s (cons k nil)))))
     :disable (apply-k-of-binop-has-enough-fuel-when-wf-2
               binop-right-well-formed
-              binop-left-well-formed)))
+              binop-left-well-formed))
 
 (defrule binop-compatible
   (implies
