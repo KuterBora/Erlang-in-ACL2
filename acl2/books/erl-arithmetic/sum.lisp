@@ -101,68 +101,20 @@
       (if (= (erl-val-integer->val 
                 (car (erl-val-cons->lst (erl-state->in args)))) 0)
           t
-          (APPLY-K-of-sum-induct
-            (UPDATE-ERL-STATE->BIND
-              (UPDATE-ERL-STATE->IN
+          (apply-k-of-sum-induct
+            (update-erl-state->bind
+              (update-erl-state->in
                 args
-                (ERL-VAL-CONS
-                  (LIST (ERL-VAL-INTEGER
+                (erl-val-cons
+                  (list (erl-val-integer
                               (+ -1
-                                (ERL-VAL-INTEGER->VAL
-                                      (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN args)))))))))
-              (OMAP::UPDATE 'X
-                            (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN args)))
-                            NIL))
-            (ERL-K (+ -5 (ERL-K->FUEL K))
-                        '(:LOCAL-CALL SUM)))))))
-
-
-
-
-(in-theory (disable
-  APPLY-K-OF-EXPR-LOCAL-CALL-WF
-  APPLY-K-OF-EXPR-CONS-WF
-  APPLY-K-OF-EXPR-BINOP-WF
-  APPLY-K-OF-FUNCTION-RETURN-WF-2
-  APPLY-K-OF-LOCAL-CALL-BAD-ARGS
-  APPLY-K-OF-CONS-MERGE-COMPATIBLE
-  APPLY-K-OF-CONS-MERGE-INCOMPATIBLE
-  APPLY-K-OF-CONS-MERGE-WHEN-NOT-CONS
-  APPLY-K-OF-EXPR-CONS-1
-  APPLY-K-OF-EXPR-BINOP-1
-  APPLY-K-OF-EXPRS-WF
-  APPLY-K-OF-EXPR-BINOP-WHEN-LEFT-BAD
-  
-  APPLY-K-OF-EXPR-BINOP-2-WHEN-LEFT-BAD
-  APPLY-K-OF-EXPR-CONS-2
-
-  APPLY-K-OF-FUNCTION-RETURN-WF
-  APPLY-K-OF-EXPRS-NIL-WF
-
-   APPLY-K-OF-EXPR-BINOP-WHEN-RIGHT-BAD
-
-
-   APPLY-K-OF-EXPR-FUN APPLY-K-OF-STRING APPLY-K-OF-EXPR-ATOM
-   APPLY-K-OF-EXPR-FUN-WF APPLY-K-OF-STRING-WF APPLY-K-OF-EXPR-ATOM-WF
-  APPLY-K-OF-EXPR-ATOM-WF
-
-  APPLY-K-OF-EXPR-CONS-NOT-CONS APPLY-K-OF-EXPR-CONS-INCOMPATIBLE
-  APPLY-K-OF-EXPR-BINOP-INCOMPATIBLE WF-STATE-P-OF-REJECT
-  APPLY-ERL-BINOP-OF-EXCPT APPLY-ERL-BINOP-OF-FLIMIT-2
-  APPLY-K-OF-NOT-CONSP
-
-  DEFAULT-<-2 DEFAULT-<-1
-
-
-  ERL-VAL-P-WHEN-ERL-FUN-P-REWRITE
-
-  (:TYPE-PRESCRIPTION NFIX)
-
-  APPLY-K-OF-EXPR-NIL-WF
-  APPLY-K-OF-EXPR-VAR-WF
-  APPLY-K-OF-EXPR-INTEGER-WF
-
-))
+                                (erl-val-integer->val
+                                      (car (erl-val-cons->lst (erl-state->in args)))))))))
+              (omap::update 'x
+                            (car (erl-val-cons->lst (erl-state->in args)))
+                            nil))
+            (erl-k (+ -5 (erl-k->fuel k))
+                        '(:local-call sum)))))))
 
 ; Base case of calling apply-k with sum
 (defrule apply-k-of-sum-base-case
@@ -192,30 +144,13 @@
            (erl-val-integer 0)))
   :use ((:instance apply-k-of-local-call-when-match)))
 
-
-
-
-; (local (defrule fuel-crock
-;   (implies
-;     (wf-state-p (apply-k s (cons k nil)))
-;     (> (erl-k->fuel k) 0))
-;   :enable apply-k))
-
-; (local (defrule fuel-crock-rev
-;   (implies
-;     (<= (erl-k->fuel k) 0)
-;     (not (wf-state-p (apply-k s (cons k nil)))))
-;   :enable apply-k))
-
-
-
-; steps: 105791
-;         69984
-;         56981
-;         36646
-(defrule help-crock
+; If evaluation does not fail, nor will evaluating the next the recursive call.
+; Remark: the reason this theorem takes so many steps seems to be case splits caused by nfix.
+; one way to solve this might be to disable nfix initially, and only expand it when needed.
+(defrule inductive-step-is-wf
   (implies 
     (and
+      ; there is enough fuel to step to the next recuirsive call
       (< 8 (erl-k->fuel k))
 
       ; the module and the world are correct
@@ -238,35 +173,26 @@
       ; Let's assume the result is well-formed
       (wf-state-p (apply-k s (cons k nil))))
     (wf-state-p
-       (APPLY-K
-        (UPDATE-ERL-STATE->BIND
-        (UPDATE-ERL-STATE->IN
-          S
-          (ERL-VAL-CONS
-            (LIST (ERL-VAL-INTEGER
-                        (+ -1
-                          (ERL-VAL-INTEGER->VAL
-                                (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))))))))
-        (OMAP::UPDATE 'X
-                      (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
-                      NIL))
-        (LIST (ERL-K (+ -5 (ERL-K->FUEL K))
-                    '(:LOCAL-CALL SUM))))
-       ))
+       (apply-k
+        (update-erl-state->bind
+          (update-erl-state->in
+            s
+            (erl-val-cons
+              (list (erl-val-integer
+                          (+ -1
+                            (erl-val-integer->val
+                                  (car (erl-val-cons->lst (erl-state->in s)))))))))
+          (omap::update 'x
+                        (car (erl-val-cons->lst (erl-state->in s)))
+                        nil))
+        (list (erl-k (+ -5 (erl-k->fuel k))
+                    '(:local-call sum))))))
+  :use ((:instance apply-k-of-local-call-when-match-wf)))
 
-  
-  :hints (
-    ("Goal" :use ((:instance apply-k-of-local-call-when-match-wf)))))
-
-
-
-
-
-
-; 119083
-; 117962
-
-(defrule help-crock-2
+; Evaluating the call until the next recursive call will produce the following term.
+; Remark: the reason this theorem takes so many steps seems to be case splits caused by nfix.
+; one way to solve this might be to disable nfix initially, and only expand it when needed.
+(defrule inductive-step-up-to-next-recursive-call
   (implies 
     (and
       (< 8 (erl-k->fuel k))
@@ -292,62 +218,58 @@
       ; Let's assume the result is well-formed
       (wf-state-p (apply-k s (cons k nil))))
     (equal (erl-state->in (apply-k s (cons k nil)))
-          (APPLY-ERL-BINOP
-            '+
-            (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
-            (erl-state->in
-              (APPLY-K
-              (UPDATE-ERL-STATE->BIND
-              (UPDATE-ERL-STATE->IN
-                S
-                (ERL-VAL-CONS
-                  (LIST (ERL-VAL-INTEGER
-                              (+ -1
-                                (ERL-VAL-INTEGER->VAL
-                                      (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))))))))
-              (OMAP::UPDATE 'X
-                            (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
-                            NIL))
-              (LIST (ERL-K (+ -5 (ERL-K->FUEL K))
-                          '(:LOCAL-CALL SUM))))))))
+           (apply-erl-binop
+              '+
+              (car (erl-val-cons->lst (erl-state->in s)))
+              (erl-state->in
+                (apply-k
+                  (update-erl-state->bind
+                    (update-erl-state->in
+                      s
+                      (erl-val-cons
+                        (list (erl-val-integer
+                                (+ -1
+                                  (erl-val-integer->val
+                                        (car (erl-val-cons->lst (erl-state->in s)))))))))
+                    (omap::update 'x
+                                  (car (erl-val-cons->lst (erl-state->in s)))
+                                  nil))
+                  (list (erl-k (+ -5 (erl-k->fuel k))
+                               '(:local-call sum))))))))
   
-  :disable (help-crock apply-k-of-sum-base-case)
+  :disable (inductive-step-is-wf apply-k-of-sum-base-case)
+  
+; this case split can be removed by proving a lemma regarding
+; how a function call does not introduce any new bindings once it returns.
+; -- If the bindings are equal, they are obviously compatible.
   :cases ((omap::compatiblep
-          (erl-state->bind (APPLY-K
-                (UPDATE-ERL-STATE->BIND
-                (UPDATE-ERL-STATE->IN
-                  S
-                  (ERL-VAL-CONS
-                  (LIST (ERL-VAL-INTEGER
+            (erl-state->bind
+              (apply-k
+                (update-erl-state->bind
+                  (update-erl-state->in
+                    s
+                    (erl-val-cons
+                      (list (erl-val-integer
                               (+ -1
-                                (ERL-VAL-INTEGER->VAL
-                                      (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))))))))
-                (OMAP::UPDATE 'X
-                              (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
-                              NIL))
-                (LIST (ERL-K (+ -5 (ERL-K->FUEL K))
-                            '(:LOCAL-CALL SUM)))))
-        (OMAP::UPDATE 'X
-            (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
-            NIL)))
+                                (erl-val-integer->val
+                                      (car (erl-val-cons->lst (erl-state->in s)))))))))
+                  (omap::update 'x
+                                (car (erl-val-cons->lst (erl-state->in s)))
+                                nil))
+                (list (erl-k (+ -5 (erl-k->fuel k))
+                            '(:local-call sum)))))
+            (omap::update 'x
+                (car (erl-val-cons->lst (erl-state->in s)))
+                nil)))
 
-  :hints (
-    ("Goal" :use ((:instance apply-k-of-local-call-when-match)
-                  (:instance help-crock)))
-    ))
+  :hints (("Goal" :use ((:instance apply-k-of-local-call-when-match)
+                        (:instance inductive-step-is-wf)))))
 
-
-
-
-
-
-
-
-
-
+; Erlang sum is equivalent to the ACL2 sum, if evaluation succeeds.
 (defrule apply-k-of-sum
   (implies 
     (and
+      ; there is enough fuel for each recursive call
       (< (* 8 (+ 1 (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s))))))
          (erl-k->fuel k))
       ; the module and the world are correct
@@ -379,8 +301,8 @@
   :induct (apply-k-of-sum-induct s k)
   :in-theory (enable sum))
 
-
-(defrule apply-k-of-sum-2
+; helper to simplify the above theorem (just replaces the argument with x).
+(defrule apply-k-of-sum-of-x
   (implies 
     (and
       (equal (* 8 (+ x 2)) (erl-k->fuel k))
@@ -411,12 +333,14 @@
         :val (sum x))))
   :do-not-induct t
   :disable apply-k-of-sum
-  :use (:instance apply-k-of-sum (s s) (k k))
-)
+  :use (:instance apply-k-of-sum (s s) (k k)))
 
+
+; We can now use the existing ACL2 arithemtic books to reason about the sum function!
 (include-book "arithmetic/top" :dir :system)
+
 (defrule cfs 
-  (implies (natp n) (equal (sum n) (/ (* n (+ n 1)) 2)))
+    (implies (natp n) (equal (sum n) (/ (* n (+ n 1)) 2)))
     :enable sum)
 
 (defrule apply-k-of-sum-closed-form
@@ -446,5 +370,5 @@
       (erl-state->in (apply-k s (cons k nil)))
       (make-erl-val-integer 
         :val  (/ (* x (+ x 1)) 2))))
-  :disable apply-k-of-sum-2
-  :use (:instance apply-k-of-sum-2 (s s) (k k)))
+  :disable apply-k-of-sum-of-x
+  :use (:instance apply-k-of-sum-of-x))

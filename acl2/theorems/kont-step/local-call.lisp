@@ -130,18 +130,6 @@
                     :expr (node-call->args
                             (kont-expr->expr (erl-k->kont k))))))))
 
-(defrule apply-k-of-local-call-bad-args
-  (implies
-    (and (wf-state-p s)
-         (not (equal (erl-val-kind (erl-state->in s)) :cons))
-         (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :local-call))
-    (equal (apply-k s (cons k nil))
-           (update-erl-state->in 
-             s
-             (make-erl-val-reject :err "Local call: invalid arg list."))))
-  :enable apply-k-of-step)
-
 (defruled apply-k-of-local-call-no-match
   (implies
     (and (wf-state-p s)
@@ -236,43 +224,6 @@
   :disable (apply-k-of-expr-local-call)
   :use (:instance apply-k-of-expr-local-call))
 
-(defrule expr-local-call-args-are-cons-when-wf
-  (implies
-    (and (wf-state-p (apply-k s (cons k nil)))
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
-    (equal
-      (erl-val-kind
-        (erl-state->in (apply-k s (list (make-erl-k
-                         :fuel (1- (erl-k->fuel k))
-                         :kont (make-kont-expr
-                                 :expr (node-call->args
-                                         (kont-expr->expr (erl-k->kont k)))))))))
-        :cons))
-  :disable (apply-k-of-expr-local-call expr-local-call-has-enough-fuel-when-wf)
-  :use ((:instance apply-k-of-expr-local-call)
-        (:instance expr-local-call-has-enough-fuel-when-wf)))
-
-(defrule apply-k-of-expr-local-call-wf
-  (implies
-    (and (wf-state-p (apply-k s (cons k nil)))
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
-    (equal (apply-k s (cons k nil))
-           (apply-k
-             (apply-k 
-               s
-               (list (make-erl-k
-                       :fuel (1- (erl-k->fuel k))
-                       :kont (make-kont-expr
-                               :expr (node-call->args
-                                       (kont-expr->expr (erl-k->kont k)))))))
-             (list (make-erl-k
-                    :fuel (1- (erl-k->fuel k))
-                    :kont (make-kont-local-call 
-                            :call (node-call->fn
-                                    (kont-expr->expr (erl-k->kont k))))))))))
-
 ; kont local call
 
 (defrule local-call-has-enough-fuel-when-wf
@@ -313,11 +264,9 @@
           (erl-val-cons->lst
             (erl-state->in s))))))
   :disable (apply-k-of-local-call-no-match
-            apply-k-of-local-call-when-match
-            apply-k-of-local-call-bad-args)
+            apply-k-of-local-call-when-match)
   :use ((:instance apply-k-of-local-call-no-match)
-        (:instance apply-k-of-local-call-when-match)
-        (:instance apply-k-of-local-call-bad-args)))
+        (:instance apply-k-of-local-call-when-match)))
 
 ; !!!!
 (defruled apply-k-of-local-call-no-match-wf
@@ -351,8 +300,7 @@
          (equal (kont-kind (erl-k->kont k)) :local-call))
      (> (erl-k->fuel k) 2))
   :disable (erl-state-of-wf-apply-k
-            fuel-crock
-            apply-k-of-exprs-wf)
+            fuel-crock)
   :use ((:instance apply-k-of-local-call-no-match)
         (:instance apply-k-of-local-call-when-match)
         (:instance fuel-crock)

@@ -119,7 +119,7 @@
 
 ; apply-k  ---------------------------------------------------------------------
 
-(defrule apply-k-of-expr-cons-1
+(local (defrule apply-k-of-expr-cons-1
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 0)
@@ -154,7 +154,7 @@
           :kont 
             (make-kont-expr 
               :expr
-                (node-cons->hd (kont-expr->expr (erl-k->kont k))))))))
+                (node-cons->hd (kont-expr->expr (erl-k->kont k)))))))))
 
 (defruled apply-k-of-cons
   (implies
@@ -186,7 +186,7 @@
               :expr
                 (kont-cons->cdr-expr (erl-k->kont k)))))))
 
-(defrule apply-k-of-expr-cons-2
+(local (defrule apply-k-of-expr-cons-2
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 2)
@@ -245,9 +245,9 @@
       (k (make-erl-k
            :fuel (+ -2 (erl-k->fuel k))
            :kont (make-kont-expr
-                    :expr (node-cons->tl (kont-expr->expr (erl-k->kont k))))))))
+                    :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))))
 
-(defrule apply-k-of-cons-merge-when-not-cons
+(local (defrule apply-k-of-cons-merge-when-not-cons
   (implies
     (and (wf-state-p s)
          (not (equal (erl-val-kind (erl-state->in s)) :cons))
@@ -258,9 +258,9 @@
              s
              (make-erl-val-reject
                :err "cons-merge expects list, pairs are not supported"))))
-  :enable apply-k-of-step)
+  :enable apply-k-of-step))
 
-(defrule apply-k-of-cons-merge-incompatible
+(local (defrule apply-k-of-cons-merge-incompatible
   (implies
     (and (wf-state-p s)
          (equal (erl-val-kind (erl-state->in s)) :cons)
@@ -278,9 +278,9 @@
                        :class (make-err-class-error)
                        :reason (make-exit-reason-badmatch
                                  :val (erl-state->in s)))))))
-  :enable apply-k-of-step)
+  :enable apply-k-of-step))
 
-(defrule apply-k-of-cons-merge-compatible
+(local (defrule apply-k-of-cons-merge-compatible
   (implies
     (and (wf-state-p s)
          (equal (erl-val-kind (erl-state->in s)) :cons)
@@ -299,7 +299,7 @@
                (erl-state->bind s)
                (kont-cons-merge->car-bind (erl-k->kont k))))))
   :enable apply-k-of-step)
-
+)
 
 (defrule apply-k-of-expr-cons
   (implies
@@ -377,9 +377,7 @@
   :disable apply-k-of-expr-cons-1
   :use (:instance apply-k-of-expr-cons-1))
 
-
-
-(defrule apply-k-of-expr-cons-not-cons
+(local (defrule apply-k-of-expr-cons-not-cons
   (implies
     (and
       (wf-state-p s)
@@ -405,28 +403,9 @@
           :cons)))
     (not (wf-state-p (apply-k s (cons k nil)))))
     :disable (apply-k-of-expr-cons-1 apply-k-of-expr-cons-2)
-    :use (:instance apply-k-of-expr-cons-2))
+    :use (:instance apply-k-of-expr-cons-2)))
 
-(defrule apply-k-of-expr-cons-is-cons-when-wf
-  (implies
-    (and (> (erl-k->fuel k) 3)
-         (wf-state-p (apply-k s (cons k nil)))
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
-    (equal
-      (erl-val-kind
-        (erl-state->in
-          (apply-k
-            s
-            (list (make-erl-k 
-                    :fuel (+ -2 (erl-k->fuel k)) 
-                    :kont (make-kont-expr 
-                            :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))))
-      :cons))
-  :disable (apply-k-of-expr-cons-1 apply-k-of-expr-cons-2 apply-k-of-expr-cons-not-cons)
-  :use (:instance apply-k-of-expr-cons-not-cons))
-
-(defrule apply-k-of-expr-cons-incompatible
+(local (defrule apply-k-of-expr-cons-incompatible
   (implies
     (and
       (wf-state-p s)
@@ -458,57 +437,4 @@
                                                  :fuel (+ -2 (erl-k->fuel k)) 
                                                  :kont (make-kont-expr 
                                                          :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))))))
-    (not (wf-state-p (apply-k s (cons k nil))))))
-
-(defrule cons-compatible
-  (implies
-    (and (> (erl-k->fuel k) 3)
-         (wf-state-p (apply-k s (cons k nil)))
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
-    (omap::compatiblep
-      (erl-state->bind (apply-k s (list (make-erl-k 
-                                          :fuel (1- (erl-k->fuel k))
-                                          :kont (make-kont-expr 
-                                                  :expr (node-cons->hd (kont-expr->expr (erl-k->kont k))))))))
-      (erl-state->bind (apply-k s (list (make-erl-k 
-                                          :fuel (+ -2 (erl-k->fuel k)) 
-                                          :kont (make-kont-expr 
-                                                  :expr (node-cons->tl (kont-expr->expr (erl-k->kont k))))))))))
-  :disable (apply-k-of-expr-cons-1 apply-k-of-expr-cons-2 apply-k-of-expr-cons-incompatible)
-  :use (:instance apply-k-of-expr-cons-incompatible))
-
-
-(defrule apply-k-of-expr-cons-wf
-  (implies
-    (and (> (erl-k->fuel k) 3)
-         (wf-state-p (apply-k s (cons k nil)))
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
-    (equal (apply-k s (cons k nil))
-           (update-erl-state->in-bind
-             (apply-k s (list (make-erl-k 
-                                :fuel (+ -2 (erl-k->fuel k)) 
-                                :kont (make-kont-expr 
-                                        :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))
-             
-             (make-erl-val-cons
-               :lst
-                (cons (erl-state->in (apply-k s (list (make-erl-k
-                                                        :fuel (1- (erl-k->fuel k))
-                                                        :kont (make-kont-expr 
-                                                                :expr (node-cons->hd (kont-expr->expr (erl-k->kont k))))))))
-                      (erl-val-cons->lst
-                        (erl-state->in (apply-k s (list (make-erl-k
-                                                          :fuel (+ -2 (erl-k->fuel k)) 
-                                                          :kont (make-kont-expr 
-                                                                  :expr (node-cons->tl (kont-expr->expr (erl-k->kont k)))))))))))
-             (omap::update*
-               (erl-state->bind (apply-k s (list (make-erl-k 
-                                                   :fuel (+ -2 (erl-k->fuel k)) 
-                                                   :kont (make-kont-expr 
-                                                           :expr (node-cons->tl (kont-expr->expr (erl-k->kont k))))))))
-               (erl-state->bind (apply-k s (list (make-erl-k 
-                                                   :fuel (1- (erl-k->fuel k))
-                                                   :kont (make-kont-expr 
-                                                           :expr (node-cons->hd (kont-expr->expr (erl-k->kont k)))))))))))))
+    (not (wf-state-p (apply-k s (cons k nil)))))))
