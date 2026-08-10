@@ -104,20 +104,20 @@
                   ; Propagate exceptions
                   ((if (equal (erl-val-kind hd) :excpt)) hd)
                   ((if (equal (erl-val-kind tl) :excpt)) tl)
-                  
+
                   ; Pairs are not supported.
                   ((unless (equal (erl-val-kind tl) :cons))
                     (make-erl-val-reject :err "Eval-Guard: tl of cons must be a list.")))
                 (make-erl-val-cons :lst (cons hd (erl-val-cons->lst tl)))))
       (:tuple (b* (; Evaluate the list.
                    (lst (eval-guard-expr x.lst s))
-                   
+
                    ; Propagate rejections.
                    ((if (equal (erl-val-kind lst) :reject)) lst)
-                    
+
                    ; Propagate exceptions.
                    ((if (equal (erl-val-kind lst) :excpt)) lst)
-   
+
                    ; Tuple must be well-formed.
                    ((if (not (equal (erl-val-kind lst) :cons)))
                     (make-erl-val-reject :err "Eval-Guard: ill-formed tuple.")))

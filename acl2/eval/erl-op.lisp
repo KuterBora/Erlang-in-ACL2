@@ -150,10 +150,6 @@
   (b* ((op (arithm-binop-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :integer) 
                (equal (erl-val-kind right) :integer)))
@@ -170,15 +166,7 @@
     ///
       (defcong arithm-binop-equiv equal (apply-erl-arithm-binop op x y) 1)
       (defcong erl-val-equiv equal (apply-erl-arithm-binop op x y) 2)
-      (defcong erl-val-equiv equal (apply-erl-arithm-binop op x y) 3)
-
-      (defrule apply-erl-arithm-binop-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (arithm-binop-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-arithm-binop op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))
-        :enable (erl-add erl-sub erl-mul erl-div erl-rem)))
+      (defcong erl-val-equiv equal (apply-erl-arithm-binop op x y) 3))
 
 ; Erlang Boolean Operations ----------------------------------------------------
 
@@ -268,10 +256,6 @@
   (b* ((op (bool-binop-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (erl-boolean-p left) (erl-boolean-p right)))
         (make-erl-val-excpt 
@@ -285,15 +269,7 @@
     ///
       (defcong bool-binop-equiv equal (apply-erl-bool-binop op x y) 1)
       (defcong erl-val-equiv equal (apply-erl-bool-binop op x y) 2)
-      (defcong erl-val-equiv equal (apply-erl-bool-binop op x y) 3)
-
-      (defrule apply-erl-bool-binop-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (bool-binop-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-bool-binop op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))
-        :enable (erl-and erl-or erl-xor)))
+      (defcong erl-val-equiv equal (apply-erl-bool-binop op x y) 3))
 
 
 ; Erlang Comparison Operators --------------------------------------------------
@@ -425,6 +401,10 @@
           ((& :none) 3)
           ((:excpt &) 3)
           ((& :excpt) 3)
+          ((:receive &) 3)
+          ((& :receive) 3)
+          ((:blocked &) 3)
+          ((& :blocked) 3)
           ((:integer :integer) 
            (let ((lv (erl-val-integer->val left))
                  (rv (erl-val-integer->val right)))
@@ -489,10 +469,6 @@
   (b* ((op (comp-binop-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        (comp (erl-compare left right))
        ((if (equal comp 3)) (make-erl-val-reject :err "erl-compare called with inavlid term.")))
       (case op
@@ -532,14 +508,7 @@
     ///
       (defcong comp-binop-equiv equal (apply-erl-comp-binop op x y) 1)
       (defcong erl-val-equiv equal (apply-erl-comp-binop op x y) 2)
-      (defcong erl-val-equiv equal (apply-erl-comp-binop op x y) 3)
-
-      (defrule apply-erl-comp-binop-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (comp-binop-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-comp-binop op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))))
+      (defcong erl-val-equiv equal (apply-erl-comp-binop op x y) 3))
 
 ; Apply Erlang List Operations -------------------------------------------------
 
@@ -571,10 +540,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :cons) 
                (equal (erl-val-kind right) :cons)))
@@ -594,10 +559,6 @@
   (b* ((op (list-op-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :cons)
                (equal (erl-val-kind right) :cons)))
@@ -611,15 +572,7 @@
     ///
       (defcong list-op-equiv equal (apply-erl-list-op op x y) 1)
       (defcong erl-val-equiv equal (apply-erl-list-op op x y) 2)
-      (defcong erl-val-equiv equal (apply-erl-list-op op x y) 3)
-
-      (defrule apply-erl-list-op-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (list-op-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-list-op op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))
-        :enable (erl-concat erl-substract)))
+      (defcong erl-val-equiv equal (apply-erl-list-op op x y) 3))
 
 
 ; Apply Erlang Binary Operations -----------------------------------------------
@@ -629,13 +582,7 @@
   :returns (v erl-val-p)
   (b* ((op (erl-binop-fix op))
        (left (erl-val-fix left))
-       (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
-       ((if (equal (erl-val-kind left) :excpt)) left)
-       ((if (equal (erl-val-kind right) :excpt)) right) )
+       (right (erl-val-fix right)))
       (cond
         ((arithm-binop-p op) (apply-erl-arithm-binop op left right))
         ((bool-binop-p op) (apply-erl-bool-binop op left right))
@@ -645,28 +592,7 @@
     ///
       (defcong erl-binop-equiv equal (apply-erl-binop op x y) 1)
       (defcong erl-val-equiv equal (apply-erl-binop op x y) 2)
-      (defcong erl-val-equiv equal (apply-erl-binop op x y) 3)
-
-      (defrule apply-erl-binop-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (erl-binop-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-binop op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))
-        :use ((:instance apply-erl-arithm-binop-of-flimit)
-              (:instance apply-erl-bool-binop-of-flimit)
-              (:instance apply-erl-comp-binop-of-flimit)
-              (:instance apply-erl-list-op-of-flimit)))
-      (defrule apply-erl-binop-of-flimit-2
-        (implies (and (erl-val-p left) (equal (erl-val-kind left) :flimit))
-                (equal (apply-erl-binop op left right) (make-erl-val-flimit))))
-      (defrule apply-erl-binop-of-excpt
-        (implies (and (erl-val-p left) 
-                      (erl-val-p right)
-                      (not (equal (erl-val-kind right) :flimit))
-                      (not (equal (erl-val-kind right) :reject))
-                      (equal (erl-val-kind left) :excpt))
-                (equal (apply-erl-binop op left right) left))))
+      (defcong erl-val-equiv equal (apply-erl-binop op x y) 3))
 
 
 ; Apply Erlang Unary Operations ------------------------------------------------
@@ -675,9 +601,7 @@
 (define apply-erl-unop ((op erl-unop-p) (val erl-val-p))
   :returns (v erl-val-p)
   (b* ((op (erl-unop-fix op))
-       (val (erl-val-fix val))
-       ((if (equal (erl-val-kind val) :flimit)) val)
-       ((if (equal (erl-val-kind val) :reject)) val))
+       (val (erl-val-fix val)))
       (case op
         (+ (erl-plus val))
         (- (erl-minus val))
@@ -685,11 +609,4 @@
         (otherwise (make-erl-val-reject :err "bad op"))))
     ///
       (defcong erl-unop-equiv equal (apply-erl-unop op x) 1)
-      (defcong erl-val-equiv equal (apply-erl-unop op x) 2)
-
-      (defrule apply-erl-unop-of-flimit
-        (implies
-          (erl-val-p val) 
-          (iff (not (equal (erl-val-kind (apply-erl-unop op val)) :flimit))
-               (not (equal (erl-val-kind val) :flimit))))
-        :enable (erl-minus erl-plus erl-not)))
+      (defcong erl-val-equiv equal (apply-erl-unop op x) 2))

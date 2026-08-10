@@ -39,12 +39,11 @@
        ; Attempt to match cases to args.
        ((erl-state ms) (match-args cases args s))
        
-       ; Propagate rejections.
-       ((if (equal (erl-val-kind ms.in) :reject)) 
-        (mv ms nil))
-       
        ; If a case fails to match, try rest of the clauses. 
        ((if (equal (erl-val-kind ms.in) :excpt)) (mv rs body))
+
+       ; Propagate rejections.
+       ((if (not (wf-state-p ms))) (mv ms nil))
        
        ; Evaluate the guard sequence.
        (guard-result (eval-guard-seq guards ms))
@@ -58,7 +57,7 @@
       
       ; Even if the chosen clause satisfies the cases and guards,
       ; ensure that there will be no rejection in the rest of the clauses.
-      ((if (equal (erl-val-kind rs.in) :reject)) (mv rs body)))
+      ((if (not (wf-state-p rs))) (mv rs nil)))
 
      ; The chosen clause satisfied the cases and guards, return its body.
      (mv ms (node-clause->body (car cls))))

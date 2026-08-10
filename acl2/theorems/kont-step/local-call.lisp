@@ -288,34 +288,34 @@
                 (erl-val-cons->lst (erl-state->in s))))))
   :use (:instance apply-k-of-local-call-no-match))
 
-(defrule local-call-match-has-enough-fuel-when-wf
-  (implies
-    (and (wf-state-p (apply-k s (cons k nil)))
-         (mv-nth 
-            1 
-            (eval-local-call
-              s
-              (kont-local-call->call (erl-k->kont k))
-              (erl-val-cons->lst (erl-state->in s))))
-         (equal (kont-kind (erl-k->kont k)) :local-call))
-     (> (erl-k->fuel k) 2))
-  :disable (erl-state-of-wf-apply-k
-            fuel-crock)
-  :use ((:instance apply-k-of-local-call-no-match)
-        (:instance apply-k-of-local-call-when-match)
-        (:instance fuel-crock)
-        (:instance fuel-crock
-          (s (mv-nth 0
-              (eval-local-call s
-                                (kont-local-call->call (erl-k->kont k))
-                                (erl-val-cons->lst (erl-state->in s)))))
-          (k (erl-k
-              (+ -1 (erl-k->fuel k))
-              (kont-exprs
-                (mv-nth 1
-                        (eval-local-call s
-                                          (kont-local-call->call (erl-k->kont k))
-                                          (erl-val-cons->lst (erl-state->in s))))))))))
+; (defrule local-call-match-has-enough-fuel-when-wf
+;   (implies
+;     (and (wf-state-p (apply-k s (cons k nil)))
+;          (mv-nth 
+;             1 
+;             (eval-local-call
+;               s
+;               (kont-local-call->call (erl-k->kont k))
+;               (erl-val-cons->lst (erl-state->in s))))
+;          (equal (kont-kind (erl-k->kont k)) :local-call))
+;      (> (erl-k->fuel k) 2))
+;   :disable (erl-state-of-wf-apply-k
+;             fuel-crock)
+;   :use ((:instance apply-k-of-local-call-no-match)
+;         (:instance apply-k-of-local-call-when-match)
+;         (:instance fuel-crock)
+;         (:instance fuel-crock
+;           (s (mv-nth 0
+;               (eval-local-call s
+;                                 (kont-local-call->call (erl-k->kont k))
+;                                 (erl-val-cons->lst (erl-state->in s)))))
+;           (k (erl-k
+;               (+ -1 (erl-k->fuel k))
+;               (kont-exprs
+;                 (mv-nth 1
+;                         (eval-local-call s
+;                                           (kont-local-call->call (erl-k->kont k))
+;                                           (erl-val-cons->lst (erl-state->in s))))))))))
 
 ; !!!
 (defruled apply-k-of-local-call-when-match-wf

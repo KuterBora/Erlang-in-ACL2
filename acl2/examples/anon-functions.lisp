@@ -2,13 +2,7 @@
 (include-book "../eval/top")
 (include-book "std/testing/assert-equal" :dir :system)
 
-; This file contains some tests for evaluating anonymous function calls.
-
-; TODO: 
-; This file probably does not have enough tests. Especially for error conditions.
-
-
-; Basic Anonymous Function -----------------------------------------------------
+; Simple Anonymous Function ----------------------------------------------------
 
 (assert-equal
   (apply-k 

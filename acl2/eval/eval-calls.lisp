@@ -84,7 +84,7 @@
                 args 
                 (omap::lookup fn module.fn-defns)
                 (update-erl-state->bind s nil)))
-             ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
+             ((if (not (wf-state-p rs))) (mv rs nil))
              ((if (null body)) 
               (mv function-clause nil)))
             (mv rs body)))
@@ -128,7 +128,7 @@
                 args
                 (omap::lookup fn imod.fn-defns)
                 (update-erl-state->bind-mod s nil 'imod-name)))
-              ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
+              ((if (not (wf-state-p rs))) (mv rs nil))
               ((if (null body)) (mv function-clause nil)))
             (mv rs body)))
 
@@ -213,7 +213,7 @@
                args
                (omap::lookup fn rmod.fn-defns)
                (update-erl-state->bind-mod s nil module)))
-             ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
+             ((if (not (wf-state-p rs))) (mv rs nil))
              ((if (null body)) (mv function-clause nil)))
             (mv rs body))))
     (mv undef nil))
@@ -302,7 +302,7 @@
           s 
           (erl-val-fun->bind fun)
           (erl-val-fun->module fun))))
-      ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
+      ((if (not (wf-state-p rs))) (mv rs nil))
       ((if (null body)) (mv function-clause nil))
 
       ; Remark: Badmatch exceptions are supposed to return the value that failed to 

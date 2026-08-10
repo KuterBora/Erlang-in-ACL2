@@ -15,6 +15,22 @@
            (apply-erl-arithm-binop op left right)))
   :enable (apply-erl-binop apply-erl-arithm-binop))
 
+(defrule appy-erl-binop-of-arithm-binop-when-error-1
+  (implies
+    (and (arithm-binop-p op)
+         (or (not (equal (erl-val-kind left) :integer))
+             (not (equal (erl-val-kind right) :integer))))
+   (not (wf-state-p (update-erl-state->in s (apply-erl-binop op left right)))))
+  :enable (apply-erl-binop apply-erl-arithm-binop))
+
+(defrule appy-erl-binop-of-arithm-binop-when-error-2
+  (implies
+    (and (arithm-binop-p op)
+         (or (not (equal (erl-val-kind left) :integer))
+             (not (equal (erl-val-kind right) :integer))))
+   (not (equal (erl-val-kind (apply-erl-arithm-binop op left right)) :receive)))
+  :enable (apply-erl-binop apply-erl-arithm-binop))
+
 ; erl-add
 (defrule apply-erl-arithm-binop-of-+
   (implies
@@ -42,4 +58,3 @@
         :val (- (erl-val-integer->val left)
                 (erl-val-integer->val right)))))
   :enable (apply-erl-arithm-binop erl-sub))
-

@@ -8,9 +8,6 @@
 ; - Unop/Binops
 ; - Variables
 ; - Match Statements
-;
-; TODO: 
-; This file probably does not have enough tests. Especially for error conditions.
 
 ; Terms ------------------------------------------------------------------------
 

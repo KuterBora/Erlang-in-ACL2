@@ -12,7 +12,7 @@
    (bind bind-p :default nil)
    (world world-p :default (omap::from-lists '(local) (list (make-module))))
    (module symbolp :default 'local)
-   (self pid-p :default 0)
+   (self pid-p :default (make-erl-val-pid :id 0))
    (outbox outbox-p :default nil)))
 
 ; Each step of the evaluator returns an erl-s-klst where
@@ -284,6 +284,11 @@
   (equal (update-erl-state->bind (update-erl-state->bind s b1) b2)
          (update-erl-state->bind s b2))
   :enable update-erl-state->bind)
+
+(defrule update-erl-state->outbox-chain
+  (equal (update-erl-state->outbox (update-erl-state->outbox s o1) o2)
+         (update-erl-state->outbox s o2))
+  :enable update-erl-state->outbox)
 
 (defrule update-erl-state->in-bind-expand
   (equal (update-erl-state->in-bind s v b)
