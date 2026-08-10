@@ -86,7 +86,7 @@
   :measure (node-count x)
   :verify-guards nil
   (b* ((x (guard-expr-fix x))
-        ((erl-state s) (erl-state-fix s)))
+       ((erl-state s) (erl-state-fix s)))
     (node-case x
       (:integer (make-erl-val-integer :val x.val))
       (:atom (make-erl-val-atom :val x.val))
@@ -152,9 +152,12 @@
              ((unless (erl-bif-p fn)) 
               (make-erl-val-reject :err "Guard expressions can only have calls to BIFs.")))
             (eval-bif fn (erl-val-cons->lst args-res) s)))
-      (:fun-call (make-erl-val-reject :err "Guard expressions can only have calls to BIFs."))))
+      (:fun-call (make-erl-val-reject :err "Guard expressions can only have calls to BIFs."))
+      (:receive (make-erl-val-reject :err "Guard expressions cannot have receive expressions."))))
   ///
-    (verify-guards eval-guard-expr))
+    (verify-guards eval-guard-expr)
+    (defcong guard-expr-equiv equal (eval-guard-expr x s) 1)
+    (defcong erl-state-equiv equal (eval-guard-expr x s) 2))
 
 
 ; Evaluate Guard Sequences -----------------------------------------------------
@@ -202,7 +205,10 @@
        ((unless (and (equal (erl-val-kind hd) :atom) 
                      (equal (erl-val-atom->val hd) 'true)))
         hd))
-      tl))
+      tl)
+  ///
+    (defcong guard-expr-list-equiv equal (eval-guard x s) 1)
+    (defcong erl-state-equiv equal (eval-guard x s) 2))
 
 ; Return '(:atom true) if there exists a guard in the sequence 
 ; that evaluates to '(:atom true). If any guard evaluates to a 
@@ -228,7 +234,10 @@
        ((if (and (equal (erl-val-kind hd) :atom) 
                  (equal (erl-val-atom->val hd) 'true)))
         hd))
-      tl))
+      tl)
+  ///
+    (defcong guard-expr-lists-equiv equal (eval-guard-seq-when-consp x s) 1)
+    (defcong erl-state-equiv equal (eval-guard-seq-when-consp x s) 2))
 
 ; If x is nil, return '(:atom true), otherwise evaluate the guard sequence.
 ; This distinction is needed because an empty guard sequence should be evaluted 
@@ -240,4 +249,7 @@
   (b* ((x (guard-expr-lists-fix x))
        (s (erl-state-fix s))
        ((if (null x)) (make-erl-val-atom :val 'true)))
-      (eval-guard-seq-when-consp x s)))
+      (eval-guard-seq-when-consp x s))
+  ///
+    (defcong guard-expr-lists-equiv equal (eval-guard-seq x s) 1)
+    (defcong erl-state-equiv equal (eval-guard-seq x s) 2))

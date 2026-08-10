@@ -52,6 +52,10 @@
          (if (equal (erl-val-kind (car args)) :integer)
              (make-erl-val-atom :val 'true)
              (make-erl-val-atom :val 'false)))
+        ((equal fn (make-fn :name 'is_pid :arity 1))
+         (if (pid-p (car args))
+             (make-erl-val-atom :val 'true)
+             (make-erl-val-atom :val 'false)))
         ((equal fn (make-fn :name 'is_tuple :arity 1))
          (if (equal (erl-val-kind (car args)) :tuple)
              (make-erl-val-atom :val 'true)
@@ -98,6 +102,7 @@
              (if (or (equal cmp 0) (equal cmp -1))
                  left
                  right)))
+        ((equal fn (make-fn :name 'self :arity 0)) (erl-state->self s))
         ((equal fn (make-fn :name 'tl :arity 1))
          (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
                             (consp (erl-val-cons->lst (car args)))))
@@ -112,4 +117,8 @@
                                     :reason (make-exit-reason-badarg))))
               (l (len (erl-val-tuple->lst (car args)))))
              (make-erl-val-integer :val l)))
-        (t (make-erl-val-reject :err "eval-bif: bad bif")))))
+        (t (make-erl-val-reject :err "eval-bif: bad bif"))))
+  ///
+    (defcong fn-equiv equal (eval-bif fn args s) 1)
+    (defcong erl-vlst-equiv equal (eval-bif fn args s) 2)
+    (defcong erl-state-equiv equal (eval-bif fn args s) 3))

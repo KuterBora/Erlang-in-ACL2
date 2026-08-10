@@ -61,7 +61,11 @@
       ((if (equal (erl-val-kind rs.in) :reject)) (mv rs body)))
 
      ; The chosen clause satisfied the cases and guards, return its body.
-     (mv ms (node-clause->body (car cls)))))
+     (mv ms (node-clause->body (car cls))))
+  ///
+    (defcong erl-vlst-equiv equal (eval-clauses-when-consp args cls s) 1)
+    (defcong erl-clause-list-equiv equal (eval-clauses-when-consp args cls s) 2)
+    (defcong erl-state-equiv equal (eval-clauses-when-consp args cls s) 3))
 
 ; This is a wrapper around eval-clauses-when-consp which does not consider the
 ; case where no clauses are passed to the evaluator initially. If the evaluator 
@@ -81,4 +85,8 @@
             s 
             (make-erl-val-reject :err "eval-clauses: clause list cannot be empty."))
           nil)))
-      (eval-clauses-when-consp args cls s)))
+      (eval-clauses-when-consp args cls s))
+  ///
+    (defcong erl-vlst-equiv equal (eval-clauses-when-consp args cls s) 1)
+    (defcong erl-clause-list-equiv equal (eval-clauses-when-consp args cls s) 2)
+    (defcong erl-state-equiv equal (eval-clauses-when-consp args cls s) 3))

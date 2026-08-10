@@ -30,7 +30,8 @@
             (equal (apply-k s (cons k kl))
                    (apply-k (erl-s-klst->s (eval-k k s))
                             (append (erl-s-klst->klst (eval-k k s)) kl))))
-          :expand ((apply-k s (cons k kl))))))))
+          :expand ((apply-k s (cons k kl)))
+          :enable wf-state-p)))))
 
 (defrule apply-k-of-append-bad
   (b* ((s1 (apply-k s0 kl1))
@@ -45,16 +46,15 @@
     (equal (apply-k s (cons k nil))
 	         (apply-k (erl-s-klst->s (eval-k k s))
 	                  (erl-s-klst->klst (eval-k k s)))))
-    :expand (apply-k s (cons k nil)))
+    :expand (apply-k s (cons k nil))
+    :enable wf-state-p)
 
 (defrule apply-k-of-kont-pair
   (equal (apply-k s (list k1 k2))
          (apply-k (apply-k s (list k1)) (list k2)))
-  :enable apply-k-of-step
-  :use ((:instance apply-k (klst (list k1 k2)))
-        (:instance apply-k-of-append
-          (s (erl-s-klst->s (eval-k k1 s)))
-          (kl1 (erl-s-klst->klst (eval-k k1 s)))
+  :use ((:instance apply-k-of-append
+          (s s)
+          (kl1 (list k1))
           (kl2 (list k2)))))
 
 (defrule erl-state-of-wf-apply-k
@@ -64,7 +64,7 @@
 (defrule fuel-of-wf-apply-k
   (implies (wf-state-p (apply-k s (cons k nil)))
            (> (erl-k->fuel k) 0))
-  :enable apply-k)
+  :enable (wf-state-p apply-k))
 
 
 ; Lemmas about Stepping ---------------------------------------------------------
@@ -77,12 +77,16 @@
     (not (wf-state-p (apply-k (erl-s-klst->s (eval-k (car klst) s))
                               (append (erl-s-klst->klst (eval-k (car klst) s))
                                       (cdr klst))))))
-  :enable apply-k)
+  :enable (wf-state-p apply-k))
 
-(defrule wf-state-implies-next-wf-state
+(defruled wf-state-implies-next-wf-state
   (implies (and (consp klst) (wf-state-p (apply-k s klst)))
            (wf-state-p (apply-k (erl-s-klst->s (eval-k (car klst) s))
                                 (erl-s-klst->klst (eval-k (car klst) s)))))
   :expand (apply-k s klst)
-  :enable apply-k-of-append
-  :rule-classes :forward-chaining)
+  :rule-classes :forward-chaining
+  :use
+    (:instance apply-k-of-append
+      (s (erl-s-klst->s (eval-k (car klst) s)))
+      (kl1 (erl-s-klst->klst (eval-k (car klst) s)))
+      (kl2 (cdr klst))))

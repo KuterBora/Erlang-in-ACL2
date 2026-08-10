@@ -208,9 +208,15 @@
             (:case-of badpattern)
             (:remote-call badpattern)
             (:call badpattern)
-            (:fun-call badpattern))))
+            (:fun-call badpattern)
+            (:receive badpattern))))
     ///
       (verify-guards eval-match)
+
+      (defcong pattern-equiv equal (eval-match p s) 1
+        :hints (("Goal" :in-theory (enable pattern-fix pattern-p))))
+      (defcong erl-state-equiv equal (eval-match p s) 2)
+
       (more-returns
         (rs (or (equal (erl-val-kind (erl-state->in rs)) :reject)
                 (equal (erl-val-kind (erl-state->in rs)) :excpt)
@@ -241,8 +247,13 @@
        ((erl-state hd) (eval-match (car ps) (update-erl-state->in s (car vs))))
        
        ; Propagate exceptions and rejections.
-       ((if (equal (erl-val-kind hd.in) :reject)) hd)
-       ((if (equal (erl-val-kind hd.in) :excpt))  hd))
+       ((if (not (wf-state-p hd))) hd))
 
      ; Recursively match the rest of the list.
-     (match-args (cdr ps) (cdr vs) hd)))
+     (match-args (cdr ps) (cdr vs) hd))
+  ///
+    (defcong erl-state-equiv equal (match-args pl vl s) 3)
+    (defcong erl-vlst-equiv equal (match-args pl vl s) 2
+      :hints (("Goal" :expand (match-args pl vl-equiv s))))
+    (defcong pattern-list-equiv equal (match-args pl vl s) 1
+      :hints (("Goal" :expand (match-args pl-equiv vl s)))))

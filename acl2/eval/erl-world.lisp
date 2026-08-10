@@ -85,6 +85,7 @@
         (and (equal (fn->name x) 'is_integer) (equal (fn->arity x) 1))
         (and (equal (fn->name x) 'is_list) (equal (fn->arity x) 1))
         (and (equal (fn->name x) 'is_number) (equal (fn->arity x) 1))
+        (and (equal (fn->name x) 'is_pid) (equal (fn->arity x) 1))
         (and (equal (fn->name x) 'is_tuple) (equal (fn->arity x) 1))
         (and (equal (fn->name x) 'abs) (equal (fn->arity x) 1))
         (and (equal (fn->name x) 'element) (equal (fn->arity x) 2))
@@ -92,6 +93,7 @@
         (and (equal (fn->name x) 'length) (equal (fn->arity x) 1))
         (and (equal (fn->name x) 'max) (equal (fn->arity x) 2))
         (and (equal (fn->name x) 'min) (equal (fn->arity x) 2))
+        (and (equal (fn->name x) 'self) (equal (fn->arity x) 0))
         (and (equal (fn->name x) 'tl) (equal (fn->arity x) 1))
         (and (equal (fn->name x) 'tuple_size) (equal (fn->arity x) 1))))
     ///

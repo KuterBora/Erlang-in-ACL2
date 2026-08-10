@@ -4,3 +4,5 @@
 (include-book "equiv")
 (include-book "module")
 (include-book "update")
+(include-book "self")
+(include-book "eval-call")

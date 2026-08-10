@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "../../eval/top")
+(include-book "eval-theorems")
 
 (set-induction-depth-limit 1)
 
@@ -20,58 +20,64 @@
        ((if (endp klst)) nil))
       (cons (make-erl-k :kont (erl-k->kont (car klst))
                         :fuel (+ n (erl-k->fuel (car klst))))
-            (increase-fuel (cdr klst) n))))
+            (increase-fuel (cdr klst) n)))
+  ///
+    (defcong erl-klst-equiv equal (increase-fuel klst n) 1)
+    (defcong nat-equiv equal (increase-fuel klst n) 2)
+    (defcong int-equiv equal (increase-fuel klst n) 2)
+    
+    (defrule increase-fuel-with-zero
+      (implies (zp n) (equal (increase-fuel kl n) (erl-klst-fix kl)))
+      :expand (increase-fuel (cdr kl) 0))
+    
+    (defrule increase-fuel-with-non-natp
+      (implies (not (natp n)) (equal (increase-fuel kl n) (erl-klst-fix kl)))
+      :do-not-induct t))
+
 
 ; increase-fuel is distributive over append
 (defrule increase-fuel-is-distributive-over-append
   (implies
-    (and (erl-state-p s)
-         (erl-klst-p rest)
-         (erl-k-p k)
+    (and (consp klst)
          (natp n)
-         (not (equal (erl-val-kind (erl-state->in (erl-s-klst->s (eval-k k s)))) :flimit)))
-    (equal (increase-fuel (append (erl-s-klst->klst (eval-k k s)) rest) n)
-           (append (erl-s-klst->klst (eval-k (erl-k (+ n (erl-k->fuel k))
-                                                    (erl-k->kont k))
+         (wf-state-p (erl-s-klst->s (eval-k (car klst) s))))
+    (equal (increase-fuel (append (erl-s-klst->klst (eval-k (car klst) s)) (cdr klst)) n)
+           (append (erl-s-klst->klst (eval-k (erl-k (+ n (erl-k->fuel (car klst)))
+                                                    (erl-k->kont (car klst)))
                                              s))
-                   (increase-fuel rest n))))
+                   (increase-fuel (cdr klst) n))))
   :enable (eval-k increase-fuel))
 
 ; A continuation that did not cause an error in eval-k will produce the same result
 ; if its fuel is increased.
 (defrule more-fuel-is-good-for-eval
   (implies 
-    (and (erl-state-p s)
-         (erl-k-p k)
-         (natp n)
-         (not (equal (erl-val-kind (erl-state->in (erl-s-klst->s (eval-k k s)))) :flimit)))
-    (equal (erl-s-klst->s (eval-k (erl-k (+ n (erl-k->fuel k)) (erl-k->kont k)) s))
-           (erl-s-klst->s (eval-k k s))))
-  :enable eval-k)
+    (and (natp n)
+         (wf-state-p (erl-s-klst->s (eval-k (car klst) s))))
+    (equal (erl-s-klst->s (eval-k (erl-k (+ n (erl-k->fuel (car klst)))
+                                         (erl-k->kont (car klst))) s))
+           (erl-s-klst->s (eval-k (car klst) s))))
+  :enable (eval-k wf-state-p))
+
+
+(defcong erl-s-klst-equiv equal (erl-s-klst->klst ks) 1
+  )
 
 ; A continuation that did not cause an error in apply-k will produce the same result
 ; if its fuel is increased.
 (defrule more-fuel-is-good-for-apply
   (implies
-    (and (erl-state-p s)
-         (erl-klst-p klst)
-         (not (equal (erl-val-kind (erl-state->in (apply-k s klst))) :flimit))
-         (natp n))
+    (and (natp n)
+         (wf-state-p s)
+         (wf-state-p (apply-k s klst)))
     (equal (apply-k s (increase-fuel klst n))
            (apply-k s klst)))
-  :enable (apply-k increase-fuel)
-  :disable (increase-fuel-is-distributive-over-append
-            more-fuel-is-good-for-eval)
-  :expand (apply-k s (cons (erl-k (+ n (erl-k->fuel (car klst)))
-                                   (erl-k->kont (car klst)))
-                            (increase-fuel (cdr klst) n)))
-  :hints (("Subgoal *1/5''"
-      :use ((:instance increase-fuel-is-distributive-over-append
-              (s s)
-              (rest (cdr klst))
-              (k (car klst))
-              (n n))
-            (:instance more-fuel-is-good-for-eval
-              (s s)
-              (k (car klst))
-              (n n))))))
+  :enable (apply-k increase-fuel apply-k-of-append)
+  :induct (apply-k s klst)
+  :expand (apply-k s
+                   (cons (erl-k (+ n (erl-k->fuel (car klst)))
+                                (erl-k->kont (car klst)))
+                        (increase-fuel (cdr klst) n)))
+  :hints (("Subgoal *1/3"
+            :use ((:instance increase-fuel-is-distributive-over-append)
+                  (:instance more-fuel-is-good-for-eval)))))

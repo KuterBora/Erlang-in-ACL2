@@ -1,6 +1,7 @@
 (in-package "ACL2")
 (include-book "termination")
 (include-book "eval-calls")
+(include-book "eval-receive")
 
 (set-induction-depth-limit 1)
 
@@ -148,7 +149,12 @@
                         :kont (make-kont-expr :expr x.args))
                       (make-erl-k
                         :fuel (1- fuel)
-                        :kont (make-kont-local-call :call x.fn))))))))
+                        :kont (make-kont-local-call :call x.fn)))))
+          
+          ; when a receive is encountered, climb backwards in the continuation tree
+          (:receive
+            (make-erl-s-klst
+              :s (update-erl-state->in s (make-erl-val-receive :klst nil)))))))
       
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
@@ -204,18 +210,30 @@
                                                                :left-bind s.bind)))))
       ; Apply the binop to the evaluated operands
       (:binop-expr2
-        (if (omap::compatiblep s.bind k.left-bind)
-            (make-erl-s-klst 
-              :s (update-erl-state->in-bind
-                   s
-                   (apply-erl-binop k.op k.val s.in)
-                   (omap::update* s.bind k.left-bind)))
-                (make-erl-s-klst
-                  :s (update-erl-state->in
-                      s 
-                      (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val s.in)))))))
+        (if (omap::compatiblep s.bind k.left-bind)   
+            (if (equal k.op '!)
+                (if (pid-p k.val)
+                    (make-erl-s-klst
+                      :s (erl-state-send s (list (make-message :dst k.val :val s.in))))
+                    (make-erl-s-klst
+                      :s
+                        (update-erl-state->in 
+                          s
+                          (make-erl-val-excpt
+                            :err (make-erl-err 
+                                   :class (make-err-class-error) 
+                                   :reason (make-exit-reason-badarg))))))
+                (make-erl-s-klst 
+                  :s (update-erl-state->in-bind
+                      s
+                      (apply-erl-binop k.op k.val s.in)
+                      (omap::update* s.bind k.left-bind))))
+            (make-erl-s-klst
+              :s (update-erl-state->in
+                  s 
+                  (make-erl-val-excpt 
+                    :err (make-erl-err :class (make-err-class-error) 
+                                        :reason (make-exit-reason-badmatch :val s.in)))))))
       
       ; Once rhs is evaluated, match it to lhs
       (:match
@@ -354,7 +372,23 @@
 
 
       ; Once a call returns, return to the correct module and scope
-      (:function-return (make-erl-s-klst :s (update-erl-state->bind-mod s k.bind k.module)))))
+      (:function-return (make-erl-s-klst :s (update-erl-state->bind-mod s k.bind k.module)))
+
+      ; Once a message is received, attempt to match the clauses of the receive expression
+      (:receive
+        (b* (((mv rs body) 
+              (eval-receive s (kont-receive->clauses k)))
+              ((if (null body)) (make-erl-s-klst :s rs)))
+            (make-erl-s-klst
+              :s (update-erl-state->in rs (make-erl-val-none))
+              :klst
+                (list
+                  (make-erl-k 
+                    :fuel (1- fuel)
+                    :kont (make-kont-expr :expr (car body)))
+                  (make-erl-k 
+                    :fuel (1- fuel)
+                    :kont (make-kont-exprs :exprs (cdr body)))))))))
   
   ///
     (defcong erl-k-equiv equal (eval-k k s) 1)
@@ -402,6 +436,14 @@
 
        ((cons khd ktl) klst)
 
+       ; Propagate calls to receive
+       ((if (equal (erl-val-kind (erl-state->in s)) :receive))
+        (update-erl-state->in
+          s
+          (make-erl-val-receive
+            :klst
+              (append (erl-val-receive->klst (erl-state->in s)) klst))))
+
        ; Propagate errors
        ((unless (wf-state-p s)) (apply-k s ktl))
 
@@ -431,10 +473,20 @@
     (local (in-theory (enable apply-k)))
 
     (defrule apply-k-of-bad-state
-      (implies (not (wf-state-p s))
-	             (equal (apply-k s klst) (erl-state-fix s))))
+      (implies
+        (and (not (wf-state-p s))
+             (not (equal (erl-val-kind (erl-state->in s)) :receive)))
+	      (equal (apply-k s klst) (erl-state-fix s)))
+      :enable wf-state-p)
+    
+    (defrule bad-state-of-apply-k-of-bad-state
+      (implies
+        (not (wf-state-p s))
+	      (not (wf-state-p (apply-k s klst))))
+      :enable wf-state-p)
                
     (defrule apply-k-when-out-of-fuel
       (implies (and (wf-state-p s) (consp klst) (zp (erl-k->fuel (car klst))))
                (equal (apply-k s klst)
-                      (update-erl-state->in (erl-state-fix s) (make-erl-val-flimit))))))
+                      (update-erl-state->in (erl-state-fix s) (make-erl-val-flimit))))
+      :enable wf-state-p))

@@ -40,11 +40,21 @@
            (bind bind-p)
            (module symbolp)))
     (:excpt ((err erl-err-p)))
+    ; For now, PIDs are represented as natural numbers
+    (:pid ((id natp)))
 
     ; Internal return values
     (:none ())
     (:reject ((err stringp)))
     (:flimit ())
+
+    ; Return when the process enters a receive
+    ; klst must always be an erl-klst. 
+    ; This property is imposed in the more-returns of the evaluator.
+    (:receive ((klst true-listp)))
+
+    ; Return when a process fails to exit a receive
+    (:blocked ())
 
     :measure (list (acl2-count x) 1))
   
@@ -86,6 +96,26 @@
     :val-type erl-val
     :measure (list (acl2-count x) 0)))
 
+; Erlang Message  --------------------------------------------------------------
+
+; Process Identifier: PIDs are unique among processors that are alive on
+; connected nodes. PID's of terminated processes can be reused.
+; - For simplicity, PID's are represented as natural numbers.
+(fty::defsubtype pid
+  :supertype erl-val-p
+  :restriction 
+    (lambda (x) (equal (erl-val-kind x) :pid))
+  :fix-value (make-erl-val-pid :id 0))
+
+; Erlang message
+(fty::defprod message
+  ((dst pid-p)
+   (val erl-val-p)))
+
+; List of Erlnag messages sent
+(fty::deflist outbox
+    :elt-type message-p
+    :true-listp t)
 
 ; Utility Functions/Types ------------------------------------------------------
 
@@ -210,7 +240,7 @@
   :expand ((erl-val-p v) (erl-val-p (cons v x))))
 
 
-; Utility Theorems -------------------------------------------------------------
+; Utility Theorems/Functions ---------------------------------------------------
 
 ; These might be unnecessary after including the omap book.
 (defrule bind-update-lookup
@@ -234,3 +264,20 @@
     :enable (erl-val-kind erl-val-integer->val erl-val-p)
     :expand (true-listp (cdr x))
     :rule-classes :forward-chaining))
+
+; Predicate for a list of well-formed values.
+(define wf-vlst-p ((vlst erl-vlst-p))
+  :enabled t
+  :measure (len (erl-vlst-fix vlst))
+  (b* ((vlst (erl-vlst-fix vlst))
+       ((if (null vlst)) t))
+      (and (null (member (erl-val-kind (car vlst))
+                         '(:flimit :excpt :reject :blocked :receive)))
+           (wf-vlst-p (cdr vlst))))
+  
+  ///
+    (defcong erl-vlst-equiv equal (wf-vlst-p vlst) 1
+      :hints (("Goal" :expand (wf-vlst-p vlst-equiv))))
+    
+    (defrule non-receive-of-car-of-wf-vlst-p
+      (implies (wf-vlst-p lst) (not (equal (erl-val-kind (car lst)) :receive)))))

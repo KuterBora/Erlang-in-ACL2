@@ -137,7 +137,9 @@
     (mv reject nil))
   
   ///
-    (defcong erl-state-equiv equal (eval-local-call s f args) 1))
+    (defcong erl-state-equiv equal (eval-local-call s f args) 1)
+    (defcong symbol-equiv equal (eval-local-call s f args) 2)
+    (defcong erl-vlst-equiv equal (eval-local-call s f args) 3))
 
 
 ; Evaluate Remote Function Calls -----------------------------------------------
@@ -214,7 +216,12 @@
              ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
              ((if (null body)) (mv function-clause nil)))
             (mv rs body))))
-    (mv undef nil)))
+    (mv undef nil))
+  ///
+    (defcong erl-state-equiv equal (eval-remote-call s m f args) 1)
+    (defcong symbol-equiv equal (eval-remote-call s m f args) 2)
+    (defcong symbol-equiv equal (eval-remote-call s m f args) 3)
+    (defcong erl-vlst-equiv equal (eval-remote-call s m f args) 4))
 
 
 ; Evaluate Anonymous Function Calls --------------------------------------------
@@ -310,4 +317,8 @@
                  :class (make-err-class-error)
                  :reason (make-exit-reason-badmatch :val fun))))
         nil)))
-    (mv rs body)))
+    (mv rs body))
+  ///
+    (defcong erl-state-equiv equal (eval-fun-call s f args) 1)
+    (defcong erl-val-equiv equal (eval-fun-call s f args) 2)
+    (defcong erl-vlst-equiv equal (eval-fun-call s f args) 3))

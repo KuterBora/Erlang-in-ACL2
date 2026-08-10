@@ -74,7 +74,8 @@
           (arithm-binop-p x)
           (bool-binop-p x)
           (short-circ-op-p x)
-          (list-op-p x)))
+          (list-op-p x)
+          (equal x '!)))
   :fix-value '+)
 
 ; Erlang unary operators
@@ -108,6 +109,7 @@
     (:remote-call ((module symbolp) (fn symbolp) (args node-p)))
     (:fun-call ((fun node-p) (args node-p)))
     (:call ((fn symbolp) (args node-p)))
+    (:receive ((cls node-clause-list-p)))
     :measure (list (acl2-count x) 3))
 
   (fty::deflist node-list
@@ -161,7 +163,8 @@
          (:case-of nil)
          (:remote-call nil)
          (:call nil)
-         (:fun-call nil))))
+         (:fun-call nil)
+         (:receive nil))))
 
 ; Erlang Pattern ---------------------------------------------------------------
 
@@ -201,7 +204,8 @@
                 (:case-of nil)
                 (:remote-call nil)
                 (:call nil)
-                (:fun-call nil)))))
+                (:fun-call nil)
+                (:receive nil)))))
   (define pattern-list-p ((x acl2::any-p))
     :returns (ok booleanp)
     :measure (node-list-count x)
@@ -253,7 +257,8 @@
           (:call (and (guard-expr-p (node-call->args x))
                       (or (equal (node-kind (node-call->args x)) :cons)
                           (equal (node-kind (node-call->args x)) :nil))))
-          (:fun-call nil))))
+          (:fun-call nil)
+          (:receive nil))))
 
   ; List of Erlang Expressions
   (define guard-expr-list-p ((x acl2::any-p))
@@ -328,7 +333,8 @@
             (and (expr-p (node-fun-call->fun x))
                  (expr-p (node-fun-call->args x))
                  (or (equal (node-kind (node-fun-call->args x)) :cons)
-                     (equal (node-kind (node-fun-call->args x)) :nil)))))))
+                     (equal (node-kind (node-fun-call->args x)) :nil))))
+          (:receive (erl-clause-list-p (node-receive->cls x))))))
 
   ; List of Erlang Expressions
   (define expr-list-p ((x acl2::any-p))

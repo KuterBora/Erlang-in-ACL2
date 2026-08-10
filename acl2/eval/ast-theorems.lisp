@@ -163,17 +163,23 @@
     (and x (expr-list-p x))
     (consp x)))
 
-; Clauses of a fun expression are erl-clauses, and its expr is an expression
+; Clauses of a fun expression are erl-clauses
 (defrule expr-fun-ensures
   (implies (and (expr-p x) (equal (node-kind x) :fun))
            (erl-clause-list-p (node-fun->cls x)))
   :enable expr-p)
 
-; Clauses of a fun expression are erl-clauses, and its expr is an expression
+; Args and call fields of a fun expression are expressions.
 (defrule expr-fun-call-ensures
   (implies (and (expr-p x) (equal (node-kind x) :fun-call))
            (and (expr-p (node-fun-call->fun x))
                 (expr-p (node-fun-call->args x))
                 (or (equal (node-kind (node-fun-call->args x)) :cons)
                     (equal (node-kind (node-fun-call->args x)) :nil))))
+  :enable expr-p)
+
+; Clauses of a receive expression are erl-clauses,
+(defrule expr-receive-ensures
+  (implies (and (expr-p x) (equal (node-kind x) :receive))
+           (erl-clause-list-p (node-receive->cls x)))
   :enable expr-p)

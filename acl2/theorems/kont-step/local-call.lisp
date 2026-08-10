@@ -121,7 +121,7 @@
   :enable apply-k-of-step
   :cases ((wf-state-p s))
   :use
-    (:instance apply-k-of-expr-when-only-diff-val
+    (:instance apply-k-of-expr-when-diff-val
       (s1 (update-erl-state->in s (make-erl-val-none)))
       (s2 s)
       (k (make-erl-k

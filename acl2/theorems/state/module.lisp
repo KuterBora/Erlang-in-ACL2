@@ -44,13 +44,18 @@
            (erl-state->module (mv-nth 0 (eval-remote-call s m c args)))))
   :enable (eval-remote-call)))
 
-(local (defrule erl-state->module-of-fun-call
+(defrule erl-state->module-of-fun-call
   (implies
     (and (not (mv-nth 1 (eval-fun-call s c args)))
          (wf-state-p (mv-nth 0 (eval-fun-call s c args))))
     (equal (erl-state->module s)
            (erl-state->module (mv-nth 0 (eval-fun-call s c args)))))
-  :enable (eval-fun-call)))
+  :enable (eval-fun-call))
+
+(local (defrule erl-state->module-of-erl-receive
+  (equal (erl-state->module (mv-nth 0 (eval-receive s clauses)))
+         (erl-state->module s))
+  :enable eval-receive))
 
 (local (defrule eval-k-of-module
   (implies 
@@ -86,7 +91,6 @@
                       (erl-s-klst->klst (eval-k (car klst) s))))
            (erl-state->module s)))
   :expand ((eval-k (car klst) s))
-  :disable wf-state-implies-next-wf-state
   :use ((:instance wf-state-implies-next-wf-state))))
 
 
@@ -102,18 +106,18 @@
 ; Helpers ----------------------------------------------------------------------
 
 ; Helper function that states the klst has no function-return continuations.
-(defun no-function-return (klst)
+(local (defun no-function-return (klst)
   (if (consp klst)
       (and
         (not (equal (kont-kind (erl-k->kont (car klst))) :function-return))
         (no-function-return (cdr klst)))
-      t))
+      t)))
 
-(defrule no-function-return-of-append
+(local (defrule no-function-return-of-append
   (implies (and (no-function-return l1) (no-function-return l2))
-           (no-function-return (append l1 l2))))
+           (no-function-return (append l1 l2)))))
 
-(defrule no-function-return-of-kind
+(local (defrule no-function-return-of-kind
   (implies 
     (and (consp klst)
          (not (or (equal (kont-kind (erl-k->kont (car klst))) :local-call)
@@ -121,7 +125,7 @@
                   (equal (kont-kind (erl-k->kont (car klst))) :fun-call)))
          (no-function-return klst))
     (no-function-return (erl-s-klst->klst (eval-k (car klst) s))))
-  :enable eval-k)
+  :enable eval-k))
 
 
 ; Induction Schema -------------------------------------------------------------
@@ -157,7 +161,8 @@
             (:local-call (module-induct (apply-k r rklst) (cdr klst)))
             (:remote-call (module-induct (apply-k r rklst) (cdr klst)))
             (:fun-call (module-induct (apply-k r rklst) (cdr klst)))
-            (:function-return t))))
+            (:function-return t)
+            (:receive (module-induct r (append rklst (cdr klst)))))))
 
   ; for termination proof
   :hints (("Goal" :in-theory (disable eval-k-decreases-klst-measure)
@@ -168,7 +173,7 @@
 ; apply-k-of-module ------------------------------------------------------------
 
 ; module remains the same after apply-k if there is no function return.
-(defrule apply-k-of-module-when-list
+(local (defrule apply-k-of-module-when-list
   (implies
     (and (no-function-return klst) (wf-state-p (apply-k s klst)))
     (equal (erl-state->module (apply-k s klst))
@@ -182,7 +187,7 @@
      ("Subgoal *1/16"
        :in-theory (enable apply-k-of-append))
      ("Subgoal *1/15"
-       :in-theory (enable apply-k-of-append))))
+       :in-theory (enable apply-k-of-append)))))
 
 ; module does not change after evaluating any continuation that is not :function-return
 (defrule apply-k-of-module

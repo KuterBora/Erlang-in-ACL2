@@ -58,7 +58,10 @@
     (:fun-call ((fun erl-val-p)))
 
     ; Continue after the function returns.
-    (:function-return ((bind bind-p) (module symbolp))))
+    (:function-return ((bind bind-p) (module symbolp)))
+    
+    ; Continue after receiving a message
+    (:receive ((clauses erl-clause-list-p))))
 
 ; A continutaion that is paired with a fuel that limits how many times
 ; the continuation can expand during evaluation.
