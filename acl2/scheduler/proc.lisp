@@ -26,6 +26,7 @@
 
 (define proc->pid ((p proc-p))
   :returns (pid pid-p)
+  :enabled t
   (b* ((p (proc-fix p)))
       (erl-state->self (proc->s p)))
   ///
@@ -33,6 +34,7 @@
 
 (define proc->outbox ((p proc-p))
   :returns (o outbox-p)
+  :enabled t
   (b* ((p (proc-fix p)))
       (erl-state->outbox (proc->s p)))
   ///
@@ -66,12 +68,25 @@
   (b* ((n (network-gen-fix n))
        ((if (omap::emptyp n)) t))
       (and (equal (omap::head-key n) (erl-state->self (proc->s (omap::head-val n))))
-           (wf-network-p (omap::tail n)))))
+           (wf-network-p (omap::tail n))))
+  ///
+    (defcong network-gen-equiv equal (wf-network-p n) 1))
 
 (fty::defsubtype network
   :supertype network-gen
   :restriction (lambda (x) (wf-network-p x))
   :fix-value nil)
+
+(defrule network-p-of-tail
+  (implies (network-p net) (network-p (omap::tail net)))
+  :enable network-p)
+
+(defrule lookup-of-tail-when-assoc-tail-of-network
+  (implies (and (network-p net) (pid-p pid) (omap::assoc pid (omap::tail net)))
+            (equal (omap::lookup pid net)
+                  (omap::lookup pid (omap::tail net))))
+  :enable (network-p network-gen-p)
+  :use (:instance omap::lookup-of-tail-when-assoc-tail (key pid) (map net)))
 
 (define runnable? ((n network-p) (p pid-p))
   :returns (b booleanp)
@@ -81,7 +96,13 @@
            (proc-runnable? (omap::lookup p n))))
   ///
     (defcong network-equiv equal (runnable? n p) 1)
-    (defcong proc-equiv equal (runnable? n p) 2))
+    (defcong pid-equiv equal (runnable? n p) 2)
+    
+    (defrule runnable-of-tail
+      (implies
+        (and (pid-p p) (network-p n) (runnable? (omap::tail n) p))
+        (runnable? n p))
+      :enable proc-runnable?))
 
 (define has-message-for-dst? ((net network-p) (src pid-p) (dst pid-p))
   (b* ((net (network-fix net))
@@ -92,4 +113,11 @@
   ///
     (defcong network-equiv equal (has-message-for-dst? net src dst) 1)
     (defcong pid-equiv equal (has-message-for-dst? net src dst) 2)
-    (defcong pid-equiv equal (has-message-for-dst? net src dst) 3))
+    (defcong pid-equiv equal (has-message-for-dst? net src dst) 3)
+    
+    (defrule has-message-for-dst-of-tail
+      (implies
+        (and (pid-p p1) (pid-p p2) (network-p n)
+             (has-message-for-dst? (omap::tail n) p1 p2))
+        (has-message-for-dst? n p1 p2))
+      :enable proc-has-message-for-dst?))

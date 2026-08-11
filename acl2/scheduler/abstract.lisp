@@ -7,16 +7,15 @@
 ; Possible Scheduling Steps ---------------------------------------------------
 
 (fty::deftagsum scheduling
-  (:deliver ((p1 pid-p) (p2 pid-p)))
   (:run ((p pid-p)))
+  (:deliver ((p1 pid-p) (p2 pid-p)))
   (:stutter ()))
 
 
 ; Weakly Fair Abstract Scheduler ----------------------------------------------
 
 (encapsulate
-
-  (((schedule * ) => *))
+  (((schedule * ) => * :formals (net) :guard (network-p net)))
 
   ; Witness function
 
@@ -42,20 +41,8 @@
   (local (defrule crock-1
     (implies (and (omap::assoc x m) (not (omap::assoc x (omap::tail m))))
              (equal (omap::head-key m) x))))
-  
-  (defrule crock-2
-    (implies (network-p m) (network-p (omap::tail m)))
-    :enable network-p)
-  
-  (defrule crock-3
-    (implies (and (network-p m) (pid-p x) (omap::assoc x (omap::tail m)))
-             (equal (omap::lookup x m)
-                    (omap::lookup x (omap::tail m))))
-    :enable (network-p network-gen-p)
 
-    :use (:instance omap::lookup-of-tail-when-assoc-tail
-            (key x) (map m)))
-
+  ; The scheduler is weakly fair
   (defrule scheduler-weakly-fair-when-runnable
     (implies 
       (and (pid-p pid)
@@ -66,7 +53,7 @@
     :enable (schedule runnable? proc-runnable?)
     :hints (("Subgoal *1/5" :use (:instance crock-1 (x pid) (m net)))))
   
-  (defrule scheduler-weakly-fair-when-has-message
+  (defrule scheduler-weakly-fair-when-deliverable
     (implies 
       (and (pid-p pid) (pid-p dst)
            (network-p net)
@@ -77,102 +64,80 @@
     :hints (("Subgoal *1/5" :use (:instance crock-1 (x pid) (m net)))
             ("Subgoal *1/6" :use ((:instance crock-1 (x pid) (m net))))))
   
-  
-  ; Theorems
-  (defrule return-type-of-schedule-step
-    (scheduler-step-p (schedule-step p)))
-  (defrule return-type-of-schedule-proc
-    (implies (and (network-p net) (not (terminated? net))) 
-             (pid-p (schedule-proc net)))
-    :enable (terminated? runnable?))
-  (defrule return-type-of-schedule-src
-    (implies (and (network-p net) (network-has-message? net))
-             (pid-p (schedule-src net)))
-    :enable (has-message? network-has-message?))
-  (defrule return-type-of-schedule-dst
-    (implies (and (proc-p src) (has-message? src))
-             (pid-p (schedule-dst src)))
-    :enable has-message?)
-  
-  ; schedule-proc
-  (defrule scheduled-pid-is-in-the-network
+  ; The scheduler is correct
+  (defrule scheduler-correct-of-run
     (implies
-      (and (network-p net) (not (terminated? net))) 
-      (omap::assoc (schedule-proc net) net))
-    :enable (terminated? runnable?))
+      (and (network-p net) (equal (scheduling-kind (schedule net)) :run))
+      (runnable? net (scheduling-run->p (schedule net))))
+    :enable schedule)
   
-  (local (defrule scheduled-pid-is-a-runnable-proc-tail
+  (defrule scheduler-correct-of-deliver
     (implies
-      (and (network-p net) (not (terminated? net)) 
-           (omap::assoc (schedule-proc net) (omap::tail net))) 
-      (runnable? (omap::lookup (schedule-proc net) net)))
-    :enable (terminated? runnable? omap::lookup)
-    :induct (terminated? net)))
-  
-  (local (defrule scheduled-pid-is-in-the-network-head
-    (implies
-      (and (network-p net) (not (terminated? net)) 
-           (not (omap::assoc (schedule-proc net) (omap::tail net)))) 
-      (equal (omap::head-key net) (schedule-proc net)))
-    :enable (terminated? runnable? omap::lookup)
-    :induct (terminated? net)))
-  
-  (local (defrule scheduled-pid-is-a-runnable-proc-head
-    (implies
-      (and (network-p net) (not (terminated? net)) 
-           (not (omap::assoc (schedule-proc net) (omap::tail net)))) 
-      (runnable? (omap::lookup (schedule-proc net) net)))
-    :enable (terminated? runnable? omap::lookup)
-    :induct (terminated? net)))
-  
-  (defrule scheduled-pid-is-a-runnable-proc
-    (implies
-      (and (network-p net) (not (terminated? net))) 
-      (runnable? (omap::lookup (schedule-proc net) net)))
-    :cases ((omap::assoc (schedule-proc net) (omap::tail net)))
-    :disable schedule-proc)
-  
-  ; schedule-src
-  (defrule scheduled-src-is-in-the-network
-    (implies
-      (and (network-p net) (network-has-message? net)) 
-      (omap::assoc (schedule-src net) net))
-    :enable (network-has-message? has-message?))
-  
-  (local (defrule scheduled-src-has-a-message-tail
-    (implies
-      (and (network-p net) (network-has-message? net) 
-           (omap::assoc (schedule-src net) (omap::tail net))) 
-      (has-message? (omap::lookup (schedule-src net) net)))
-    :enable (network-has-message? has-message? omap::lookup)
-    :induct (network-has-message? net)))
-  
-  (local (defrule scheduled-src-is-in-the-network-head
-    (implies
-      (and (network-p net) (network-has-message? net)
-           (not (omap::assoc (schedule-src net) (omap::tail net)))) 
-      (equal (omap::head-key net) (schedule-src net)))
-    :enable (network-has-message? has-message? omap::lookup)
-    :induct (network-has-message? net)))
-  
-  (local (defrule scheduled-src-has-a-message-head
-    (implies
-      (and (network-p net) (network-has-message? net)
-           (not (omap::assoc (schedule-src net) (omap::tail net)))) 
-      (has-message? (omap::lookup (schedule-src net) net)))
-    :enable (network-has-message? has-message? omap::lookup)
-    :induct (network-has-message? net)))
-  
-  (defrule scheduled-src-has-a-message
-    (implies
-      (and (network-p net) (network-has-message? net))
-      (has-message? (omap::lookup (schedule-src net) net)))
-    :cases ((omap::assoc (schedule-src net) (omap::tail net)))
-    :disable schedule-src)
-  
-  ; schedule-dst
-  (defrule src-has-message-for-scheduled-dst
-    (implies
-      (and (proc-p p) (has-message? p)) 
-      (omap::assoc (schedule-dst p) (erl-state->outbox (proc->es p))))
-    :enable has-message?))
+      (and (network-p net) (equal (scheduling-kind (schedule net)) :deliver))
+      (has-message-for-dst?
+        net
+        (scheduling-deliver->p1 (schedule net))
+        (scheduling-deliver->p2 (schedule net))))
+    :enable (schedule has-message-for-dst? proc-has-message-for-dst?)))
+
+; Executable counterpart
+(define in-order-schedule ((net network-p))
+  :returns (s scheduling-p)
+  :verify-guards nil
+  :measure (acl2-count (network-fix net))
+  (b* ((net (network-fix net))
+        ((if (omap::emptyp net)) (make-scheduling-stutter))
+        (pid (omap::head-key net))
+        ((if (runnable? net pid)) (make-scheduling-run :p pid))
+        (outbox (proc->outbox (omap::lookup pid net)))
+        ((unless (omap::emptyp outbox)) (make-scheduling-deliver :p1 pid :p2 (omap::head-key outbox))))
+      (in-order-schedule (omap::tail net)))
+  :hints (("Goal" :in-theory (enable network-fix)))
+  ///
+    (defcong network-equiv equal (in-order-schedule net) 1)
+    (verify-guards in-order-schedule
+      :hints (("Goal" :in-theory (enable network-p))))
+    (local (defrule crock-1
+      (implies (and (omap::assoc x m) (not (omap::assoc x (omap::tail m))))
+              (equal (omap::head-key m) x))))
+
+    ; The scheduler is weakly fair
+    (defrule in-order-scheduler-weakly-fair-when-runnable
+      (implies 
+        (and (pid-p pid)
+             (network-p net)
+             (omap::assoc pid net)
+             (runnable? net pid))
+        (not (equal (in-order-schedule net) '(:stutter))))
+      :enable (runnable? proc-runnable?)
+      :hints (("Subgoal *1/5" :use (:instance crock-1 (x pid) (m net)))))
+    
+    (defrule in-order-scheduler-weakly-fair-when-deliverable
+      (implies 
+        (and (pid-p pid) (pid-p dst)
+             (network-p net)
+             (omap::assoc pid net)
+             (has-message-for-dst? net pid dst))
+        (not (equal (in-order-schedule net) '(:stutter))))
+      :enable (has-message-for-dst? proc-has-message-for-dst? proc->outbox)
+      :hints (("Subgoal *1/5" :use (:instance crock-1 (x pid) (m net)))
+              ("Subgoal *1/6" :use ((:instance crock-1 (x pid) (m net))))))
+    
+    ; The scheduler is correct
+    (defrule in-order-scheduler-correct-of-run
+      (implies
+        (and (network-p net) (equal (scheduling-kind (in-order-schedule net)) :run))
+        (runnable? net (scheduling-run->p (in-order-schedule net)))))
+    
+    (defrule in-order-scheduler-correct-of-deliver
+      (implies
+        (and (network-p net) (equal (scheduling-kind (in-order-schedule net)) :deliver))
+        (has-message-for-dst?
+          net
+          (scheduling-deliver->p1 (in-order-schedule net))
+          (scheduling-deliver->p2 (in-order-schedule net))))
+      :enable (has-message-for-dst? proc-has-message-for-dst?)))
+
+(defattach
+  (schedule in-order-schedule)
+  :hints (("Goal" :use (:instance in-order-scheduler-weakly-fair-when-deliverable))))
