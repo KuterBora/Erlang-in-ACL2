@@ -214,7 +214,7 @@
             (if (equal k.op '!)
                 (if (pid-p k.val)
                     (make-erl-s-klst
-                      :s (erl-state-send s (list (make-message :dst k.val :val s.in))))
+                      :s (erl-state-send s k.val s.in))
                     (make-erl-s-klst
                       :s
                         (update-erl-state->in 

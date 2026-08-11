@@ -57,7 +57,7 @@
     (:blocked ())
 
     :measure (list (acl2-count x) 1))
-  
+
   ; List of Erlang Values
   (fty::deflist erl-vlst
     :elt-type erl-val-p
@@ -89,7 +89,7 @@
     (:nocatch ((val erl-val-p)))
     (:system-limit ())
     :measure (list (acl2-count x) 0))
-  
+
   ; Reprsentation of Erlang bindings. Maps each variable to a value.
   (fty::defomap bind
     :key-type symbol
@@ -107,15 +107,10 @@
     (lambda (x) (equal (erl-val-kind x) :pid))
   :fix-value (make-erl-val-pid :id 0))
 
-; Erlang message
-(fty::defprod message
-  ((dst pid-p)
-   (val erl-val-p)))
-
-; List of Erlnag messages sent
-(fty::deflist outbox
-    :elt-type message-p
-    :true-listp t)
+; Map from PID to messages sent
+(fty::defomap outbox
+  :key-type pid-p
+  :val-type erl-vlst-p)
 
 ; Utility Functions/Types ------------------------------------------------------
 
@@ -280,4 +275,6 @@
       :hints (("Goal" :expand (wf-vlst-p vlst-equiv))))
     
     (defrule non-receive-of-car-of-wf-vlst-p
-      (implies (wf-vlst-p lst) (not (equal (erl-val-kind (car lst)) :receive)))))
+      (implies
+        (wf-vlst-p lst)
+        (not (equal (erl-val-kind (car lst)) :receive)))))
