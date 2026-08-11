@@ -154,7 +154,14 @@
           ; when a receive is encountered, climb backwards in the continuation tree
           (:receive
             (make-erl-s-klst
-              :s (update-erl-state->in s (make-erl-val-receive :klst nil)))))))
+              :s (update-erl-state->in
+                   s
+                   (make-erl-val-receive
+                     :klst
+                      (list
+                        (make-erl-k
+                          :fuel fuel
+                          :kont (make-kont-receive :clauses x.cls))))))))))
       
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons

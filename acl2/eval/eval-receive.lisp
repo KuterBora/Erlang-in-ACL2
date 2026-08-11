@@ -5,7 +5,6 @@
 
 ; TODO: documentation
 (define eval-receive ((s erl-state-p) (cls erl-clause-list-p))
-  (declare (ignorable cls))
   :returns (mv (rs erl-state-p) (body expr-list-p))
   (b* (((erl-state s) (erl-state-fix s))
         (cls (erl-clause-list-fix cls))

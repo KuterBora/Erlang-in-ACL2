@@ -1,6 +1,6 @@
 (in-package "ACL2")
 (include-book "proc")
-(include-book "std/omaps/extensionality" :dir :system)
+; (include-book "std/omaps/extensionality" :dir :system)
 
 (set-induction-depth-limit 1)
 
@@ -15,6 +15,9 @@
 ; Weakly Fair Abstract Scheduler ----------------------------------------------
 
 (encapsulate
+  ; TODO: for fairness properties, we also need an abstarct state.
+  ; that the scheduler uses to choose what action to take.
+  ; I am guessing we will need this when we introduce fairness.
   (((schedule * ) => * :formals (net) :guard (network-p net)))
 
   ; Witness function
@@ -44,17 +47,17 @@
 
   ; The scheduler is weakly fair
   (defrule scheduler-weakly-fair-when-runnable
-    (implies 
+    (implies
       (and (pid-p pid)
            (network-p net)
            (omap::assoc pid net)
            (runnable? net pid))
       (not (equal (schedule net) (make-scheduling-stutter))))
     :enable (schedule runnable? proc-runnable?)
-    :hints (("Subgoal *1/5" :use (:instance crock-1 (x pid) (m net)))))
+    :hints (("Subgoal *1/3" :use (:instance crock-1 (x pid) (m net)))))
   
   (defrule scheduler-weakly-fair-when-deliverable
-    (implies 
+    (implies
       (and (pid-p pid) (pid-p dst)
            (network-p net)
            (omap::assoc pid net)
@@ -110,7 +113,7 @@
              (runnable? net pid))
         (not (equal (in-order-schedule net) '(:stutter))))
       :enable (runnable? proc-runnable?)
-      :hints (("Subgoal *1/5" :use (:instance crock-1 (x pid) (m net)))))
+      :hints (("Subgoal *1/3" :use (:instance crock-1 (x pid) (m net)))))
     
     (defrule in-order-scheduler-weakly-fair-when-deliverable
       (implies 

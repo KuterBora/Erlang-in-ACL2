@@ -4,20 +4,20 @@
 ; Erlang Process --------------------------------------------------------------
 
 (std::defenum proc-state-p
-  (:idle :terminated :receive-enter :receive-wait))
+  (:idle :terminated :receive :blocked))
 
 (fty::defprod proc
   (; state of the Erlang process
    (ps proc-state-p :default :idle)
 
-   ; state of the Erlang program run by the process
+   ; BOZO: state of the Erlang program run by the process
    (s erl-state-p :default (make-erl-state))
 
-   ; the messages received, but not yet tried on the next
+   ; BOZO: the messages received, but not yet tried on the next
    ; receive. (this is only used to prevent receive loops)
    (inbox-new erl-vlst-p :default nil)
 
-   ; messages that have been received and have already been
+   ; BOZO: messages that have been received and have already been
    ; tried by the next receive.
    (inbox-tried erl-vlst-p :default nil)
    
@@ -121,3 +121,14 @@
              (has-message-for-dst? (omap::tail n) p1 p2))
         (has-message-for-dst? n p1 p2))
       :enable proc-has-message-for-dst?))
+
+(define terminated? ((net network-p))
+  (b* ((net (network-fix net))
+       ((if (omap::emptyp net)) t))
+      (and (not (or (equal (proc->ps (omap::head-val net)) :idle)
+                    (equal (proc->ps (omap::head-val net)) :receive)
+                    (proc->outbox (omap::head-val net))))
+           (terminated? (omap::tail net))))
+  :hints (("Goal" :in-theory (enable network-p network-fix)))
+  ///
+    (defcong network-equiv equal (terminated? net) 1))

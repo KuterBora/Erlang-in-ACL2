@@ -104,9 +104,8 @@
               (equal (kont-binop-expr2->op (erl-k->kont k)) '!))
          (erl-state-send
           s
-          (list (make-message
-                  :dst (kont-binop-expr2->val (erl-k->kont k))
-                  :val (erl-state->in s)))))
+          (kont-binop-expr2->val (erl-k->kont k))
+          (erl-state->in s)))
         ((equal (kont-binop-expr2->op (erl-k->kont k)) '!)
          (update-erl-state->in
           s
