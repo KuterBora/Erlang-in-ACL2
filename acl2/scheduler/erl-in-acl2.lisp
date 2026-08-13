@@ -8,7 +8,6 @@
 
 (define proc-receive ((proc proc-p))
   :returns (rp proc-p)
-  :verify-guards nil
   :measure (len (proc->inbox-new (proc-fix proc)))
   (b* ((proc (proc-fix proc))
        
