@@ -1,5 +1,6 @@
 (in-package "ACL2")
 (include-book "abstract")
+(include-book "../theorems/state/self")
 
 ; todo:
 ; verify guards
@@ -18,6 +19,7 @@
 
        (- (cw "Attempting to receive message ~x0~%" (car (proc->inbox-new proc))))
        (rs (update-erl-state->in (proc->s proc) (car (proc->inbox-new proc))))
+       ((unless (erl-klst-p (proc->klst proc))) (b* ((- (cw "proc-receive: bad continuation list.~%"))) proc))
        (rs (apply-k rs (proc->klst proc))))
       (cond
         ((equal (erl-val-kind (erl-state->in rs)) :blocked)
@@ -42,12 +44,40 @@
                      :s rs
                      :ps :terminated
                      :inbox-new (append (proc->inbox-tried proc) (cdr (proc->inbox-new proc)))
-                     :inbox-tried nil))))))
+                     :inbox-tried nil)))))
+  ///
+    (defcong proc-equiv equal (proc-receive p) 1)
+    (more-returns
+      (rp :name proc->pid-of-proc-receive
+        (equal (proc->pid rp) (proc->pid proc))
+        :hints (("Goal" :in-theory (enable proc->pid))))))
+
+(local (defrule crock-2
+  (implies
+    (omap::assoc p (network-fix net))
+    (equal (proc->pid (omap::lookup p (network-fix net))) p))
+  :enable (omap::lookup network-fix network-p)))
+
+(local (defrule crock-3
+  (implies
+    (omap::assoc p (network-fix net))
+    (equal (erl-state->self (proc->s (omap::lookup p (network-fix net)))) p))
+  :disable crock-2
+  :enable proc->pid
+  :use (:instance crock-2)))
+
 
 (define erl-step ((net network-p))
-  ;returns (rnet network-p)
-  ;guard-hints (("Goal" :in-theory (enable network-p network-fix)))
-  :verify-guards nil
+  :returns rnet
+  :guard-hints
+    (("Goal"
+      :in-theory (e/d (network-p network-fix
+                       proc-has-message-for-dst?
+                       has-message-for-dst?)
+                      (scheduler-correct-when-run
+                       scheduler-correct-when-deliver))
+      :use ((:instance scheduler-correct-when-run)
+            (:instance scheduler-correct-when-deliver))))
   (b* ((net (network-fix net))
        ((if (terminated? net)) net)
        (sc (schedule net))
@@ -59,7 +89,9 @@
              (pid (scheduling-run->p sc))
              (proc (omap::lookup pid net))
              (s (proc->s proc))
-             (klst (proc->klst proc)))
+             (klst (proc->klst proc))
+             ((unless (erl-klst-p klst))
+              (b* ((- (cw "erl-step: bad continuation list.~%"))) nil)))
             (if (equal (proc->ps proc) :idle)
 
                 ; The program is running for the first time.
@@ -110,8 +142,8 @@
                                ssrc
                                (omap::update
                                  dst
-                                 (cdr (omap::lookup dst (erl-state->outbox ssrc)))
-                                 (erl-state->outbox ssrc))))
+                                 (cdr (omap::lookup dst (proc->outbox psrc)))
+                                 (proc->outbox psrc))))
                        net)))
               
                (pdst (omap::lookup dst net))
@@ -124,50 +156,91 @@
                       dst
                       (change-proc pdst
                         :inbox-new (append (proc->inbox-new pdst)
-                                           (list (car (omap::lookup dst (erl-state->outbox ssrc)))))
+                                           (list (car (omap::lookup dst (proc->outbox psrc)))))
                         :ps :receive)
                       (omap::update
                         src
                         (change-proc psrc
                           :s (update-erl-state->outbox
                                ssrc
-                               (if (cdr (omap::lookup dst (erl-state->outbox ssrc)))
+                               (if (cdr (omap::lookup dst (proc->outbox psrc)))
                                    (omap::update
                                      dst
-                                     (cdr (omap::lookup dst (erl-state->outbox ssrc)))
-                                     (erl-state->outbox ssrc))
-                                   (omap::delete dst (erl-state->outbox ssrc)))))
+                                     (cdr (omap::lookup dst (proc->outbox psrc)))
+                                     (proc->outbox psrc))
+                                   (omap::delete dst (proc->outbox psrc)))))
                         net)))
                   (omap::update
                       dst
                       (change-proc pdst
                         :inbox-new (append (proc->inbox-new pdst)
-                                           (list (car (omap::lookup dst (erl-state->outbox ssrc))))))
+                                           (list (car (omap::lookup dst (proc->outbox psrc))))))
                       (omap::update
                         src
                         (change-proc psrc
                           :s (update-erl-state->outbox
                                ssrc
-                               (if (cdr (omap::lookup dst (erl-state->outbox ssrc)))
+                               (if (cdr (omap::lookup dst (proc->outbox psrc)))
                                    (omap::update
                                      dst
-                                     (cdr (omap::lookup dst (erl-state->outbox ssrc)))
-                                     (erl-state->outbox ssrc))
-                                   (omap::delete dst (erl-state->outbox ssrc)))))
-                        net))))))))
-
-; TODO
-; - guards
-; - mbe
+                                     (cdr (omap::lookup dst (proc->outbox psrc)))
+                                     (proc->outbox psrc))
+                                   (omap::delete dst (proc->outbox psrc)))))
+                        net)))))))
+  ///
+    (more-returns
+      (rnet network-p :rule-classes :type-prescription
+        ; TODO: This can be done with single computational hint.
+        ;       Alas, I do not have time for that right now.
+        :hints
+          (("Subgoal 9"
+            :in-theory
+              (e/d (runnable? proc-runnable? network-p-of-update)
+                   (scheduler-correct-when-run))
+            :use ((:instance scheduler-correct-when-run)))
+          ("Subgoal 8"
+            :in-theory
+              (e/d (runnable? proc-runnable? proc->pid)
+                   (scheduler-correct-when-run))
+            :use ((:instance scheduler-correct-when-run)))
+          ("Subgoal 7"
+            :in-theory
+              (e/d (runnable? proc-runnable? proc->pid)
+                   (scheduler-correct-when-run))
+            :use ((:instance scheduler-correct-when-run)))
+          ("Subgoal 6"
+            :in-theory
+              (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
+                   (scheduler-correct-when-deliver))
+            :use ((:instance scheduler-correct-when-deliver)))
+          ("Subgoal 5"
+            :in-theory
+              (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
+                   (scheduler-correct-when-deliver))
+            :use ((:instance scheduler-correct-when-deliver)))
+          ("Subgoal 4"
+            :in-theory
+              (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
+                   (scheduler-correct-when-deliver))
+            :use ((:instance scheduler-correct-when-deliver)))
+          ("Subgoal 3"
+            :in-theory
+              (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
+                   (scheduler-correct-when-deliver))
+            :use ((:instance scheduler-correct-when-deliver)))
+          ("Subgoal 2"
+            :in-theory
+              (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
+                   (scheduler-correct-when-deliver))
+            :use ((:instance scheduler-correct-when-deliver)))))))
 
 ; Erlang Runtime --------------------------------------------------------------
 
 ; Run the Erlang processes, given the next step by the scheduler.
-; TODO: lookup choice variables
+; TODO: lookup the terminology of choice variables
 (define erl-runner ((net network-p) (fuel natp))
   :measure (nfix fuel)
   :returns (rnet network-p)
-  :verify-guards nil
   (b* ((net (network-fix net))
        (fuel (nfix fuel))
        ((if (= fuel 0)) net)

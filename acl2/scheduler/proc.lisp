@@ -22,11 +22,10 @@
    (inbox-tried erl-vlst-p :default nil)
    
    ; the remaining computation
-   (klst erl-klst-p :default nil)))
+   (klst true-listp :default nil)))
 
 (define proc->pid ((p proc-p))
   :returns (pid pid-p)
-  :enabled t
   (b* ((p (proc-fix p)))
       (erl-state->self (proc->s p)))
   ///
@@ -34,7 +33,6 @@
 
 (define proc->outbox ((p proc-p))
   :returns (o outbox-p)
-  :enabled t
   (b* ((p (proc-fix p)))
       (erl-state->outbox (proc->s p)))
   ///
@@ -51,8 +49,9 @@
 (define proc-has-message-for-dst? ((p proc-p) (dst pid-p))
   (b* ((p (proc-fix p))
        (dst (pid-fix dst)))
-      (and (erl-state->outbox (proc->s p))
-           (omap::assoc dst (erl-state->outbox (proc->s p)))))
+      (and (proc->outbox p)
+           (omap::assoc dst (proc->outbox p))
+           (omap::lookup dst (proc->outbox p))))
   ///
     (defcong proc-equiv equal (proc-has-message-for-dst? p dst) 1)
     (defcong pid-equiv equal (proc-has-message-for-dst? p dst) 2))
@@ -67,15 +66,30 @@
   :measure (acl2-count (network-gen-fix n))
   (b* ((n (network-gen-fix n))
        ((if (omap::emptyp n)) t))
-      (and (equal (omap::head-key n) (erl-state->self (proc->s (omap::head-val n))))
+      (and (equal (omap::head-key n) (proc->pid (omap::head-val n)))
            (wf-network-p (omap::tail n))))
   ///
-    (defcong network-gen-equiv equal (wf-network-p n) 1))
+    (defcong network-gen-equiv equal (wf-network-p n) 1)
+    
+    (defrule wf-network-p-of-update
+      (implies
+        (and (network-gen-p net) (wf-network-p net))
+        (wf-network-p (omap::update (proc->pid p) p net)))
+      :expand (wf-network-p (omap::update (proc->pid p) p nil))
+      :hints
+        (("Subgoal *1/4''"
+            :expand (wf-network-p (omap::update (proc->pid p) p net))))))
 
 (fty::defsubtype network
   :supertype network-gen
   :restriction (lambda (x) (wf-network-p x))
   :fix-value nil)
+
+(defrule network-p-of-update
+  (implies
+    (and (network-p net) (pid-p pid) (proc-p p) (equal (proc->pid p) pid))
+    (network-p (omap::update pid p net)))
+  :enable (network-gen-p network-p))
 
 (defrule network-p-of-tail
   (implies (network-p net) (network-p (omap::tail net)))
@@ -102,7 +116,12 @@
       (implies
         (and (pid-p p) (network-p n) (runnable? (omap::tail n) p))
         (runnable? n p))
-      :enable proc-runnable?))
+      :enable proc-runnable?)
+    
+    (defrule assoc-of-runnable?
+      (implies
+        (and (network-p net) (pid-p p) (runnable? net p))
+        (omap::assoc p net))))
 
 (define has-message-for-dst? ((net network-p) (src pid-p) (dst pid-p))
   (b* ((net (network-fix net))
@@ -120,7 +139,42 @@
         (and (pid-p p1) (pid-p p2) (network-p n)
              (has-message-for-dst? (omap::tail n) p1 p2))
         (has-message-for-dst? n p1 p2))
-      :enable proc-has-message-for-dst?))
+      :enable proc-has-message-for-dst?)
+    
+    (defrule assoc-of-lookup-when-has-message-for-dst?
+      (implies
+        (and (pid-p p1) (pid-p p2) (has-message-for-dst? net p1 p2))
+        (omap::assoc p2 (proc->outbox (omap::lookup p1 net))))
+      :enable (proc-has-message-for-dst? network-fix))
+    
+    (defrule lookup-of-lookup-when-has-message-for-dst?
+      (implies
+        (and (pid-p p1) (pid-p p2) (has-message-for-dst? net p1 p2))
+        (omap::lookup p2 (proc->outbox (omap::lookup p1 net))))
+      :enable (proc-has-message-for-dst? network-fix))
+
+    (defrule erl-vlst-p-when-has-message-for-dst?
+      (implies
+        (and (pid-p p1) (pid-p p2) (has-message-for-dst? net p1 p2))
+        (erl-vlst-p (omap::lookup p2 (proc->outbox (omap::lookup p1 net))))))
+
+    (defrule consp-when-has-message-for-dst?
+      (implies
+        (and (pid-p p1) (pid-p p2) (has-message-for-dst? net p1 p2))
+        (consp (omap::lookup p2 (proc->outbox (omap::lookup p1 net)))))
+      :disable (has-message-for-dst?
+                lookup-of-lookup-when-has-message-for-dst?
+                erl-vlst-p-when-has-message-for-dst?)
+      :use ((:instance lookup-of-lookup-when-has-message-for-dst?)
+            (:instance erl-vlst-p-when-has-message-for-dst?)))
+
+    (defrule has-message-for-dst?-when-assoc-on-tail
+      (implies
+        (and (pid-p p1) (pid-p p2)
+             (omap::assoc p1 (omap::tail net))
+             (has-message-for-dst? net p1 p2))
+        (has-message-for-dst? (omap::tail net) p1 p2))
+      :enable (proc-has-message-for-dst? network-fix)))
 
 (define terminated? ((net network-p))
   (b* ((net (network-fix net))

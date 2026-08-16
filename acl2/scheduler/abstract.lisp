@@ -11,8 +11,43 @@
   (:deliver ((p1 pid-p) (p2 pid-p)))
   (:stutter ()))
 
-
 ; Weakly Fair Abstract Scheduler ----------------------------------------------
+
+; helper function that returns a message from the given outbox, or nil
+; if none exists.
+(define parse-outbox ((x outbox-p))
+  :returns rpid
+  :measure (acl2-count (outbox-fix x))
+  (b* ((x (outbox-fix x))
+       ((if (omap::emptyp x)) nil)
+       ((if (null (omap::head-val x))) (parse-outbox (omap::tail x))))
+      (omap::head-key x))
+  ///
+    (defcong outbox-equiv equal (parse-outbox x) 1)
+    (more-returns
+      (rpid :name pid-p-of-parse-outbox
+        :rule-classes :type-prescription
+        (implies rpid (pid-p rpid)))
+      (rpid :name assoc-of-parse-outbox
+        (implies rpid (omap::assoc rpid x)))
+      (rpid :name parse-outbox-has-message
+        (implies rpid (omap::lookup rpid x))
+        :hints (("Goal" :in-theory (enable omap::lookup)))))
+    
+    (defrule parse-outbox-when-outbox-has-message-for-dst
+      (implies
+        (and (outbox-p x) (pid-p dst)
+              (omap::assoc dst x)
+              (omap::lookup dst x))
+        (parse-outbox x))
+      :enable omap::lookup)
+    
+    (defrule parse-outbox-when-proc-has-message-for-dst
+      (implies
+        (and (proc-p p) (pid-p dst)
+              (proc-has-message-for-dst? p dst))
+        (parse-outbox (proc->outbox p)))
+      :enable (proc->outbox proc-has-message-for-dst?)))
 
 (encapsulate
   ; TODO: for fairness properties, we also need an abstarct state.
@@ -21,26 +56,33 @@
   (((schedule * ) => * :formals (net) :guard (network-p net)))
 
   ; Witness function
-
   (local (define schedule ((net network-p))
-    :returns (s scheduling-p)
-    :verify-guards nil
+    :returns s
     :measure (acl2-count (network-fix net))
     (b* ((net (network-fix net))
          ((if (omap::emptyp net)) (make-scheduling-stutter))
          (pid (omap::head-key net))
          ((if (runnable? net pid)) (make-scheduling-run :p pid))
          (outbox (proc->outbox (omap::lookup pid net)))
-         ((unless (omap::emptyp outbox)) (make-scheduling-deliver :p1 pid :p2 (omap::head-key outbox))))
+         ((if (parse-outbox outbox))
+          (make-scheduling-deliver :p1 pid :p2 (parse-outbox outbox))))
         (schedule (omap::tail net)))
     :hints (("Goal" :in-theory (enable network-fix)))
     ///
-      (defcong network-equiv equal (schedule net) 1)
       (verify-guards schedule
         :hints (("Goal" :in-theory (enable network-p))))))
   
   ; Theorems
+  (more-returns schedule
+    (s
+     :name scheduling-p-of-schedule
+     :rule-classes :type-prescription
+     :hints (("Goal" :in-theory (enable schedule)))
+     scheduling-p))
 
+  (defcong network-equiv equal (schedule net) 1
+    :hints (("Goal" :in-theory (enable schedule))))
+  
   (local (defrule crock-1
     (implies (and (omap::assoc x m) (not (omap::assoc x (omap::tail m))))
              (equal (omap::head-key m) x))))
@@ -54,8 +96,8 @@
            (runnable? net pid))
       (not (equal (schedule net) (make-scheduling-stutter))))
     :enable (schedule runnable? proc-runnable?)
-    :hints (("Subgoal *1/3" :use (:instance crock-1 (x pid) (m net)))))
-  
+    :hints (("Subgoal *1/4" :use (:instance crock-1 (x pid) (m net)))))
+
   (defrule scheduler-weakly-fair-when-deliverable
     (implies
       (and (pid-p pid) (pid-p dst)
@@ -63,37 +105,37 @@
            (omap::assoc pid net)
            (has-message-for-dst? net pid dst))
       (not (equal (schedule net) (make-scheduling-stutter))))
-    :enable (schedule has-message-for-dst? proc-has-message-for-dst? proc->outbox)
-    :hints (("Subgoal *1/5" :use (:instance crock-1 (x pid) (m net)))
-            ("Subgoal *1/6" :use ((:instance crock-1 (x pid) (m net))))))
+    :enable schedule
+    :hints (("Subgoal *1/6" :use (:instance crock-1 (x pid) (m net)))))
   
   ; The scheduler is correct
-  (defrule scheduler-correct-of-run
+  (defrule scheduler-correct-when-run
     (implies
-      (and (network-p net) (equal (scheduling-kind (schedule net)) :run))
+      (equal (scheduling-kind (schedule net)) :run)
       (runnable? net (scheduling-run->p (schedule net))))
-    :enable schedule)
-  
-  (defrule scheduler-correct-of-deliver
+    :enable (network-fix schedule))
+
+  (defrule scheduler-correct-when-deliver
     (implies
-      (and (network-p net) (equal (scheduling-kind (schedule net)) :deliver))
+      (equal (scheduling-kind (schedule net)) :deliver)
       (has-message-for-dst?
         net
         (scheduling-deliver->p1 (schedule net))
         (scheduling-deliver->p2 (schedule net))))
-    :enable (schedule has-message-for-dst? proc-has-message-for-dst?)))
+    :enable (schedule network-fix has-message-for-dst? proc-has-message-for-dst?)))
+
 
 ; Executable counterpart
 (define in-order-schedule ((net network-p))
   :returns (s scheduling-p)
-  :verify-guards nil
   :measure (acl2-count (network-fix net))
   (b* ((net (network-fix net))
-        ((if (omap::emptyp net)) (make-scheduling-stutter))
-        (pid (omap::head-key net))
-        ((if (runnable? net pid)) (make-scheduling-run :p pid))
-        (outbox (proc->outbox (omap::lookup pid net)))
-        ((unless (omap::emptyp outbox)) (make-scheduling-deliver :p1 pid :p2 (omap::head-key outbox))))
+       ((if (omap::emptyp net)) (make-scheduling-stutter))
+       (pid (omap::head-key net))
+       ((if (runnable? net pid)) (make-scheduling-run :p pid))
+       (outbox (proc->outbox (omap::lookup pid net)))
+       ((if (parse-outbox outbox))
+        (make-scheduling-deliver :p1 pid :p2 (parse-outbox outbox))))
       (in-order-schedule (omap::tail net)))
   :hints (("Goal" :in-theory (enable network-fix)))
   ///
@@ -113,7 +155,7 @@
              (runnable? net pid))
         (not (equal (in-order-schedule net) '(:stutter))))
       :enable (runnable? proc-runnable?)
-      :hints (("Subgoal *1/3" :use (:instance crock-1 (x pid) (m net)))))
+      :hints (("Subgoal *1/4" :use (:instance crock-1 (x pid) (m net)))))
     
     (defrule in-order-scheduler-weakly-fair-when-deliverable
       (implies 
@@ -122,24 +164,23 @@
              (omap::assoc pid net)
              (has-message-for-dst? net pid dst))
         (not (equal (in-order-schedule net) '(:stutter))))
-      :enable (has-message-for-dst? proc-has-message-for-dst? proc->outbox)
-      :hints (("Subgoal *1/5" :use (:instance crock-1 (x pid) (m net)))
-              ("Subgoal *1/6" :use ((:instance crock-1 (x pid) (m net))))))
+      :hints (("Subgoal *1/6" :use (:instance crock-1 (x pid) (m net)))))
     
     ; The scheduler is correct
-    (defrule in-order-scheduler-correct-of-run
+    (defrule in-order-scheduler-correct-when-run
       (implies
-        (and (network-p net) (equal (scheduling-kind (in-order-schedule net)) :run))
-        (runnable? net (scheduling-run->p (in-order-schedule net)))))
+        (equal (scheduling-kind (in-order-schedule net)) :run)
+        (runnable? net (scheduling-run->p (in-order-schedule net))))
+      :enable network-fix)
     
-    (defrule in-order-scheduler-correct-of-deliver
+    (defrule in-order-scheduler-correct-when-deliver
       (implies
-        (and (network-p net) (equal (scheduling-kind (in-order-schedule net)) :deliver))
+        (equal (scheduling-kind (in-order-schedule net)) :deliver)
         (has-message-for-dst?
           net
           (scheduling-deliver->p1 (in-order-schedule net))
           (scheduling-deliver->p2 (in-order-schedule net))))
-      :enable (has-message-for-dst? proc-has-message-for-dst?)))
+      :enable (network-fix has-message-for-dst? proc-has-message-for-dst? proc->outbox)))
 
 (defattach
   (schedule in-order-schedule)
