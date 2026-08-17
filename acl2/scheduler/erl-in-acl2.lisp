@@ -163,12 +163,10 @@
                         (change-proc psrc
                           :s (update-erl-state->outbox
                                ssrc
-                               (if (cdr (omap::lookup dst (proc->outbox psrc)))
-                                   (omap::update
-                                     dst
-                                     (cdr (omap::lookup dst (proc->outbox psrc)))
-                                     (proc->outbox psrc))
-                                   (omap::delete dst (proc->outbox psrc)))))
+                               (omap::update
+                                 dst
+                                 (cdr (omap::lookup dst (proc->outbox psrc)))
+                                 (proc->outbox psrc))))
                         net)))
                   (omap::update
                       dst
@@ -180,12 +178,10 @@
                         (change-proc psrc
                           :s (update-erl-state->outbox
                                ssrc
-                               (if (cdr (omap::lookup dst (proc->outbox psrc)))
-                                   (omap::update
-                                     dst
-                                     (cdr (omap::lookup dst (proc->outbox psrc)))
-                                     (proc->outbox psrc))
-                                   (omap::delete dst (proc->outbox psrc)))))
+                               (omap::update
+                                 dst
+                                 (cdr (omap::lookup dst (proc->outbox psrc)))
+                                 (proc->outbox psrc))))
                         net)))))))
   ///
     (more-returns
@@ -210,14 +206,14 @@
             :use ((:instance scheduler-correct-when-run)))
           ("Subgoal 6"
             :in-theory
-              (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
-                   (scheduler-correct-when-deliver))
-            :use ((:instance scheduler-correct-when-deliver)))
+              (e/d (runnable? proc-runnable? proc->pid)
+                   (scheduler-correct-when-run))
+            :use ((:instance scheduler-correct-when-run)))
           ("Subgoal 5"
             :in-theory
-              (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
-                   (scheduler-correct-when-deliver))
-            :use ((:instance scheduler-correct-when-deliver)))
+              (e/d (runnable? proc-runnable? proc->pid)
+                   (scheduler-correct-when-run))
+            :use ((:instance scheduler-correct-when-run)))
           ("Subgoal 4"
             :in-theory
               (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
