@@ -80,6 +80,8 @@
         (("Subgoal *1/4''"
             :expand (wf-network-p (omap::update (proc->pid p) p net))))))
 
+; Erlang Network --------------------------------------------------------------
+
 (fty::defsubtype network
   :supertype network-gen
   :restriction (lambda (x) (wf-network-p x))
