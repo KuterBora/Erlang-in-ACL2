@@ -29,6 +29,13 @@
   (b* ((p (proc-fix p)))
       (erl-state->self (proc->s p)))
   ///
+    (more-returns
+      (pid :name erl-val-kind-of-proc->pid
+        (equal (erl-val-kind pid) :pid)
+       :hints
+        (("Goal"
+            :in-theory (e/d (pid-p) (proc->pid pid-p-of-proc->pid))
+            :use (:instance pid-p-of-proc->pid)))))
     (defcong proc-equiv equal (proc->pid p) 1))
 
 (define proc->outbox ((p proc-p))
@@ -78,7 +85,18 @@
       :expand (wf-network-p (omap::update (proc->pid p) p nil))
       :hints
         (("Subgoal *1/4''"
-            :expand (wf-network-p (omap::update (proc->pid p) p net))))))
+            :expand (wf-network-p (omap::update (proc->pid p) p net)))))
+    
+    (defrule wf-network-p-of-delete
+      (implies
+        (and (network-gen-p net) (wf-network-p net))
+        (wf-network-p (omap::delete p net)))
+      :enable (omap::delete)
+      :hints
+        (("Subgoal *1/4''"
+           :use (:instance wf-network-p-of-update
+                  (net (omap::delete p (omap::tail net)))
+                  (p (mv-nth 1 (omap::head net))))))))
 
 ; Erlang Network --------------------------------------------------------------
 
@@ -92,6 +110,12 @@
     (and (network-p net) (pid-p pid) (proc-p p) (equal (proc->pid p) pid))
     (network-p (omap::update pid p net)))
   :enable (network-gen-p network-p))
+
+(defrule network-p-of-delete
+  (implies
+    (and (network-p net) (pid-p pid))
+    (network-p (omap::delete pid net)))
+  :enable (network-gen-p network-p wf-network-p))
 
 (defrule network-p-of-tail
   (implies (network-p net) (network-p (omap::tail net)))
