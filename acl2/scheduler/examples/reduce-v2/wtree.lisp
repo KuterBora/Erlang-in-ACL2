@@ -1,11 +1,14 @@
+(in-package "ACL2")
 (include-book "spawn")
 
+(set-induction-depth-limit 1)
+
+(local (include-book "std/lists/len" :dir :system))
+(local (include-book "arithmetic-3/top" :dir :system))
+(local (include-book "std/lists/nth" :dir :system))
 
 ; Create wtree
 (encapsulate nil
-  (local (include-book "arithmetic-3/top" :dir :system))
-  (local (include-book "std/lists/nth" :dir :system))
-
   (local (defrule compatiblep-of-tail
     (implies (omap::compatiblep a b)
              (omap::compatiblep a (omap::tail b)))))
@@ -48,7 +51,14 @@
     (implies (and (nat-listp lst) (nth x lst))
              (natp (nth x lst)))))
 
-  (define create-wtree0 ((n natp) (self pid-p) (index natp) (parent erl-val-p) (children erl-vlst-p) (net network-p))
+  (local (defrule domain-of-network-p
+    (implies (network-p n) (pid-set-p (omap::keys n)))
+    :enable (network-p pid-set-p omap::keys)))
+
+  (define create-wtree0
+    ((n natp) (self pid-p) (index natp)
+     (parent erl-val-p) (children erl-vlst-p)
+     (pids pid-set-p) (net network-p))
     :verify-guards nil
     :returns rnet
     :measure (nfix n)
@@ -57,34 +67,66 @@
          (index (nfix index))
          (parent (erl-val-fix parent))
          (children (erl-vlst-fix children))
+         (pids (pid-set-fix pids))
          (net (network-fix net))
          ((if (zp n)) net)
+         ((if (not (set::in self pids))) nil)
          ((if (omap::assoc self net)) nil)
          ((if (equal n 1))
           (omap::update self (make-reduce-proc self parent children index) net))
-         
-         ; Unfortunately I have to do a little trick here, so that the self pid is not reused
-         ; in the recursive call.
-         (tnet (omap::update self (make-proc :s (make-erl-state :self self)) net))
-         (cpid (spawn tnet))
-         (tchild-net
-           (create-wtree0 (ceiling n 2) cpid (+ index (floor n 2)) self nil tnet))
-         (child-net (omap::delete self tchild-net)))
-        (create-wtree0 (floor n 2) self index parent (cons cpid children) child-net))
+         (cpid (spawn pids))
+         (child-net
+           (create-wtree0
+              (ceiling n 2) cpid (+ index (floor n 2)) self nil
+              (set::insert cpid pids) net)))
+        (create-wtree0
+          (floor n 2) self index parent (cons cpid children)
+          (set::union pids (omap::keys child-net)) child-net))
 
-    ///
-      (more-returns
-        (rnet network-p :rule-classes :type-prescription
-          :hints (("Goal" :in-theory (disable nfix)))))
+      ///
+        (more-returns
+          (rnet network-p :rule-classes :type-prescription
+            :hints (("Goal" :in-theory (disable nfix)))))
+          
+        (verify-guards create-wtree0
+          :hints (("Goal" :in-theory (enable network-p))))
         
-      (verify-guards create-wtree0)))
-
-(define create-wtree ((n natp))
-  :returns (rnet network-p)
-  (b* ((n (nfix n)))
-      (create-wtree0 n (spawn nil) 0 '(:atom none) nil nil)))
-
-
+        (defcong nat-equiv equal (create-wtree0 a b c d e f g) 1)
+        (defcong pid-equiv equal (create-wtree0 a b c d e f g) 2
+          :hints
+            (("Goal" :expand ((create-wtree0 a b c d e f g)
+                              (create-wtree0 a b-equiv c d e f g)))))
+        (defcong nat-equiv equal (create-wtree0 a b c d e f g) 3
+          :hints
+            (("Goal" :in-theory (disable nfix)
+                     :expand ((create-wtree0 a b c d e f g)
+                              (create-wtree0 a b c-equiv d e f g)))))
+        (defcong erl-val-equiv equal (create-wtree0 a b c d e f g) 4)
+        (defcong erl-vlst-equiv equal (create-wtree0 a b c d e f g) 5)
+        (defcong pid-set-equiv equal (create-wtree0 a b c d e f g) 6
+          :hints
+            (("Goal" :expand ((create-wtree0 a b c d e f g)
+                              (create-wtree0 a b c d e f-equiv g)))))
+        (defcong network-equiv equal (create-wtree0 a b c d e f g) 7
+          :hints
+            (("Goal" :expand ((create-wtree0 a b c d e f g)
+                              (create-wtree0 a b c d e f g-equiv))))))
+  
+  (define create-wtree ((n natp))
+    :returns (rnet network-p)
+    :guard-hints (("Goal" :in-theory (enable pid-set-p)))
+    (b* ((n (nfix n))
+         (self (spawn nil)))
+        (create-wtree0 n self 0 '(:atom none) nil (list self) nil))
+    ///
+      (defcong nat-equiv equal (create-wtree n) 1
+        :hints
+          (("Goal"
+             :in-theory (disable nfix)
+             :expand ((create-wtree n) (create-wtree n-equiv))
+             :use (:instance nat-equiv-implies-equal-create-wtree0-1
+                    (a n) (b self) (c 0) (d '(:atom none))
+                    (e nil) (f (list self)) (g nil)))))))
 
 
 ; Wtree properties
@@ -212,20 +254,12 @@
        (parent (erl-val-fix parent))
        (net (network-fix net))
        ((unless (omap::assoc pid net)) nil)
-       (- (cw "Passed check 9~%"))
        ((unless (pid-p parent)) (root-p (omap::lookup pid net)))
-       (- (cw "Passed check 10, the net is ~x0 and the parent is: ~x1~%"
-            net parent))
        ((unless (omap::assoc parent net)) nil)
-       (- (cw "Passed check 11~%"))
        (pproc (omap::lookup parent net))
-       (- (cw "Going to 12 with pproc: ~x0~%" pproc))
        ((unless (or (leaf-p pproc) (root-p pproc))) nil)
-       (- (cw "Passed check 12~%"))
        (bind (erl-state->bind (proc->s pproc)))
-       (cpids (erl-val-cons->lst (omap::lookup 'ChildPids bind)))
-       (- (cw "Going to 13 with pid: ~x0 and cpids ~x1 ~%"
-              pid cpids)))
+       (cpids (erl-val-cons->lst (omap::lookup 'ChildPids bind))))
       (not (null (member-equal pid cpids))))
   ///
     (defcong pid-equiv equal (check-parent pid parent net) 1)
@@ -234,48 +268,48 @@
 
 ; return the leftmost descendent of the given pid, else nil.
 ; Also, make sure there is no cycle by removing visted nodes from the net.
-(define leftmost-child ((pid pid-p) (net network-p))
-  :returns lpid
-  :measure (omap::size (network-fix net))
-  :guard-hints (("Goal" :in-theory (enable erl-val-crock)))
-  :prepwork ((local (defruled erl-val-crock (implies (erl-val-p v) (consp v)))))
+; (define leftmost-child ((pid pid-p) (net network-p))
+;   :returns lpid
+;   :measure (omap::size (network-fix net))
+;   :guard-hints (("Goal" :in-theory (enable erl-val-crock)))
+;   :prepwork ((local (defruled erl-val-crock (implies (erl-val-p v) (consp v)))))
 
-  (b* ((pid (pid-fix pid))
-       (net (network-fix net))
-       ((unless (omap::assoc pid net)) nil)
-       (proc (omap::lookup pid net))
-       ((unless (or (leaf-p proc) (root-p proc))) nil)
-       (bind (erl-state->bind (proc->s proc)))
-       (children (erl-val-cons->lst (omap::lookup 'ChildPids bind)))
-       ((if (null children)) pid)
-       (cpid (car children))
-       ((unless (pid-p cpid)) nil)
-       ((unless (omap::assoc cpid net)) nil)
-       ((unless (leaf-p (omap::lookup cpid net))) nil))
-      (leftmost-child cpid (omap::delete pid net)))
-  ///
-    (defcong pid-equiv equal (leftmost-child pid net) 1)
-    (defcong network-equiv equal (leftmost-child pid net) 2)
+;   (b* ((pid (pid-fix pid))
+;        (net (network-fix net))
+;        ((unless (omap::assoc pid net)) nil)
+;        (proc (omap::lookup pid net))
+;        ((unless (or (leaf-p proc) (root-p proc))) nil)
+;        (bind (erl-state->bind (proc->s proc)))
+;        (children (erl-val-cons->lst (omap::lookup 'ChildPids bind)))
+;        ((if (null children)) pid)
+;        (cpid (car children))
+;        ((unless (pid-p cpid)) nil)
+;        ((unless (omap::assoc cpid net)) nil)
+;        ((unless (leaf-p (omap::lookup cpid net))) nil))
+;       (leftmost-child cpid (omap::delete pid net)))
+;   ///
+;     (defcong pid-equiv equal (leftmost-child pid net) 1)
+;     (defcong network-equiv equal (leftmost-child pid net) 2)
     
-    (more-returns
-      (lpid :name erl-pid-or-nil-of-leftmost-child
-        (or (null lpid) (pid-p lpid)))
-      (lpid :name assoc-of-leftmost-child
-        (implies (and lpid (network-p net)) (omap::assoc lpid net)))
-      (lpid :name node-p-of-leftmost-child
-        (implies
-          (and lpid (network-p net))
-          (or (leaf-p (omap::lookup lpid net))
-              (root-p (omap::lookup lpid net)))))
-      ; TODO: prove this by showing omap::delete will not be assoc
-      ; (lpid :name no-children-of-leftmost-child
-      ;   (implies
-      ;     (and (pid-p lpid) (pid-p pid) (network-p net))
-      ;     (null (erl-val-cons->lst
-      ;             (omap::lookup
-      ;               'ChildPids
-      ;               (erl-state->bind (proc->s (omap::lookup lpid net))))))))
-      ))
+;     (more-returns
+;       (lpid :name erl-pid-or-nil-of-leftmost-child
+;         (or (null lpid) (pid-p lpid)))
+;       (lpid :name assoc-of-leftmost-child
+;         (implies (and lpid (network-p net)) (omap::assoc lpid net)))
+;       (lpid :name node-p-of-leftmost-child
+;         (implies
+;           (and lpid (network-p net))
+;           (or (leaf-p (omap::lookup lpid net))
+;               (root-p (omap::lookup lpid net)))))
+;       ; TODO: prove this by showing omap::delete will not be assoc
+;       ; (lpid :name no-children-of-leftmost-child
+;       ;   (implies
+;       ;     (and (pid-p lpid) (pid-p pid) (network-p net))
+;       ;     (null (erl-val-cons->lst
+;       ;             (omap::lookup
+;       ;               'ChildPids
+;       ;               (erl-state->bind (proc->s (omap::lookup lpid net))))))))
+;       ))
 
 
 ; return the rightmost descendent of the given pid, else nil.
@@ -321,13 +355,11 @@
   :returns (r booleanp)
   :measure (len (erl-vlst-fix children))
   :guard-hints
-    (("Goal" :use ((:instance node-p-of-rightmost-child (net net) (pid (car children)))
-                   (:instance node-p-of-leftmost-child (net net) (pid (car children)))
-            )))
+    (("Goal" :use ((:instance node-p-of-rightmost-child (net net) (pid (car children))))))
   (b* ((index (nfix index))
        (children (erl-vlst-fix children))
        (net (network-fix net))
-       ((if (endp children)) t)
+       ((if (null children)) t)
        (cpid (car children))
        ((unless (pid-p cpid)) nil)
        ((unless (omap::assoc cpid net)) nil)
@@ -335,72 +367,61 @@
        ((unless (leaf-p cproc)) nil)
        (cbind (erl-state->bind (proc->s cproc)))
        (cchildren (erl-val-cons->lst (omap::lookup 'ChildPids cbind)))
-       (cindex (erl-val-integer->val (omap::lookup 'Index cbind))))
-      (cond
-        ((null cchildren)
-         (and (equal (+ 1 index) cindex)
-              (check-indices cindex (cdr children) net)))
-        (t
-          (b* ((lpid (leftmost-child cpid net))
-               ((unless lpid) nil)
-               (lproc (omap::lookup lpid net))
-               (lbind (erl-state->bind (proc->s lproc)))
-               (lindex (erl-val-integer->val (omap::lookup 'Index lbind)))
-               ((unless (equal lindex (+ 1 index))) nil)
-               (rpid (rightmost-child cpid net))
-               ((unless rpid) nil)
-               (rproc (omap::lookup rpid net))
-               (rbind (erl-state->bind (proc->s rproc)))
-               (rindex (erl-val-integer->val (omap::lookup 'Index rbind))))
-              (check-indices rindex (cdr children) net))))))
+       (cindex (erl-val-integer->val (omap::lookup 'Index cbind)))
+       ((unless (equal (+ 1 index) cindex)) nil)
+       ((if (null cchildren)) (check-indices cindex (cdr children) net))
+       (rpid (rightmost-child cpid net))
+       ((unless rpid) nil)
+        (rproc (omap::lookup rpid net))
+        (rbind (erl-state->bind (proc->s rproc)))
+        (rindex (erl-val-integer->val (omap::lookup 'Index rbind))))
+      (check-indices rindex (cdr children) net)))
 
 ; check if network is a wtree of size n.
 (define wtree0-p ((net network-p) (net0 network-p) (n natp))
   :returns (r booleanp)
   :measure (acl2-count (network-fix net))
   :guard-hints
-    (("Goal" :use
-      ((:instance node-p-of-rightmost-child (net net0) (pid (mv-nth 0 (omap::head net))))
-       (:instance node-p-of-rightmost-child (net net0) (pid (mv-nth 0 (omap::head net)))))))
+    (("Goal"
+      :in-theory (disable node-p-of-rightmost-child index-of-leaf-p)
+      :use
+        ((:instance index-of-leaf-p (p (mv-nth 1 (omap::head net))))
+         (:instance node-p-of-rightmost-child (net net0) (pid (mv-nth 0 (omap::head net))))
+         (:instance node-p-of-rightmost-child (net net0) (pid (mv-nth 0 (omap::head net)))))))
   :ignore-ok t
   (b* ((net (network-fix net))
        (net0 (network-fix net0))
        (n (nfix n))
-       (- (cw "Start~%"))
-       ((if (zp n)) nil)
-       (- (cw "Passed check 1~%"))
+
+       ; do I need these?
+       ((if (zp n)) (omap::emptyp net0))
+       ((unless (equal n (omap::size net0))) nil)
+
        ((if (omap::emptyp net)) t)
-       (- (cw "Passed check 2~%"))
+
        (pid (omap::head-key net))
        (proc (omap::head-val net))
        ((unless (or (root-p proc) (leaf-p proc))) nil)
-       (- (cw "Passed check 3~%"))
+
        (bind (erl-state->bind (proc->s proc)))
        ; must have entries for parent, children, and index
        (index (erl-val-integer->val (omap::lookup 'Index bind)))
        (children (erl-val-cons->lst (omap::lookup 'ChildPids bind)))
        (parent (omap::lookup 'Parent bind))
        ((unless (check-children pid children net0)) nil)
-       (- (cw "Passed check 4~%"))
        ((unless (check-parent pid parent net0)) nil)
-       (- (cw "Passed check 5~%"))
-       ((unless (check-indices index children net0)) nil)
-       (- (cw "Passed check 6~%")))
+       ((unless (check-indices index children net0)) nil))
     (cond
       ((root-p proc)
        (b* (((unless (non-root-segment-p (omap::tail net))) nil)
-            (- (cw "Passed check 7~%"))
             ((unless (wtree0-p (omap::tail net) net0 n)) nil)
-            (- (cw "Passed check 8~%"))
             (rpid (rightmost-child pid net0)))
            (if rpid
                (b* ((rproc (omap::lookup rpid net0))
                     (rbind (erl-state->bind (proc->s rproc)))
-                    (rindex (erl-val-integer->val (omap::lookup 'Index rbind)))
-                    (- (cw "RIndex is ~x0. ~%" rindex)))
+                    (rindex (erl-val-integer->val (omap::lookup 'Index rbind))))
                   (equal rindex (- n 1))) ; if 0 indexed
-               (b* ((- (cw "rpid is nil. children are : ~x0~%" children)))
-                (and (null children) (equal n 1))))))
+               (and (null children) (equal n 1)))))
       ((leaf-p proc) (wtree0-p (omap::tail net) net0 n))
       (t nil))))
 
@@ -409,32 +430,3 @@
   :returns (r booleanp)
   (b* ((net (network-fix net)))
       (wtree0-p net net (omap::size net))))
-
-(wtree-p (create-wtree 5))
-
-(leftmost-child '(:pid 0) (create-wtree 2))
-
-; TODO
-; split to files
-; test create and reduce
-; why wtree not work
-; change var names
-; should be enough for proof?
-
-
-; (tree-p
-;   parent is parent
-;   child is child
-;   check-indices-of-children
-;   )
-; can I prove that a root must exist?
-
-; later I can reason about how net does not contain any other process -- or that should be a hypothesis.
-; -- in fact this is an important security property we will want to prove. -- only processes
-; spawned by one another can send messages to one another.
-; What I want to prove for now is that a process cannot send if not passed a pid, or has bindings for pid.
-; Then I can assume no other process in the net has hold on a pid in the wtree but those in the wtree.
-; Discuss wih Mark! --  assume for now that the network is just the wtree, but later just say that
-; the network contains an isolated wtree.
-
-; More for MArk: I need a better word for leaf.
