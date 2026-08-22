@@ -1,9 +1,11 @@
 (in-package "ACL2")
-(include-book "../../top")
+(include-book "../../scheduler/top")
 
 (set-induction-depth-limit 1)
 
-; BOZO: the world should not be limited to the following functions. It should
+; TODO doc and defsection
+
+; TODO: the world should not be limited to the following functions. It should
 ; instead just state that there is a module in the world that contains the
 ; functions. However, this simplifies the proofs slightly for now.
 
@@ -80,4 +82,17 @@
                                                   :hd (make-node-var :id 'ChildPids)
                                                   :tl (make-node-cons
                                                         :hd (make-node-var :id 'Index)
-                                                        :tl (make-node-nil)))))))))))
+                                                        :tl (make-node-nil))))))))))
+  ///
+    (defcong pid-equiv equal (make-reduce-proc s p c i) 1)
+    (defcong erl-val-equiv equal (make-reduce-proc s p c i) 2)
+    (defcong erl-vlst-equiv equal (make-reduce-proc s p c i) 3)
+    (defcong nat-equiv equal (make-reduce-proc s p c i) 4)
+
+    (defrule network-p-of-update-with-make-reduce-proc
+      (implies
+        (and (network-p net) (pid-p pid))
+        (network-p (omap::update pid (make-reduce-proc pid par chl val) net)))
+      :e/d ((proc->pid) (network-p-of-update))
+      :use (:instance network-p-of-update
+              (net net) (pid pid) (p (make-reduce-proc pid par chl val)))))

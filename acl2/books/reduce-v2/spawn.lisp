@@ -1,52 +1,47 @@
 (in-package "ACL2")
-(include-book "proc")
+(include-book "reduce-proc")
 
+; TODO: doc
 ; TODO defsection
-(local (include-book "std/lists/len" :dir :system))
-(local (include-book "arithmetic/top" :dir :system))
-(local (in-theory (enable* set::definitions)))
 
-(local (defrule set-order-crock
-  (implies
-    (and (not (set::emptyp s))
-         (not (set::emptyp (set::tail s))))
-    (<< (set::head s)
-        (set::head (set::tail s))))
-  :in-theory (enable* set::order-rules)))
-
-(local (defrule list-order
-  (implies
-    (and
-      a b
-      (true-listp a) (true-listp b) 
-      (car a) (car b) (equal (car a) (car b))
-      (cadr a) (cadr b) (not (equal (cadr a) (cadr b)))
-      (not (cddr a)) (not (cddr b))
-      (<< (cadr a) (cadr b)))
-      (<< a b))
-  :enable (<< lexorder)))
-
-(local (defrule natp-order
-  (implies
-    (natp x)
-    (<< x (+ 1 x)))
-  :enable (<< lexorder alphorder)))
-
+; Show that the order of the spawned pid decreases.
+; TODO: This lemma will have to change if the natp representation of pids changes.
 (local (defrule order-of-make-pid
   (implies
     (pid-p p)
     (<< p (erl-val-pid (+ 1 (erl-val-pid->id p)))))
-  :enable (pid-p erl-val-kind erl-val-pid erl-val-pid->id)
-  :disable list-order
+  :in-theory (e/d*
+    (pid-p erl-val-kind erl-val-pid erl-val-pid->id set::order-rules)
+    (list-order))
   :expand ((erl-val-p p))
-  :use (:instance list-order
-          (a p)
-          (b (list :pid (+ 1 (cadr p)))))))
+  :use (:instance list-order (a p) (b (list :pid (+ 1 (cadr p)))))
+  :prep-books ((include-book "arithmetic/top" :dir :system)
+               (include-book "std/lists/len" :dir :system))
+  :prep-lemmas
+    ((defrule list-order
+       (implies
+         (and a b (true-listp a) (true-listp b) (car a) (car b) (cadr a) (cadr b)
+              (equal (car a) (car b)) (not (equal (cadr a) (cadr b)))
+              (not (cddr a)) (not (cddr b)) (<< (cadr a) (cadr b)))
+         (<< a b))
+       :enable (<< lexorder))
+     (defrule natp-order
+       (implies (natp x) (<< x (+ 1 x))) :enable (<< lexorder alphorder)))))
 
+; helper for the following theorems
+(local (defrule set-order
+  (implies (and (not (set::emptyp s)) (not (set::emptyp (set::tail s))))
+           (<< (set::head s) (set::head (set::tail s))))
+  :in-theory (enable* set::order-rules)))
+
+
+; spawn takes a set of existing pids, and returns a new unique pid.
 (encapsulate
   (((spawn *) => * :formals (pids) :guard (pid-set-p pids)))
 
-  ; BOZO: when I change pid from nat, this may have to change completely.
+  (local (in-theory (enable* set::definitions)))
+
+  ; witness function
   (local (define spawn ((pids pid-set-p))
     :returns pid
     :measure (set::cardinality (pid-set-fix pids))
@@ -57,20 +52,19 @@
           (make-erl-val-pid :id (+ 1 (erl-val-pid->id (set::head pids))))))
         (spawn (set::tail pids)))))
   
+  ; spawn returns a pid-p
   (more-returns spawn
-    (pid :name pid-p-of-spawn
-      (pid-p pid)
-      :hints (("Goal" :in-theory (enable spawn pid-p)))))
+    (pid :name pid-p-of-spawn :rule-classes :type-prescription
+      pid-p :hints (("Goal" :in-theory (enable spawn pid-p)))))
   
   (defcong pid-set-equiv equal (spawn pids) 1
     :hints (("Goal" :in-theory (enable spawn))))
   
+  ; This theorem only holds for this specific witness.
   (local (defruled order-of-spawn
-    (implies
-      (pid-set-p pids)
-      (<< (set::head pids) (spawn pids)))
-    :in-theory (e/d (spawn) (set-order-crock))
-    :hints (("Subgoal *1/4" :use (:instance set-order-crock (s pids)))
+    (implies (pid-set-p pids) (<< (set::head pids) (spawn pids)))
+    :in-theory (e/d (spawn) (set-order))
+    :hints (("Subgoal *1/4" :use (:instance set-order (s pids)))
             ("Subgoal *1/2" :in-theory (enable set::head pid-set-p)
                             :expand (spawn pids)))))
 
@@ -80,36 +74,35 @@
     :in-theory (enable* spawn set::order-rules)
     :hints (("Subgoal *1/4" :use (:instance order-of-spawn)))))
 
+; executable counterpart for spawn
 (define simple-spawn ((pids pid-set-p))
-    :returns pid
-    :measure (set::cardinality (pid-set-fix pids))
-    :guard-hints (("Goal" :in-theory (enable pid-set-p pid-p set::head)))
-    (b* ((pids (pid-set-fix pids))
-         ((if (set::emptyp pids)) '(:pid 0))
-         ((if (set::emptyp (set::tail pids)))
-          (make-erl-val-pid :id (+ 1 (erl-val-pid->id (set::head pids))))))
-        (simple-spawn (set::tail pids)))
+  :returns pid
+  :measure (set::cardinality (pid-set-fix pids))
+  :prepwork ((local (in-theory (enable* set::definitions))))
+  :guard-hints (("Goal" :in-theory (enable pid-set-p pid-p set::head)))
+  (b* ((pids (pid-set-fix pids))
+        ((if (set::emptyp pids)) '(:pid 0))
+        ((if (set::emptyp (set::tail pids)))
+        (make-erl-val-pid :id (+ 1 (erl-val-pid->id (set::head pids))))))
+      (simple-spawn (set::tail pids)))
   ///
     (more-returns
-      (pid :name pid-p-of-simple-spawn
-        (pid-p pid)
-        :hints (("Goal" :in-theory (enable simple-spawn pid-p)))))
+      (pid :name pid-p-of-simple-spawn :rule-classes :type-prescription
+       pid-p :hints (("Goal" :in-theory (enable simple-spawn pid-p)))))
   
     (defcong pid-set-equiv equal (simple-spawn pids) 1
       :hints (("Goal" :in-theory (enable simple-spawn))))
     
     (local (defruled order-of-simple-spawn
-      (implies
-        (pid-set-p pids)
-        (<< (set::head pids) (simple-spawn pids)))
-      :in-theory (e/d (simple-spawn) (set-order-crock))
-      :hints (("Subgoal *1/4" :use (:instance set-order-crock (s pids)))
+      (implies (pid-set-p pids) (<< (set::head pids) (simple-spawn pids)))
+      :in-theory (e/d (simple-spawn) (set-order))
+      :hints (("Subgoal *1/4" :use (:instance set-order (s pids)))
               ("Subgoal *1/2" :in-theory (enable set::head pid-set-p)
                               :expand (simple-spawn pids)))))
 
     (defrule unique-pid-of-simple-spawn
       (implies (pid-set-p pids) (not (set::in (simple-spawn pids) pids)))
       :in-theory (enable* simple-spawn set::order-rules)
-      :hints (("Subgoal *1/4" :use (:instance order-of-simple-spawn)))))
+      :hints (("Subgoal *1/4" :use (:instance order-of-simple-spawn))))
 
-(defattach spawn simple-spawn) 
+    (defattach spawn simple-spawn))

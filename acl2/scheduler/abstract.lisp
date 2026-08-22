@@ -1,6 +1,5 @@
 (in-package "ACL2")
-(include-book "proc")
-; (include-book "std/omaps/extensionality" :dir :system)
+(include-book "network")
 
 (set-induction-depth-limit 1)
 
