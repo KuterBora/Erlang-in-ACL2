@@ -2,11 +2,6 @@
 (include-book "abstract")
 (include-book "../theorems/state/self")
 
-; todo:
-; verify guards
-; remove the inbox distinction
-; refactor duplicates
-
 (define proc-receive ((proc proc-p))
   :returns (rp proc-p)
   :measure (len (proc->inbox-new (proc-fix proc)))

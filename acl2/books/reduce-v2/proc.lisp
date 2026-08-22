@@ -3,7 +3,6 @@
 
 (set-induction-depth-limit 1)
 
-
 ; BOZO: the world should not be limited to the following functions. It should
 ; instead just state that there is a module in the world that contains the
 ; functions. However, this simplifies the proofs slightly for now.

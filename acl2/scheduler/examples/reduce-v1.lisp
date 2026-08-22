@@ -199,9 +199,6 @@
        ((unless (omap::compatiblep parent-net child-net)) nil))
       (omap::update* parent-net child-net)))
 
-; Test for 4 processes.
-(create-wtree 4 '(:atom none) nil 0 (list 1 2 3 4))
-
 ; Reduce network with 10 processes.
 (defconst *net2* (create-wtree 10 '(:atom none) nil 0 (list 7 16 2 19 11 6 16 8 3 12)))
 

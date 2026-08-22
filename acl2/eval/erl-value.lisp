@@ -107,6 +107,14 @@
     (lambda (x) (equal (erl-val-kind x) :pid))
   :fix-value (make-erl-val-pid :id 0))
 
+(fty::deflist pid-lst
+  :elt-type pid
+  :true-listp t)
+
+(fty::defset pid-set
+  :elt-type pid
+  :elementp-of-nil nil)
+
 ; Map from PID to messages sent
 (fty::defomap outbox
   :key-type pid-p
