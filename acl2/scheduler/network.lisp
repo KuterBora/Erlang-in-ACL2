@@ -74,6 +74,10 @@
   (implies (network-p n) (pid-set-p (omap::keys n)))
   :enable (network-p pid-set-p omap::keys))
 
+(defrule pid-p-of-head-key-of-network
+  (implies (and (network-p net) (not (omap::emptyp net)))
+           (pid-p (omap::head-key net))))
+
 (defrule network-p-of-update
   (implies
     (and (network-p net) (pid-p pid)

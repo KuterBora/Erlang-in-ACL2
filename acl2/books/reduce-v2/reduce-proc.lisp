@@ -95,4 +95,32 @@
         (network-p (omap::update pid (make-reduce-proc pid par chl val) net)))
       :e/d ((proc->pid) (network-p-of-update))
       :use (:instance network-p-of-update
-              (net net) (pid pid) (p (make-reduce-proc pid par chl val)))))
+              (net net) (pid pid) (p (make-reduce-proc pid par chl val))))
+
+    (defrule assoc-of-make-reduce
+      (and
+        (omap::assoc 'Index
+          (erl-state->bind (proc->s (make-reduce-proc self parent children index))))
+        (omap::assoc 'Parent
+          (erl-state->bind (proc->s (make-reduce-proc self parent children index))))
+        (omap::assoc 'ChildPids
+          (erl-state->bind (proc->s (make-reduce-proc self parent children index)))))
+      :enable (omap::from-lists omap::lookup-of-update))
+
+    (defrule index-of-make-reduce-proc
+      (equal (omap::lookup 'Index
+               (erl-state->bind (proc->s (make-reduce-proc self parent children index))))
+             (make-erl-val-integer :val (nfix index)))
+      :enable (omap::from-lists omap::lookup-of-update))
+
+    (defrule parent-of-make-reduce-proc
+      (equal (omap::lookup 'Parent
+               (erl-state->bind (proc->s (make-reduce-proc self parent children index))))
+             (erl-val-fix parent))
+      :enable (omap::from-lists omap::lookup-of-update))
+
+    (defrule childpids-of-make-reduce-proc
+      (equal (omap::lookup 'ChildPids
+               (erl-state->bind (proc->s (make-reduce-proc self parent children index))))
+             (make-erl-val-cons :lst (erl-vlst-fix children)))
+      :enable (omap::from-lists omap::lookup-of-update)))

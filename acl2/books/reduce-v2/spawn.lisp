@@ -106,3 +106,24 @@
       :hints (("Subgoal *1/4" :use (:instance order-of-simple-spawn))))
 
     (defattach spawn simple-spawn))
+
+; More theorems about spawn
+(defrule unique-pid-of-spawn-on-network
+ (implies
+  (and (pid-set-p pids) (set::subset (omap::keys net) pids))
+  (not (set::in (spawn pids) (omap::keys net))))
+  :use ((:instance set::subset-in-2
+          (a (spawn pids)) (x (omap::keys net)) (y pids))))
+
+(defrule not-assoc-of-spawn-on-network
+  (implies (and (pid-set-p pids) (set::subset (omap::keys net) pids))
+           (not (omap::assoc (spawn pids) net)))
+  :enable omap::assoc-to-in-of-keys)
+
+(defrule spawned-pid-not-in-pids
+  (implies (and (pid-set-p pids) (set::in p pids))
+           (not (equal p (spawn pids)))))
+
+(defrule spawned-pid-not-in-pids-rev
+  (implies (and (pid-set-p pids) (set::in p pids))
+           (not (equal (spawn pids) p))))

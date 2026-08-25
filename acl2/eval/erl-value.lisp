@@ -115,6 +115,12 @@
   :elt-type pid
   :elementp-of-nil nil)
 
+; TODO: I though I would not have to prove this, but it would not match otherwise.
+(defrule nil-not-in-pid-set
+  (implies (pid-set-p pids) (not (set::in nil pids)))
+  :use ((:instance pid-p-when-in-pid-set-p-binds-free-x (a nil) (x pids)))
+  :disable pid-p-when-in-pid-set-p-binds-free-x)
+
 ; Map from PID to messages sent
 (fty::defomap outbox
   :key-type pid-p
