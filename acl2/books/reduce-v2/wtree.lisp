@@ -477,10 +477,16 @@
                   (equal rindex (- n 1)))
                (and (null children) (equal n 1)))))
       ((leaf-p proc) (wtree0-p (omap::tail net) net0 n))
-      (t nil))))
+      (t nil)))
+  ///
+    (defcong network-equiv equal (wtree0-p net net0 n) 1)
+    (defcong network-equiv equal (wtree0-p net net0 n) 2)
+    (defcong nat-equiv equal (wtree0-p net net0 n) 3))
 
 ; Check if network is a wtree of size n.
 (define wtree-p ((net network-p))
   :returns (r booleanp)
   (b* ((net (network-fix net)))
-      (wtree0-p net net (omap::size net))))
+      (wtree0-p net net (omap::size net)))
+  ///
+    (defcong network-equiv equal (wtree-p net) 1))
