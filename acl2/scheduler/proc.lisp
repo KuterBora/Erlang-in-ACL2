@@ -22,7 +22,7 @@
    (inbox-tried erl-vlst-p :default nil)
    
    ; the remaining computation
-   (klst true-listp :default nil)))
+   (klst erl-klst-p :default nil)))
 
 (define proc->pid ((p proc-p))
   :returns (pid pid-p)

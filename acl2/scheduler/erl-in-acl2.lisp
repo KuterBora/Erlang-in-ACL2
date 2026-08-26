@@ -14,7 +14,6 @@
 
        (- (cw "Attempting to receive message ~x0~%" (car (proc->inbox-new proc))))
        (rs (update-erl-state->in (proc->s proc) (car (proc->inbox-new proc))))
-       ((unless (erl-klst-p (proc->klst proc))) (b* ((- (cw "proc-receive: bad continuation list.~%"))) proc))
        (rs (apply-k rs (proc->klst proc))))
       (cond
         ((equal (erl-val-kind (erl-state->in rs)) :blocked)
@@ -25,14 +24,17 @@
                      :inbox-new (cdr (proc->inbox-new proc))
                      :inbox-tried (append (proc->inbox-tried proc) (list (car (proc->inbox-new proc))))))))
         ((equal (erl-val-kind (erl-state->in rs)) :receive)
-         (b* ((- (cw "Received the message and ran till the next receive.~%~%")))
+         (b* ((klst (erl-val-receive->klst (erl-state->in rs)))
+              ((unless (erl-klst-p klst))
+               (b* ((- (cw "proc-receive: bad continuation list.~%"))) proc))
+              (- (cw "Received the message and ran till the next receive.~%~%")))
              (change-proc
                proc
                  :s rs
                  :ps :receive
                  :inbox-new (append (proc->inbox-tried proc) (cdr (proc->inbox-new proc)))
                  :inbox-tried nil
-                 :klst (erl-val-receive->klst (erl-state->in rs)))))
+                 :klst klst)))
         (t (b* ((- (cw "Process received a message and terminated with the value: ~x0~%~%" (erl-state->in rs))))
                 (change-proc
                    proc
@@ -66,11 +68,12 @@
   :returns rnet
   :guard-hints
     (("Goal"
-      :in-theory (e/d (network-p network-fix
-                       proc-has-message-for-dst?
-                       has-message-for-dst?)
-                      (scheduler-correct-when-run
-                       scheduler-correct-when-deliver))
+      :in-theory
+        (e/d (network-p network-fix
+              proc-has-message-for-dst?
+              has-message-for-dst?)
+             (scheduler-correct-when-run
+              scheduler-correct-when-deliver))
       :use ((:instance scheduler-correct-when-run)
             (:instance scheduler-correct-when-deliver))))
   (b* ((net (network-fix net))
@@ -95,13 +98,16 @@
                     (if (equal (erl-val-kind (erl-state->in ns)) :receive)
                         ; The program ran until a receive was encountered.
                         (b*
-                          ((- (cw "Evaluated ~x0 till the next receive. ~%~%" pid)))
+                          ((- (cw "Evaluated ~x0 till the next receive. ~%~%" pid))
+                           (nklst (erl-val-receive->klst (erl-state->in ns)))
+                           ((unless (erl-klst-p nklst))
+                            (b* ((- (cw "erl-step: bad continuation list.~%"))) nil)))
                           (omap::update
                             pid
                             (change-proc proc
                                 :s ns
                                 :ps :receive
-                                :klst (erl-val-receive->klst (erl-state->in ns)))
+                                :klst nklst)
                             net))
                         ; The program terminated.
                         (b*

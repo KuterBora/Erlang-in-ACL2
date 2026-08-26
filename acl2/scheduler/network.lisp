@@ -200,4 +200,9 @@
            (terminated? (omap::tail net))))
   :hints (("Goal" :in-theory (enable network-p network-fix)))
   ///
-    (defcong network-equiv equal (terminated? net) 1))
+    (defcong network-equiv equal (terminated? net) 1)
+    
+    (defrule terminated?-of-emptyp
+      (implies
+        (and (network-p net) (omap::emptyp net))
+        (terminated? net))))
