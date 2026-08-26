@@ -13,6 +13,7 @@
 ;           -- if it terminates, reduce is satisfied by the invariant.
 ; - step 6: extend the world, so that reduce workers can use the index to
 ;           compute/aquire their portion of work. Update the proofs.
+;           This is probably all we have time for.
 ; - step 7: funs instead of +
 ; - step 8: use skolem functions instead of the termination proof
 ;           to state that if the scheduler is weakly fair, eventually
@@ -51,7 +52,7 @@
 
 
 ; TODO maybe I should make wtree-p a fixtype?
-; Also, I do need to state that the wtree must have a root?
+; Also, do I need to state that the wtree must have a root?
 
 ; The invariant for reduce
 (define reduce-inv0 ((net network-p) (net0 network-p))
@@ -61,8 +62,6 @@
        (net0 (network-fix net0))
        ((if (omap::emptyp net)) t))
        (and
-        (wtree-p net0) ; maybe I don't need this here, because the wrapper
-                       ; function can call it instead.
         ; pick a node
         ; if root
         ;; if terminated -- contains the sum
@@ -113,24 +112,17 @@
     (defcong network-equiv equal (reduce-inv net) 1))
 
 
-; (defrule inv0-of-erl-step
-;   (implies
-;     (and (network-p net) (network-p net0) (reduce-inv0 net net0))
-;     (reduce-inv0 (erl-step net) (erl-step net0)))
-;   :enable (reduce-inv reduce-inv0)
-;   :disable wtree0-p-of-erl-step1
-;   :induct (reduce-inv0 net net0)
-;   :expand ((reduce-inv0 (erl-step (omap::tail net)) (erl-step net0))
-;            (reduce-inv0 (erl-step net) (erl-step net0)))
-;   :hints (("Subgoal *1/2" :use (:instance wtree0-p-of-erl-step1))))
+(defrule inv0-of-erl-step
+  (implies
+    (and (network-p net) (network-p net0) (reduce-inv0 net net0))
+    (reduce-inv0 (erl-step net) (erl-step net0)))
+  :enable reduce-inv0)
 
-; (defrule inv-of-erl-step
-;   (implies
-;     (and (network-p net) (reduce-inv net))
-;     (reduce-inv (erl-step net)))
-;   :enable (reduce-inv reduce-inv0)
-;   :disable wtree-p-of-erl-step1
-;   :induct (reduce-inv0 net net0)
-;   :expand ((reduce-inv (erl-step net))
-;            (reduce-inv0 (erl-step net) (erl-step net)))
-;   :hints (("Subgoal *1/2" :use (:instance wtree-p-of-erl-step1))))
+(defrule inv-of-erl-step
+  (implies
+    (and (network-p net) (reduce-inv net))
+    (reduce-inv (erl-step net)))
+  :enable reduce-inv)
+
+; next, show that of the net is terminated,
+; the root will have the sum of indices.
