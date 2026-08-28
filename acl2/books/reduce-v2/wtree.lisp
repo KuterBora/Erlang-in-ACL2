@@ -55,6 +55,7 @@
 
 
 ; Any node, but the root, in the reduce worker tree.
+; TODO: rename to branch
 (define leaf-p ((p proc-p))
   :returns (r booleanp)
   (b* ((p (proc-fix p))

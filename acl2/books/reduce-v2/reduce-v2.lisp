@@ -3,29 +3,31 @@
 
 (set-induction-depth-limit 1)
 
+
+
+
 ; PROOF PLAN
 ; 
-; - step 1: show that erl-step with a wtree returns a wtree
+; - step 1: show that erl-step of a wtree returns a wtree
 ; - step 2: find the reqirements for the invariant
 ; - step 3: show that the invariant holds after running erl-step
+;
 ; - step 4: for now, consider an erl-runner that terminates
 ;           -- complete the termination proof
 ;           -- if it terminates, reduce is satisfied by the invariant.
+; - step 4.5 -- leaves should get GrandTotal
+; - step 5 -- barrier instead of termination
 ; - step 6: extend the world, so that reduce workers can use the index to
-;           compute/aquire their portion of work. Update the proofs.
-;           This is probably all we have time for.
+;           compute/aquire their portion of work. Update the proofs accordingly.
+; =============== This is probably all we have time for. ========================
+;
 ; - step 7: funs instead of +
 ; - step 8: use skolem functions instead of the termination proof
 ;           to state that if the scheduler is weakly fair, eventually
 ;           the call to reduce will return to the master process with
 ;           the correct value, and the master process can evaluate (cdr klst)
 
-; I need add a constraint to network-p such that klst is erl-klst-p
-(skip-proofs
-  (defrule unsound-crock
-    (implies
-      (omap::assoc pid net)
-      (erl-klst-p (proc->klst (omap::lookup pid net))))))
+
 
 ; Here I need to show that if a proc in a tree is updated
 ; without modifying its pid and the bindings for Index, ChildPids,
@@ -37,8 +39,7 @@
   (implies
     (and (network-p net) (wtree0-p net net0 (omap::size net)))
     (wtree0-p (erl-step net) (erl-step net0) (omap::size (erl-step net))))
-  :enable (wtree0-p erl-step proc-receive)
-  :no-thanks t))
+  :enable (wtree0-p erl-step proc-receive)))
 
 
 
@@ -51,51 +52,10 @@
 ; TODO maybe I should make wtree-p a fixtype?
 ; Also, do I need to state that the wtree must have a root?
 
+; First TODO: maybe I should combine inbox new and inbox tried???
+; How will fuel work???
 
-;; if terminated -- contains the sum
-;; if blocked -- there exists a process that has is runnable
-;;               or has a message for root.
-;;            -- the next message to be received is not in inbox-tried
-;;            -- LeftTotal is equal to sum(latest received value)
-;;            -- CPids is a sublist of ChildPids, starting from
-;;                latest received index.
-;; if on receive -- there exists a process that is runnable
-;;                    or has a message for root,
-;;                  or, there exists a message in root's inbox-new
-;;                  that can be received.
-;;               -- inbox-tried is empty.
-;;               -- LeftTotal is equal to sum(latest received value)
-;; if idle, ok
-(define root-inv ((pid pid-p) (net network-p))
-  :ignore-ok t
-  :returns (r booleanp)
-  (b* ((pid (pid-fix pid))
-       (net (network-fix net))
-       ((unless (omap::assoc pid net)) nil)
-       (proc (omap::lookup pid net))
-       ((unless (root-p proc)) t)
-       (ps (proc->ps proc)))
-      (case ps
-        (:idle t)
-        (:terminated t)
-        (:blocked t)
-        (:receive t))))
-
-
-;; if leaf
-;; if terminated -- either:
-;;                  has message for parent in its outbox
-;;                  or parent has its message in one of its inboxes
-;;                  or parent has already received? How do I tell
-;;                   that apart? another auxilary variable? or
-;;                   it might be enough to say that the CPids does not
-;;                    not contain this worker.
-;; if blocked -- nil, because workers do not receive.
-;; if receive -- nil, because workers do not receive.
-;; if idle -- I am not sure if we need to say that the
-;;            parent must not have received the message yet,
-;;            and also does not have it in its inbox.
-(define leaf-inv ((pid pid-p) (net network-p))
+(define inv ((pid pid-p) (net network-p))
   :ignore-ok t
   :returns (r booleanp)
   (b* ((pid (pid-fix pid))
@@ -103,12 +63,47 @@
        ((unless (omap::assoc pid net)) nil)
        (proc (omap::lookup pid net))
        ((unless (leaf-p proc)) t)
-       (ps (proc->ps proc)))
+       (ps (proc->ps proc))
+       (bind (erl-state->bind (proc->s ps)))
+       (parent (omap::lookup 'Parent bind))
+       (children (omap::lookup 'Children bind))
+       (index (omap::lookup 'Index bind)))
       (case ps
-        (:idle t)
-        (:terminated t)
-        (:blocked t)
-        (:receive t))))
+        (:idle
+          ; equal proc (make-reduce-proc ...)
+          )
+        (:terminated
+          ; /\ equal s->in f(i, j) or i
+          ; /\ if leaf
+          ;    \/
+          ;     /\ outbox = empty
+          ;     /\ parent:
+          ;         \/ message in parent inbox
+          ;         \/ parent already received
+          ;   \/ message in outbox
+          ; /\ if root, empty outbox
+          ; /\ message contains f(i, j), sent to parent
+          ; /\ maybe the children have terminated?     
+          ) 
+        (:blocked
+          ; /\ equal s->in :receive of next CPid
+          ; /\
+          ;    /\ s->bind Cpids correct regards to receive in s
+          ;    /\ s->LeftTotal contains f(i, (index (car CPid)))
+          ; /\ outbox is empty?
+          ; /\
+          ;   /\ inbox does not contain message from (car CPid).
+          ;   /\ all messages in inbox contain the correct values.
+          )
+        (:receive
+          ; /\ equal s->in :receive of next CPid
+          ; /\
+          ;    /\ s->bind Cpids correct regards to receive in s
+          ;    /\ s->LeftTotal contains f(i, (index (car CPid)))
+          ; /\ outbox is empty?
+          ; /\ all messages in inbox contain the correct values.
+          ; /\ next message to receive is not in inbox tried?
+          ))))
 
 
 ; The invariant for reduce
@@ -156,6 +151,8 @@
     (and (network-p net) (reduce-inv net))
     (reduce-inv (erl-step net)))
   :enable reduce-inv)
+
+
 
 ; next, show that if the net is terminated,
 ; the root will have the sum of indices.

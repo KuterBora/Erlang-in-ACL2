@@ -9,6 +9,13 @@
 ; Create a Reduce Worker Tree -------------------------------------------------
 
 ; Create a worker tree for reduce.
+; 
+; n: numbder of processes to spawn
+; self: current worker node buing built
+; index: index of self
+; children: children of self, known so far
+; pids: existing pids
+; net: nodes of wtree built so far
 (define create-wtree0
   ((n natp) (self pid-p) (index natp) (parent erl-val-p)
    (children erl-vlst-p) (pids pid-set-p) (net network-p))
