@@ -6,13 +6,13 @@
   :returns (rp proc-p)
   :measure (len (proc->inbox-new (proc-fix proc)))
   (b* ((proc (proc-fix proc))
-       
+
        ; If there are no more messages to try, the process is blocked.
        ((unless (proc->inbox-new proc))
         (b* ((- (cw "Pid: ~x0 failed to receive, it is now blocked.~%~%" (proc->pid proc))))
             (change-proc proc :ps :blocked)))
-
        (- (cw "Attempting to receive message ~x0~%" (car (proc->inbox-new proc))))
+
        (rs (update-erl-state->in (proc->s proc) (car (proc->inbox-new proc))))
        (rs (apply-k rs (proc->klst proc))))
       (cond
@@ -100,12 +100,13 @@
                         (b*
                           ((- (cw "Evaluated ~x0 till the next receive. ~%~%" pid))
                            (nklst (erl-val-receive->klst (erl-state->in ns)))
+                           (- (cw "So the new klst is: ~x0. ~%~%" nklst))
                            ((unless (erl-klst-p nklst))
                             (b* ((- (cw "erl-step: bad continuation list.~%"))) nil)))
                           (omap::update
                             pid
                             (change-proc proc
-                                :s ns
+                                :s (update-erl-state->in ns (make-erl-val-none))
                                 :ps :receive
                                 :klst nklst)
                             net))

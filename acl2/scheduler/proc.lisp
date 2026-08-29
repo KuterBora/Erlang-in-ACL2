@@ -14,11 +14,11 @@
    (s erl-state-p :default (make-erl-state))
 
    ; BOZO: the messages received, but not yet tried on the next
-   ; receive. (this is only used to prevent receive loops)
+   ; receive. This makes implementation easier later on.
    (inbox-new erl-vlst-p :default nil)
 
    ; BOZO: messages that have been received and have already been
-   ; tried by the next receive.
+   ; tried by the next receive. This makes implementation easier later on.
    (inbox-tried erl-vlst-p :default nil)
    
    ; the remaining computation

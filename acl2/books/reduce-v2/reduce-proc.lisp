@@ -13,7 +13,9 @@
   reduce(none, [], GrandTotal) -> GrandTotal;
   reduce(ParentPid, [], MyTotal) ->
     ParentPid ! {self(), reduce_up, MyTotal};
-  reduce(Parent, [ChildHd | ChildTl], LeftTotal) ->
+  reduce(ParentPid, CPids, LeftTotal) ->
+    ChildHd = hd(CPids);
+    ChildTl = tl(Cpids);
     receive
       {ChildHd, reduce_up, RightTotal} ->
         reduce(Parent, ChildTl, LeftTotal + RightTotal)
