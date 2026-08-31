@@ -32,18 +32,18 @@
 ; Then - if ACL2 cannot already figure it out - I can have a crock
 ; lemma for each case of erl-step.  
 
-(skip-proofs (defrule wtree0-p-of-erl-step
-  (implies
-    (and (network-p net) (wtree0-p net net0 (omap::size net)))
-    (wtree0-p (erl-step net) (erl-step net0) (omap::size (erl-step net))))
-  :enable (wtree0-p erl-step proc-receive)))
+; (skip-proofs (defrule wtree0-p-of-erl-step
+;   (implies
+;     (and (network-p net) (wtree0-p net net0 (omap::size net)))
+;     (wtree0-p (erl-step net) (erl-step net0) (omap::size (erl-step net))))
+;   :enable (wtree0-p erl-step proc-receive)))
 
-; TODO for Mark
-(defrule wtree-p-of-erl-step
-  (implies
-    (and (network-p net) (wtree-p net))
-    (wtree-p (erl-step net)))
-  :enable wtree-p)
+; ; TODO for Mark
+; (defrule wtree-p-of-erl-step
+;   (implies
+;     (and (network-p net) (wtree-p net))
+;     (wtree-p (erl-step net)))
+;   :enable wtree-p)
 
 ; TODO maybe I should make wtree-p a fixtype?
 ; Also, do I need to state that the wtree must have a root?
@@ -305,96 +305,7 @@
        :enable prefixp)))
 
 
-; we need a wtree prop:
-; forall pids, if in wtree, leaf or root.
 
-
-; This mirrors assoc-of-tail-when-assoc-of-tail
-; but for root
-(defrule root-when-assoc-of-tail-is-root
-  (implies (root-p (omap::lookup key (omap::tail map)))
-           (root-p (omap::lookup key map)))
-  :enable omap::lookup
-  :use (:instance omap::assoc-of-tail-when-assoc-of-tail
-        (map map) (key key)))
-
-
-; This mirrors assoc-of-tail-when-assoc-of-tail
-; but for leaf
-(defrule leaf-when-assoc-of-tail-is-leaf
-  (implies (leaf-p (omap::lookup key (omap::tail map)))
-           (leaf-p (omap::lookup key map)))
-  :enable omap::lookup
-  :use (:instance omap::assoc-of-tail-when-assoc-of-tail
-         (map map) (key key)))
-
-; TODO: For my current implementation of wtree-p, I have
-; to state n > 0. However, I would like to change that.
-(defrule wtree0-nodes-are-leaf-or-root
-  (implies
-    (and (wtree0-p net net0 n) (natp n) (> n 0)
-         (network-p net) (network-p net0)
-         (omap::assoc pid net)
-         (not (leaf-p (omap::lookup pid net))))
-    (root-p (omap::lookup pid net)))
-  :enable wtree0-p
-  :use ((:instance omap::assoc-of-tail-when-not-head
-          (key pid) (map net))
-        (:instance omap::assoc-of-tail-when-assoc-of-tail
-          (key pid) (map net))))
-
-(defrule wtree0-nodes-are-leaf-or-root-rev
-  (implies
-    (and (wtree0-p net net0 n) (natp n) (> n 0)
-         (network-p net) (network-p net0)
-         (omap::assoc pid net)
-         (not (root-p (omap::lookup pid net))))
-    (leaf-p (omap::lookup pid net)))
-  :enable wtree0-p
-  :use ((:instance omap::assoc-of-tail-when-not-head
-          (key pid) (map net))
-        (:instance omap::assoc-of-tail-when-assoc-of-tail
-          (key pid) (map net))))
-
-(defrule wtree-nodes-are-leaf-or-root
-  (implies
-    (and (wtree-p net) (network-p net)
-         (pid-p pid) (omap::assoc pid net))
-    (or (leaf-p (omap::lookup pid net))
-        (root-p (omap::lookup pid net))))
-  :enable wtree-p
-  :cases ((< 0 (omap::size net))))
-
-(defrule crock1
-  (implies
-    (and
-      (network-p net)
-      (omap::assoc pid net))
-    (proc-p (omap::lookup pid net)))
-  :enable (network-p))
-
-(defrule index-of-wtree-node-2
-  (implies
-    (or (root-p p) (leaf-p p))
-    (<= 0 (erl-val-integer->val (omap::lookup 'Index (erl-state->bind (proc->s p))))))
-  :enable (root-p leaf-p))
-
-(defrule index-of-wtree-node-3
-  (implies
-    (leaf-p p)
-    (<= 0 (+ -1 (erl-val-integer->val (omap::lookup 'Index (erl-state->bind (proc->s p)))))))
-  :enable leaf-p)
-
- ;  ("Subgoal 1"
-    ;   :in-theory (disable pid-lst-crock)
-    ;   :use
-    ;     ((:instance pid-lst-crock
-    ;        (l1 (erl-val-cons->lst
-    ;               (omap::lookup 'childpids
-    ;                 (erl-state->bind (proc->s (omap::lookup pid net))))))
-    ;        (l2 (erl-val-cons->lst
-    ;             (omap::lookup 'cpids
-    ;               (erl-state->bind (proc->s (omap::lookup pid net)))))))))
 
 ; '???' notes constrains that might not be necessary.
 (define inv ((pid pid-p) (net network-p))
@@ -645,8 +556,7 @@
     (defcong network-equiv equal (inv pid net) 2))
 
 ;; Oops I am missing this
-(defcong network-equiv equal (erl-step net) 1
-  :hints (("Goal" :in-theory (enable erl-step))))
+
 
 ; TODO: also need inv of create-wtree, should be actually easy
 
@@ -664,25 +574,7 @@
 ; weak-update-induction
 ; ;;;;;;
 
-(defrule rightmost-child0-of-no-children
-  (implies
-    (and
-      (network-p net) (not (omap::emptyp net))
-      (omap::assoc pid net)
-      (or (leaf-p (omap::lookup pid net))
-          (root-p (omap::lookup pid net)))
-      (not
-        (erl-val-cons->lst
-          (omap::lookup 'ChildPids
-            (erl-state->bind
-              (proc->s
-                (omap::lookup pid net)))))))
-    (equal (rightmost-child0 pid net (omap::size net)) pid))
-  :enable rightmost-child0)
 
-(defrule not-null-when-pid-p
-  (implies (pid-p p) p)
-  :rule-classes :forward-chaining)
 
 (defrule head-of-network-p
   (implies
@@ -694,84 +586,11 @@
   (implies
     (and (network-p net) (not (omap::emptyp net)))
     (equal (omap::lookup (mv-nth 0 (omap::head net)) net)
-           (mv-nth 1 (omap::head net)))
-  ))
+           (mv-nth 1 (omap::head net)))))
 
-(defrule wtree0-p-of-bad-tail
-  (implies
-    (and
-      (network-p net) (network-p net0)
-      (not (omap::emptyp net))
-      (not (wtree0-p (omap::tail net) net0 size)))
-    (not (wtree0-p net net0 size)))
-  :enable wtree0-p)
-
-(defrule rightmost-child-of-wtree0-p
-  (implies
-    (and (wtree0-p net net0 size) (natp size)
-         (network-p net) (network-p net0)
-         (not (omap::emptyp net))
-         (not (omap::emptyp net0))
-         (omap::assoc pid net)
-         (root-p (omap::lookup pid net)))
-    (rightmost-child pid net0))
-  :enable wtree0-p
-  ;disable (not-null-when-pid-p rightmost-child0-of-no-children)
-  :induct (wtree0-induct pid net net0 size)
-  :hints
-    (("Subgoal *1/3"
-      :use ((:instance omap::assoc-of-tail-when-not-head
-             (key pid) (map net))))
-     ("Subgoal *1/2"
-      :expand (wtree0-p net net0 size))))
-
-(skip-proofs (defrule check-children-of-wtree0-p
-  (implies
-    (and (wtree0-p net net (omap::size net))
-         (network-p net) (not (omap::emptyp net))
-         (omap::assoc pid net))
-    (check-children
-      pid
-      (erl-val-cons->lst
-        (omap::lookup 'ChildPids
-          (erl-state->bind
-            (proc->s
-              (omap::lookup pid net)))))
-      net))
-  ))
-
-(skip-proofs (defrule root-of-wtree0-p
-  (implies
-    (and (wtree0-p net net (omap::size net))
-         (network-p net) (not (omap::emptyp net))
-         (omap::assoc pid net)
-         (root-p (omap::lookup pid net)))
-    (equal
-      (erl-val-integer->val
-        (omap::lookup 'Index
-          (erl-state->bind
-            (proc->s
-              (omap::lookup (rightmost-child pid net) net)))))
-      (+ -1 (omap::size net))))
-  ))
-
-(skip-proofs (defrule check-indices-of-wtree0-p
-  (implies
-    (and (wtree0-p net net (omap::size net))
-         (network-p net) (not (omap::emptyp net))
-         (omap::assoc pid net))
-    (check-indices
-      (erl-val-integer->val
-        (omap::lookup 'Index
-          (erl-state->bind
-            (proc->s (omap::lookup pid net)))))
-      (erl-val-cons->lst
-        (omap::lookup 'ChildPids
-          (erl-state->bind
-            (proc->s (omap::lookup pid net)))))
-      net))
-  ))
-
+(defrule size-crock-31
+  (implies (< 0 (omap::size m)) (not (omap::emptyp m)))
+  :enable omap::size)
 
 (defrule root-equiv-crock
   (implies
@@ -821,11 +640,103 @@
 
 
 
+
+; (defrule root-or-leaf-of-wtree0
+;   (implies
+;     (and
+;       (network-p net) (network-p net0)
+;       (wtree0-p net net0 size)
+;       (not (omap::emptyp net0))
+;       (omap::assoc pid net) (natp size)
+;       (not (root-p (omap::lookup pid net))))
+;     (leaf-p (omap::lookup pid net)))
+;   :enable wtree0-p)
+
+(defrule root-or-leaf-of-wtree0-2
+  (implies
+    (and
+      (network-p net) (network-p net0)
+      (wtree0-p net net0 size)
+      (not (omap::emptyp net0))
+      (not (omap::emptyp net))
+      (natp size)
+      (not (root-p (mv-nth 1 (omap::head net)))))
+    (leaf-p (mv-nth 1 (omap::head net))))
+  :expand (wtree0-p net net0 size))
+
+
 (defrule wtree0-p-of-update
   (implies
     (and
-      (network-p net) (wtree0-p net net (omap::size net))
+      (network-p net) (network-p net0)
+      (wtree0-p net net0 size) (natp size)
       (omap::assoc pid net)
+      (pid-p pid) (proc-p proc)
+      (network-p (omap::update pid proc net))
+      (equal (proc->pid proc) pid)
+      (or (leaf-p proc) (root-p proc))
+      (equal
+        (omap::lookup 'Index
+          (erl-state->bind (proc->s proc)))
+        (omap::lookup 'Index
+          (erl-state->bind (proc->s (omap::lookup pid net)))))
+      (equal
+        (omap::lookup 'Parent
+          (erl-state->bind (proc->s proc)))
+        (omap::lookup 'Parent
+          (erl-state->bind (proc->s (omap::lookup pid net)))))
+      (equal
+        (omap::lookup 'ChildPids
+          (erl-state->bind (proc->s proc)))
+        (omap::lookup 'ChildPids
+          (erl-state->bind (proc->s (omap::lookup pid net))))))
+    (wtree0-p (omap::update pid proc net) net0 size))
+  :enable (network-fix)
+  :disable
+    (wtree0-of-tail-of-wtree0-p
+    check-children-of-wtree0-p)
+  :induct (wtree0-induct pid net net0 size)
+  :hints
+    (("Subgoal *1/3"
+      :use ((:instance wtree0-of-tail-of-wtree0-p)
+            (:instance check-children-of-wtree0-p (pid (mv-nth 0 (omap::head net))))
+            (:instance check-parent-of-wtree0-p (pid (mv-nth 0 (omap::head net))))
+            (:instance check-indices-of-wtree0-p (pid (mv-nth 0 (omap::head net))))
+            (:instance check-children-of-wtree0-p (net (omap::tail net)))
+            (:instance check-parent-of-wtree0-p (net (omap::tail net)))
+            (:instance check-indices-of-wtree0-p (net (omap::tail net)))
+            (:instance omap::assoc-of-tail-when-not-head (key pid) (map net)))
+      :expand
+        ((wtree0-p (omap::update (proc->pid proc) proc net) net0 size)))
+     ("Subgoal *1/2"
+      :expand
+        ((wtree0-p net net0 size)
+         (wtree0-p (omap::update (proc->pid proc) proc net) net0 0)
+         (wtree0-p (omap::update (proc->pid proc) proc net) net0 size)))))
+
+
+
+
+
+
+(defrule more-crocks
+  (implies
+    (and (network-p net)
+         (not (equal (proc->pid proc) (mv-nth 0 (omap::head net)))))
+    (equal (omap::lookup (proc->pid proc) net)
+           (omap::lookup (proc->pid proc) (omap::tail net))))
+  :enable omap::lookup
+  :use (:instance omap::assoc-of-tail-when-not-head
+          (key (proc->pid proc)) (map net)))
+
+(defrule wtree0-p-of-update-net0
+  (implies
+    (and
+      (network-p net) (network-p net0)
+      (wtree0-p net net0 size) (natp size)
+      (omap::assoc pid net)
+      (pid-p pid) (proc-p proc)
+      (network-p (omap::update pid proc net))
       (equal (proc->pid proc) pid)
       (or (leaf-p proc) (root-p proc))
       (equal
@@ -845,35 +756,28 @@
           (erl-state->bind (proc->s (omap::lookup pid net))))))
     (wtree0-p
       (omap::update pid proc net)
-      net
-      (omap::size net)))
-  :enable (wtree0-p network-fix)
-  :induct
-    (wtree0-update-induct pid proc net net (omap::size net))
-  :disable (rightmost-child-of-wtree0-p
-            check-children-of-wtree0-p
-            root-of-wtree0-p
-            check-indices-of-wtree0-p)
+      (omap::update pid proc net0)
+      size))
+  :enable (network-fix)
+  :disable
+    (wtree0-of-tail-of-wtree0-p
+    check-children-of-wtree0-p)
+  :induct (wtree0-induct pid net net0 size)
   :hints
-    (("Subgoal *1/6" :by nil)
-     ("Subgoal *1/5"
-       :use (:instance check-indices-of-wtree0-p
-              (pid (mv-nth 0 (omap::head net))) (net net)))
-     ("Subgoal *1/3"
-      :use ((:instance omap::assoc-of-tail-when-not-head
-            (key pid) (map net)))
-      :expand (
+    (("Subgoal *1/3"
+      :cases ((omap::emptyp net0))
+      :expand
         (wtree0-p (omap::update (proc->pid proc) proc net)
-                        net (omap::size net))))))
+                  (omap::update (proc->pid proc) proc net0)
+                  size)
+      :use ((:instance wtree0-of-tail-of-wtree0-p)
+            (:instance check-children-of-wtree0-p
+              (net (omap::update (proc->pid proc) proc (omap::tail net)))
+              (net0 (omap::update (proc->pid proc) proc net0)))
+            (:instance check-indices-of-wtree0-p
+              (net (omap::update (proc->pid proc) proc (omap::tail net)))
+              (net0 (omap::update (proc->pid proc) proc net0)))))))
 
-
-(CHECK-CHILDREN
-   (MV-NTH 0 (OMAP::HEAD (OMAP::TAIL NET)))
-   (ERL-VAL-CONS->LST
-    (OMAP::LOOKUP
-       'CHILDPIDS
-       (ERL-STATE->BIND (PROC->S (MV-NTH 1 (OMAP::HEAD (OMAP::TAIL NET)))))))
-   (OMAP::TAIL NET))
 
 
 
@@ -881,8 +785,9 @@
   (implies
     (and
       (network-p net) (wtree-p net)
-      (omap::assoc pid net)
+      (omap::assoc pid net) (proc-p proc) (pid-p pid)
       (equal (proc->pid proc) pid)
+      (or (leaf-p proc) (root-p proc))
       (equal
         (omap::lookup 'Index
           (erl-state->bind (proc->s proc)))
@@ -899,7 +804,13 @@
         (omap::lookup 'ChildPids
           (erl-state->bind (proc->s (omap::lookup pid net))))))
     (wtree-p (omap::update pid proc net)))
-  :enable (wtree0-p wtree-p network-fix))
+  :enable (wtree0-p wtree-p network-fix)
+  :do-not-induct t
+  :disable wtree0-p-of-update
+  :use (:instance wtree0-p-of-update
+          (net net)
+          (net0 net0)
+          (size (omap::size net))))
 
 
 (defrule inv-of-erl-step

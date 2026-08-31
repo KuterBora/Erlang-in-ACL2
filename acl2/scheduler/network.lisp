@@ -78,6 +78,12 @@
   (implies (and (network-p net) (not (omap::emptyp net)))
            (pid-p (omap::head-key net))))
 
+(defrule proc-p-of-lookup-of-network
+  (implies
+    (and (network-p net) (omap::assoc pid net))
+    (proc-p (omap::lookup pid net)))
+  :enable network-p)
+
 (defrule network-p-of-update
   (implies
     (and (network-p net) (pid-p pid)

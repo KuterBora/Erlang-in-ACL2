@@ -230,7 +230,8 @@
             :in-theory
               (e/d (has-message-for-dst? proc-has-message-for-dst? proc->pid)
                    (scheduler-correct-when-deliver))
-            :use ((:instance scheduler-correct-when-deliver)))))))
+            :use ((:instance scheduler-correct-when-deliver))))))
+      (defcong network-equiv equal (erl-step net) 1))
 
 ; Erlang Runtime --------------------------------------------------------------
 
