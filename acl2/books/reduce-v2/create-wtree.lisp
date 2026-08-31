@@ -18,7 +18,7 @@
 ; net: nodes of wtree built so far
 (define create-wtree0
   ((n natp) (self pid-p) (index natp) (parent erl-val-p)
-   (children erl-vlst-p) (pids pid-set-p) (net network-p))
+   (children pid-lst-p) (pids pid-set-p) (net network-p))
   :verify-guards nil
   :returns rnet
   :measure (nfix n)
@@ -26,7 +26,7 @@
        (self (pid-fix self))
        (index (nfix index))
        (parent (erl-val-fix parent))
-       (children (erl-vlst-fix children))
+       (children (pid-lst-fix children))
        (pids (pid-set-fix pids))
        (net (network-fix net))
        ((if (zp n)) net)
@@ -58,7 +58,7 @@
                         :expand ((create-wtree0 a b c d e f g)
                                  (create-wtree0 a b c-equiv d e f g)))))
       (defcong erl-val-equiv equal (create-wtree0 a b c d e f g) 4)
-      (defcong erl-vlst-equiv equal (create-wtree0 a b c d e f g) 5)
+      (defcong pid-lst-equiv equal (create-wtree0 a b c d e f g) 5)
       (defcong pid-set-equiv equal (create-wtree0 a b c d e f g) 6
         :hints (("Goal" :expand ((create-wtree0 a b c d e f g)
                                  (create-wtree0 a b c d e f-equiv g)))))
@@ -200,7 +200,14 @@
               (proc->s
                 (omap::lookup self
                   (create-wtree0 n self index parent children pids net))))))
-        :cons)))
+        :cons)
+      (pid-lst-p
+        (erl-val-cons->lst
+          (omap::lookup 'ChildPids
+            (erl-state->bind
+              (proc->s
+                (omap::lookup self
+                  (create-wtree0 n self index parent children pids net)))))))))
   :enable create-wtree0
   :disable (floor ceiling)))
 
@@ -210,7 +217,7 @@
       (network-p net) (pid-set-p pids)
       (set::in self pids) (not (omap::assoc self net))
       (set::subset (omap::keys net) pids)
-      (erl-vlst-p chl) (consp chl)
+      (pid-lst-p chl) (consp chl)
       (natp index) (natp n) (> n 0))
     (equal
       (last (erl-val-cons->lst
@@ -229,7 +236,7 @@
       (network-p net) (pid-set-p pids)
       (set::in self pids) (not (omap::assoc self net))
       (set::subset (omap::keys net) pids)
-      (natp index) (erl-vlst-p chl) (natp n) (> n 0)
+      (natp index) (pid-lst-p chl) (natp n) (> n 0)
       (member-equal pid chl))
     (member-equal pid
       (erl-val-cons->lst
@@ -250,7 +257,7 @@
         (set::subset (omap::keys net) pids) (set::in self pids)
         (not (omap::assoc self net)))
     (equal (omap::size (create-wtree0 n self index parent children pids net))
-          (+ n (omap::size net))))
+           (+ n (omap::size net))))
   :enable (create-wtree0 omap::size-to-cardinality-of-keys set::insert-cardinality)
   :disable (floor ceiling))
 
@@ -367,7 +374,7 @@
            (network-p net) (pid-set-p pids)
            (set::in self pids) (not (omap::assoc self net))
            (set::subset (omap::keys net) pids)
-           (erl-vlst-p children) (check-children self children net)
+           (pid-lst-p children) (check-children self children net)
            (not (omap::assoc pid net)) (pid-p pid)
            (omap::assoc pid (create-wtree0 n self index parent children pids net)))
          (check-children pid
@@ -417,7 +424,7 @@
            (network-p net) (pid-set-p pids)
            (set::in self pids) (not (omap::assoc self net))
            (set::subset (omap::keys net) pids)
-           (erl-vlst-p chl) (natp index)
+           (pid-lst-p chl) (natp index)
            (or (and (> index 0) (pid-p parent))
                (and (equal index 0) (equal parent '(:atom none))))
            (natp n) (> n 0)
@@ -433,7 +440,7 @@
            (network-p net) (pid-set-p pids)
            (set::in self pids) (not (omap::assoc self net))
            (set::subset (omap::keys net) pids)
-           (erl-vlst-p children) (natp index)
+           (pid-lst-p children) (natp index)
            (or (and (> index 0) (pid-p parent) (not (equal pid self)))
                (and (equal index 0) (equal parent '(:atom none))))
            (natp n) (> n 0)
@@ -478,7 +485,7 @@
       (natp index)
       (or (and (> index 0) (pid-p parent))
           (and (equal index 0) (equal parent '(:atom none))))
-      (erl-vlst-p chl) (consp chl)
+      (pid-lst-p chl) (consp chl)
       (pid-p (car (last chl)))
       (omap::assoc (car (last chl)) net) 
       (leaf-p (omap::lookup (car (last chl)) net)))
@@ -497,7 +504,7 @@
        (implies
          (and
           (network-p net) (pid-set-p pids) (natp index)
-          (erl-vlst-p chl) (consp chl)
+          (pid-lst-p chl) (consp chl)
           (set::subset (omap::keys net) pids)
           (set::in self pids) (not (omap::assoc self net))
           (natp n) (> n 0))
@@ -606,7 +613,7 @@
          (natp index) (natp n)
          (set::subset (omap::keys net) pids)
          (set::in self pids) (not (omap::assoc self net))
-         (check-indices i chl net))
+         (check-indices i chl net) (pid-lst-p chl))
     (check-indices i chl (create-wtree0 n self index parent cwchl pids net)))
   :enable check-indices))
 
@@ -614,7 +621,7 @@
 (local (defrule check-indices-of-create-wtree0-of-lookup
   (implies
     (and (network-p net) (pid-set-p pids) (pid-p self) (pid-p pid)
-         (natp index) (erl-vlst-p children)
+         (natp index) (pid-lst-p children)
          (set::subset (omap::keys net) pids)
          (set::in self pids) (not (omap::assoc self net))
          (natp n) (> n 0)
@@ -624,12 +631,16 @@
     (check-indices
       (erl-val-integer->val
         (omap::lookup 'Index
-          (erl-state->bind (proc->s (omap::lookup pid
-            (create-wtree0 n self index parent children pids net))))))
+          (erl-state->bind
+            (proc->s
+              (omap::lookup pid
+                (create-wtree0 n self index parent children pids net))))))
       (erl-val-cons->lst
         (omap::lookup 'ChildPids
-          (erl-state->bind (proc->s (omap::lookup pid
-            (create-wtree0 n self index parent children pids net))))))
+          (erl-state->bind
+            (proc->s
+              (omap::lookup pid
+                (create-wtree0 n self index parent children pids net))))))
       (create-wtree0 n self index parent children pids net)))
   :enable (create-wtree0 omap::lookup-of-update)
   :disable (floor ceiling not |(< (if a b c) x)| |(< x (if a b c))|)
@@ -652,7 +663,7 @@
 
 ; Create-Wtree is Wtree-p -----------------------------------------------------
 
-(defrule wtree0-p-of-create-wtree-general
+(defrule wtree0-p-of-create-wtree
   (implies
     (and (natp n) (> n 0) (network-p net) (not (omap::emptyp net))
          (omap::submap net (create-wtree n)))
@@ -678,5 +689,5 @@
   :enable wtree-p
   :disable natp
   :cases ((create-wtree n))
-  :use ((:instance wtree0-p-of-create-wtree-general
+  :use ((:instance wtree0-p-of-create-wtree
           (net (create-wtree n)))))

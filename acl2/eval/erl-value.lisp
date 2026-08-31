@@ -111,6 +111,10 @@
   :elt-type pid
   :true-listp t)
 
+(defrule erl-vlst-p-of-pid-lst
+  (implies (pid-lst-p lst) (erl-vlst-p lst))
+  :enable (pid-lst-p erl-vlst-p))
+
 (fty::defset pid-set
   :elt-type pid
   :elementp-of-nil nil)

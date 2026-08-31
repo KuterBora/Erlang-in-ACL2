@@ -57,13 +57,13 @@
                                          (:nil))))))))))))))))
 
 ; Create a process with given id, parent id, child ids, and index, that is calling reduce.
-(define make-reduce-proc ((self pid-p) (parent erl-val-p) (children erl-vlst-p) (index natp))
+(define make-reduce-proc ((self pid-p) (parent erl-val-p) (children pid-lst-p) (index natp))
   :returns (proc proc-p)
   :guard-hints (("Goal" :in-theory (enable omap::from-lists)))
   (b* ((self (pid-fix self))
        (parent (erl-val-fix parent))
        (index (nfix index))
-       (children (erl-vlst-fix children)))
+       (children (pid-lst-fix children)))
     (make-proc
       :s
         (make-erl-state
@@ -74,7 +74,7 @@
             :self self
             :world (sum-reduce-w))
       :klst (list (make-erl-k
-                    :fuel 1000
+                    :fuel 100
                     :kont (make-kont-expr
                             :expr (make-node-call
                                     :fn 'sum_reduce
@@ -88,7 +88,7 @@
   ///
     (defcong pid-equiv equal (make-reduce-proc s p c i) 1)
     (defcong erl-val-equiv equal (make-reduce-proc s p c i) 2)
-    (defcong erl-vlst-equiv equal (make-reduce-proc s p c i) 3)
+    (defcong pid-lst-equiv equal (make-reduce-proc s p c i) 3)
     (defcong nat-equiv equal (make-reduce-proc s p c i) 4)
 
     (defrule network-p-of-update-with-make-reduce-proc
@@ -124,5 +124,5 @@
     (defrule childpids-of-make-reduce-proc
       (equal (omap::lookup 'ChildPids
                (erl-state->bind (proc->s (make-reduce-proc self parent children index))))
-             (make-erl-val-cons :lst (erl-vlst-fix children)))
+             (make-erl-val-cons :lst (pid-lst-fix children)))
       :enable (omap::from-lists omap::lookup-of-update)))
