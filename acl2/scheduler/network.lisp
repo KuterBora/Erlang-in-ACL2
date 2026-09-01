@@ -120,6 +120,13 @@
   :enable (network-p network-gen-p)
   :use (:instance omap::lookup-of-tail-when-assoc-tail (key pid) (map net)))
 
+(defrule size-of-update-network
+  (implies
+    (and (network-p net) (omap::assoc pid net))
+    (equal (omap::size (omap::update pid proc net))
+           (omap::size net)))
+  :in-theory (enable* omap::order-rules omap::size
+                omap::head-key-minimal-2))
 
 ; Predicates for Networks -----------------------------------------------------
 
