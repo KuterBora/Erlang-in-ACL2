@@ -30,7 +30,7 @@
               (- (cw "Received the message and ran till the next receive.~%~%")))
              (change-proc
                proc
-                 :s rs
+                 :s (update-erl-state->in rs (make-erl-val-none))
                  :ps :receive
                  :inbox-new (append (proc->inbox-tried proc) (cdr (proc->inbox-new proc)))
                  :inbox-tried nil
@@ -157,8 +157,10 @@
                     (omap::update
                       dst
                       (change-proc pdst
-                        :inbox-new (append (proc->inbox-new pdst)
+                        :inbox-new (append (proc->inbox-tried pdst)
+                                           (proc->inbox-new pdst)
                                            (list (car (omap::lookup dst (proc->outbox psrc)))))
+                        :inbox-tried nil
                         :ps :receive)
                       (omap::update
                         src

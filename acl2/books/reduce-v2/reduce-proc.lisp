@@ -37,12 +37,13 @@
               (:var ParentPid)
               (:tuple (:cons (:call self (:nil))
                              (:cons (:var MyTotal)
-                                    (:nil)))))))
-         ((cases (:var ParentPid) (:var Children) (:var LeftTotal))
+                                    (:nil)))))
+            (:var MyTotal)))
+         ((cases (:var ParentPid) (:var CPids) (:var LeftTotal))
           (guards)
           (body
-            (:match (:var ChildHd) (:call hd (:cons (:var Children) (:nil))))
-            (:match (:var ChildTl) (:call tl (:cons (:var Children) (:nil))))
+            (:match (:var ChildHd) (:call hd (:cons (:var CPids) (:nil))))
+            (:match (:var ChildTl) (:call tl (:cons (:var CPids) (:nil))))
             (:receive
               (((cases
                   (:tuple (:cons (:var ChildHd)

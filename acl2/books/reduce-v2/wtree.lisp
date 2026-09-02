@@ -282,6 +282,7 @@
        (net (network-fix net))
        ((unless (omap::assoc pid net)) nil)
        ((unless (pid-p parent)) (root-p (omap::lookup pid net)))
+       ((when (equal parent pid)) nil)
        ((unless (omap::assoc parent net)) nil)
        (pproc (omap::lookup parent net))
        ((unless (or (leaf-p pproc) (root-p pproc))) nil)
