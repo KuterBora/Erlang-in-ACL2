@@ -7,9 +7,9 @@
 ; Updating a Wtree -------------------------------------------------------------
 
 ; TODO: This probably exists in a community book.
-(local (defrule size-crock
+(defrule size-crock
   (implies (< 0 (omap::size m)) (not (omap::emptyp m)))
-  :enable omap::size))
+  :enable omap::size)
 
 (defrule wtree0-p-of-update
   (implies
