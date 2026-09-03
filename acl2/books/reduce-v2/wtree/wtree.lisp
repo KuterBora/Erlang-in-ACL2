@@ -8,7 +8,7 @@
 
 ; Wtree Predicate --------------------------------------------------------------
 
-; Helper to travetse the network.
+; Helper to traverse the network.
 (define wtree0-p ((net network-p) (net0 network-p) (n natp))
   :returns (r booleanp)
   :measure (acl2-count (network-fix net))
@@ -17,8 +17,10 @@
       :in-theory (disable node-p-of-rightmost-child index-of-leaf)
       :use
         ((:instance index-of-leaf (p (mv-nth 1 (omap::head net))))
-         (:instance node-p-of-rightmost-child (net net0) (pid (mv-nth 0 (omap::head net))))
-         (:instance node-p-of-rightmost-child (net net0) (pid (mv-nth 0 (omap::head net)))))))
+         (:instance node-p-of-rightmost-child
+           (net net0) (pid (mv-nth 0 (omap::head net))))
+         (:instance node-p-of-rightmost-child
+           (net net0) (pid (mv-nth 0 (omap::head net)))))))
   :ignore-ok t
   (b* ((net (network-fix net))
        (net0 (network-fix net0))
@@ -29,7 +31,7 @@
        (pid (omap::head-key net))
        (proc (omap::head-val net))
        ((unless (or (root-p proc) (leaf-p proc))) nil)
-       (bind (erl-state->bind (proc->s proc)))
+       (bind (wtree-bind proc))
        (index (erl-val-integer->val (omap::lookup 'Index bind)))
        (children (erl-val-cons->lst (omap::lookup 'ChildPids bind)))
        (parent (omap::lookup 'Parent bind))
@@ -42,7 +44,7 @@
             (rpid (rightmost-child pid net0))
             ((unless rpid) nil)
             (rproc (omap::lookup rpid net0))
-            (rbind (erl-state->bind (proc->s rproc)))
+            (rbind (wtree-bind rproc))
             (rindex (erl-val-integer->val (omap::lookup 'Index rbind))))
           (equal rindex (- n 1))))   
       ((leaf-p proc) (wtree0-p (omap::tail net) net0 n))
@@ -52,8 +54,8 @@
     (defcong network-equiv equal (wtree0-p net net0 n) 2)
     (defcong nat-equiv equal (wtree0-p net net0 n) 3)
     
-    ; TODO: For my current implementation of wtree-p, I have
-    ; to state n > 0. However, I would like to change that.
+    ; TODO: For my current implementation of wtree-p, I often have
+    ; to state n > 0 in proofs. However, I would like to change that.
     (defrule wtree0-nodes-are-leaf-or-root
       (implies
         (and (wtree0-p net net0 n) (natp n) (> n 0)
@@ -173,10 +175,7 @@
     (check-children
       pid
       (erl-val-cons->lst
-        (omap::lookup 'ChildPids
-          (erl-state->bind
-            (proc->s
-              (omap::lookup pid net)))))
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
       net0))
   :enable wtree0-p
   :induct (wtree0-induct pid net net0 size)
@@ -195,10 +194,7 @@
       (omap::assoc pid net))
     (check-parent
       pid
-      (omap::lookup 'Parent
-        (erl-state->bind
-          (proc->s
-            (omap::lookup pid net))))
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
       net0))
   :enable wtree0-p
   :induct (wtree0-induct pid net net0 size)
@@ -218,10 +214,7 @@
       (root-p (omap::lookup pid net)))
     (equal
       (erl-val-integer->val
-        (omap::lookup 'Index
-          (erl-state->bind
-            (proc->s
-              (omap::lookup (rightmost-child pid net0) net0)))))
+        (omap::lookup 'Index (wtree-bind (omap::lookup (rightmost-child pid net0) net0))))
       (+ -1 size)))
   :enable wtree0-p
   :induct (wtree0-induct pid net net0 size)
@@ -240,13 +233,9 @@
       (omap::assoc pid net))
     (check-indices
       (erl-val-integer->val
-        (omap::lookup 'Index
-          (erl-state->bind
-            (proc->s (omap::lookup pid net)))))
+        (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
       (erl-val-cons->lst
-        (omap::lookup 'ChildPids
-          (erl-state->bind
-            (proc->s (omap::lookup pid net)))))
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
       net0))
   :enable wtree0-p
   :induct (wtree0-induct pid net net0 size)

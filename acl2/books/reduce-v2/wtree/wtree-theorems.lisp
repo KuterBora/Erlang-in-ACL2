@@ -3,7 +3,6 @@
 
 ; Even more theorems about wtree-p, and its helpers
 
-
 ; Updating a Wtree -------------------------------------------------------------
 
 ; TODO: This probably exists in a community book.
@@ -22,20 +21,14 @@
       (equal (proc->pid proc) pid)
       (or (leaf-p proc) (root-p proc))
       (equal
-        (omap::lookup 'Index
-          (erl-state->bind (proc->s proc)))
-        (omap::lookup 'Index
-          (erl-state->bind (proc->s (omap::lookup pid net)))))
+        (omap::lookup 'Index (wtree-bind proc))
+        (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
       (equal
-        (omap::lookup 'Parent
-          (erl-state->bind (proc->s proc)))
-        (omap::lookup 'Parent
-          (erl-state->bind (proc->s (omap::lookup pid net)))))
+        (omap::lookup 'Parent (wtree-bind proc))
+        (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
       (equal
-        (omap::lookup 'ChildPids
-          (erl-state->bind (proc->s proc)))
-        (omap::lookup 'ChildPids
-          (erl-state->bind (proc->s (omap::lookup pid net))))))
+        (omap::lookup 'ChildPids (wtree-bind proc))
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net)))))
     (wtree0-p (omap::update pid proc net) net0 size))
   :enable (network-fix)
   :disable
@@ -68,15 +61,12 @@
       (pid-p pid) (proc-p proc) (omap::assoc pid net0)
       (or (leaf-p proc) (root-p proc))
       (or (leaf-p (omap::lookup pid net0)) (root-p (omap::lookup pid net0)))
-      (equal (omap::lookup 'Index (erl-state->bind (proc->s proc)))
-             (omap::lookup 'Index
-               (erl-state->bind (proc->s (omap::lookup pid net0)))))
-      (equal (omap::lookup 'Parent (erl-state->bind (proc->s proc)))
-             (omap::lookup 'Parent
-               (erl-state->bind (proc->s (omap::lookup pid net0)))))
-      (equal (omap::lookup 'ChildPids (erl-state->bind (proc->s proc)))
-             (omap::lookup 'ChildPids
-               (erl-state->bind (proc->s (omap::lookup pid net0)))))
+      (equal (omap::lookup 'Index (wtree-bind proc))
+             (omap::lookup 'Index (wtree-bind (omap::lookup pid net0))))
+      (equal (omap::lookup 'Parent (wtree-bind proc))
+             (omap::lookup 'Parent (wtree-bind (omap::lookup pid net0))))
+      (equal (omap::lookup 'ChildPids (wtree-bind proc))
+             (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net0))))
       (wtree0-p net net0 size))
     (wtree0-p net (omap::update pid proc net0) size))
   :enable (wtree0-p omap::lookup-of-update)
@@ -91,15 +81,12 @@
       (network-p (omap::update pid proc net))
       (equal (proc->pid proc) pid)
       (or (leaf-p proc) (root-p proc))
-      (equal (omap::lookup 'Index (erl-state->bind (proc->s proc)))
-             (omap::lookup 'Index
-               (erl-state->bind (proc->s (omap::lookup pid net)))))
-      (equal (omap::lookup 'Parent (erl-state->bind (proc->s proc)))
-             (omap::lookup 'Parent
-               (erl-state->bind (proc->s (omap::lookup pid net)))))
-      (equal (omap::lookup 'ChildPids (erl-state->bind (proc->s proc)))
-             (omap::lookup 'ChildPids
-               (erl-state->bind (proc->s (omap::lookup pid net))))))
+      (equal (omap::lookup 'Index (wtree-bind proc))
+             (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
+      (equal (omap::lookup 'Parent (wtree-bind proc))
+             (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
+      (equal (omap::lookup 'ChildPids (wtree-bind proc))
+             (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net)))))
     (wtree-p (omap::update pid proc net)))
   :enable wtree-p
   :do-not-induct t

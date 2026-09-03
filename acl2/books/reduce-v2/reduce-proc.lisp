@@ -12,13 +12,13 @@
 #| 
   reduce(none, [], GrandTotal) -> GrandTotal;
   reduce(ParentPid, [], MyTotal) ->
-    ParentPid ! {self(), reduce_up, MyTotal};
+    ParentPid ! {self(), MyTotal};
   reduce(ParentPid, CPids, LeftTotal) ->
     ChildHd = hd(CPids);
     ChildTl = tl(Cpids);
     receive
-      {ChildHd, reduce_up, RightTotal} ->
-        reduce(Parent, ChildTl, LeftTotal + RightTotal)
+      {ChildHd, RightTotal} ->
+        reduce(ParentPid, ChildTl, LeftTotal + RightTotal)
     end.
 |#
 (define sum-reduce-w ()

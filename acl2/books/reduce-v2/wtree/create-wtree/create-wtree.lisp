@@ -155,20 +155,17 @@
       (natp n) (> n 0) (pid-p self))
     (and
       (omap::assoc 'Index
-        (erl-state->bind
-          (proc->s
-            (omap::lookup self
-              (create-wtree0 n self index parent children pids net)))))
+        (wtree-bind
+          (omap::lookup self
+            (create-wtree0 n self index parent children pids net))))
       (omap::assoc 'Parent
-        (erl-state->bind
-          (proc->s
-            (omap::lookup self
-              (create-wtree0 n self index parent children pids net)))))
+        (wtree-bind
+          (omap::lookup self
+            (create-wtree0 n self index parent children pids net))))
       (omap::assoc 'ChildPids
-        (erl-state->bind
-          (proc->s
-            (omap::lookup self
-              (create-wtree0 n self index parent children pids net)))))))
+        (wtree-bind
+          (omap::lookup self
+            (create-wtree0 n self index parent children pids net))))))
   :enable create-wtree0
   :disable (floor ceiling)))
 
@@ -182,33 +179,27 @@
     (and
       (equal
         (omap::lookup 'Index
-          (erl-state->bind
-            (proc->s
-              (omap::lookup self
-                (create-wtree0 n self index parent children pids net)))))
+          (wtree-bind
+            (omap::lookup self
+              (create-wtree0 n self index parent children pids net))))
         (make-erl-val-integer :val index))
       (equal
         (omap::lookup 'Parent
-          (erl-state->bind
-            (proc->s
-              (omap::lookup self
-                (create-wtree0 n self index parent children pids net)))))
+          (wtree-bind
+            (omap::lookup self
+              (create-wtree0 n self index parent children pids net))))
         parent)
       (equal
         (erl-val-kind
           (omap::lookup 'ChildPids
-            (erl-state->bind
-              (proc->s
-                (omap::lookup self
-                  (create-wtree0 n self index parent children pids net))))))
+            (wtree-bind
+              (omap::lookup self
+                (create-wtree0 n self index parent children pids net)))))
         :cons)
       (pid-lst-p
         (erl-val-cons->lst
-          (omap::lookup 'ChildPids
-            (erl-state->bind
-              (proc->s
-                (omap::lookup self
-                  (create-wtree0 n self index parent children pids net)))))))))
+          (omap::lookup 'ChildPids (wtree-bind (omap::lookup self
+                  (create-wtree0 n self index parent children pids net))))))))
   :enable create-wtree0
   :disable (floor ceiling)))
 
@@ -223,10 +214,9 @@
     (equal
       (last (erl-val-cons->lst
               (omap::lookup 'ChildPids
-                (erl-state->bind
-                  (proc->s
-                    (omap::lookup self
-                      (create-wtree0 n self index parent chl pids net)))))))
+                (wtree-bind
+                  (omap::lookup self
+                    (create-wtree0 n self index parent chl pids net))))))
       (last chl)))
   :enable create-wtree0
   :disable (floor ceiling)))
@@ -242,10 +232,9 @@
     (member-equal pid
       (erl-val-cons->lst
         (omap::lookup 'ChildPids
-          (erl-state->bind
-            (proc->s
-              (omap::lookup self
-                (create-wtree0 n self index parent chl pids net))))))))
+          (wtree-bind
+            (omap::lookup self
+              (create-wtree0 n self index parent chl pids net)))))))
   :enable (create-wtree0 omap::lookup-of-update)
   :disable (floor ceiling)))
 
@@ -354,8 +343,7 @@
       (natp n) (> n 0) (omap::assoc pid (create-wtree n)))
     (check-children pid
       (erl-val-cons->lst
-        (omap::lookup 'ChildPids
-          (erl-state->bind (proc->s (omap::lookup pid (create-wtree n))))))
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid (create-wtree n)))))
       (create-wtree n)))
   :enable create-wtree
   :prep-lemmas
@@ -400,8 +388,9 @@
          (check-children pid
            (erl-val-cons->lst
              (omap::lookup 'ChildPids
-               (erl-state->bind (proc->s (omap::lookup pid
-                 (create-wtree0 n self index parent children pids net))))))
+              (wtree-bind
+                (omap::lookup pid
+                  (create-wtree0 n self index parent children pids net)))))
            (create-wtree0 n self index parent children pids net)))
        :enable create-wtree0
        :disable (floor ceiling floor-zero floor-positive erl-val-fix-when-erl-val-p nfix
@@ -418,8 +407,7 @@
       (natp n) (> n 0)
       (omap::assoc pid (create-wtree n)))
     (check-parent pid
-      (omap::lookup 'Parent
-        (erl-state->bind (proc->s (omap::lookup pid (create-wtree n)))))
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid (create-wtree n))))
       (create-wtree n)))
   :enable create-wtree
   :disable check-parent-of-create-wtree0-of-lookup
@@ -468,10 +456,9 @@
            (not (omap::assoc pid net)))
          (check-parent pid
            (omap::lookup 'Parent
-             (erl-state->bind
-               (proc->s
-                 (omap::lookup pid
-                   (create-wtree0 n self index parent children pids net)))))
+             (wtree-bind
+               (omap::lookup pid
+                 (create-wtree0 n self index parent children pids net))))
            (create-wtree0 n self index parent children pids net)))
        :enable (create-wtree0)
        :disable
@@ -530,8 +517,9 @@
           (natp n) (> n 0))
          (erl-val-cons->lst
            (omap::lookup 'ChildPids
-             (erl-state->bind (proc->s (omap::lookup self
-               (create-wtree0 n self index parent chl pids net)))))))
+             (wtree-bind
+               (omap::lookup self
+                 (create-wtree0 n self index parent chl pids net))))))
        :use last-child-of-create-wtree0-of-self
        :disable last-child-of-create-wtree0-of-self
        :enable last))))
@@ -549,11 +537,13 @@
            (create-wtree0 n self index parent nil pids net) fuel)
          (equal (erl-val-integer->val
                   (omap::lookup 'Index
-                    (erl-state->bind (proc->s
+                    (wtree-bind
                       (omap::lookup
-                        (rightmost-child0 self
-                          (create-wtree0 n self index parent nil pids net) fuel)
-                        (create-wtree0 n self index parent nil pids net))))))
+                        (rightmost-child0
+                          self
+                          (create-wtree0 n self index parent nil pids net)
+                          fuel)
+                        (create-wtree0 n self index parent nil pids net)))))
                 (+ index n -1))))
   :induct (rightmost-wtree-induct n self index parent pids net fuel)
   :enable (omap::lookup-of-update rightmost-child0)
@@ -580,10 +570,10 @@
     (and (rightmost-child (spawn nil) (create-wtree n))
          (equal (erl-val-integer->val
                   (omap::lookup 'Index
-                    (erl-state->bind (proc->s
+                    (wtree-bind
                       (omap::lookup
                         (rightmost-child (spawn nil) (create-wtree n))
-                        (create-wtree n))))))
+                        (create-wtree n)))))
                 (- n 1))))
   :enable (create-wtree rightmost-child))
 
@@ -613,12 +603,11 @@
     (and (rightmost-child self (create-wtree0 n self index parent nil pids net))
          (equal (erl-val-integer->val
                   (omap::lookup 'Index
-                    (erl-state->bind
-                      (proc->s
-                        (omap::lookup
-                          (rightmost-child self
-                            (create-wtree0 n self index parent nil pids net))
-                          (create-wtree0 n self index parent nil pids net))))))
+                    (wtree-bind
+                      (omap::lookup
+                        (rightmost-child self
+                          (create-wtree0 n self index parent nil pids net))
+                        (create-wtree0 n self index parent nil pids net)))))
                 (+ index n -1))))
   :enable rightmost-child
   :use ((:instance rightmost-child0-of-create-wtree0
@@ -651,16 +640,14 @@
     (check-indices
       (erl-val-integer->val
         (omap::lookup 'Index
-          (erl-state->bind
-            (proc->s
-              (omap::lookup pid
-                (create-wtree0 n self index parent children pids net))))))
+          (wtree-bind
+            (omap::lookup pid
+              (create-wtree0 n self index parent children pids net)))))
       (erl-val-cons->lst
         (omap::lookup 'ChildPids
-          (erl-state->bind
-            (proc->s
-              (omap::lookup pid
-                (create-wtree0 n self index parent children pids net))))))
+          (wtree-bind
+            (omap::lookup pid
+              (create-wtree0 n self index parent children pids net)))))
       (create-wtree0 n self index parent children pids net)))
   :enable (create-wtree0 omap::lookup-of-update)
   :disable (floor ceiling not |(< (if a b c) x)| |(< x (if a b c))|)
@@ -672,11 +659,9 @@
     (and (natp n) (> n 0) (pid-p pid) (omap::assoc pid (create-wtree n)))
     (check-indices
       (erl-val-integer->val
-        (omap::lookup 'Index
-          (erl-state->bind (proc->s (omap::lookup pid (create-wtree n))))))
+        (omap::lookup 'Index (wtree-bind (omap::lookup pid (create-wtree n)))))
       (erl-val-cons->lst
-        (omap::lookup 'ChildPids
-          (erl-state->bind (proc->s (omap::lookup pid (create-wtree n))))))
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid (create-wtree n)))))
       (create-wtree n)))
   :enable create-wtree)
 

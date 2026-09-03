@@ -27,9 +27,10 @@
        ((unless (or (leaf-p proc) (root-p proc))) t)
        (ps (proc->ps proc))
        (bind (erl-state->bind (proc->s proc)))
-       (parent (omap::lookup 'Parent bind))
-       (children (erl-val-cons->lst (omap::lookup 'ChildPids bind)))
-       (index (erl-val-integer->val (omap::lookup 'Index bind))))
+       (wbind (wtree-bind proc))
+       (parent (omap::lookup 'Parent wbind))
+       (children (erl-val-cons->lst (omap::lookup 'ChildPids wbind)))
+       (index (erl-val-integer->val (omap::lookup 'Index wbind))))
       (case ps
         (:idle
           ; If the process has not been run yet, it is has not changed
@@ -37,7 +38,10 @@
           ; messages.
           ; - init-proc simulates a proc that has just been spawned,
           ;   having received no messages.
-          (b* ((init-proc (make-reduce-proc pid parent children index))
+          (b* (; The process has not entered the reduce call, so the
+               ; there should be no new bindings yet.
+               ((unless (equal bind wbind)) nil)
+               (init-proc (make-reduce-proc pid parent children index))
                ((unless (equal (proc->s proc) (proc->s init-proc))) nil)
                ((unless (equal (proc->klst proc) (proc->klst init-proc))) nil)
                ((unless (null (proc->inbox-tried proc))) nil)
@@ -60,7 +64,7 @@
                ((unless (leaf-p (omap::lookup cpid net))) nil)
 
                (cproc (omap::lookup cpid net))
-               (cbind (erl-state->bind (proc->s cproc)))
+               (cbind (wtree-bind cproc))
                (cindex (erl-val-integer->val (omap::lookup 'Index cbind)))
                ((unless (<= index cindex)) nil))
               (and
@@ -121,7 +125,7 @@
                ((unless (proc-p chdproc)) nil)
                ((unless (leaf-p chdproc)) nil)
 
-               (chdbind (erl-state->bind (proc->s chdproc)))
+               (chdbind (wtree-bind chdproc))
                (cindex (erl-val-integer->val (omap::lookup 'Index chdbind)))
                ((unless (< index cindex)) nil)
 
@@ -221,7 +225,7 @@
                ((unless (proc-p chdproc)) nil)
                ((unless (leaf-p chdproc)) nil)
 
-               (chdbind (erl-state->bind (proc->s chdproc)))
+               (chdbind (wtree-bind chdproc))
                (cindex (erl-val-integer->val (omap::lookup 'Index chdbind)))
                ; The other index ordering: the node sits strictly below the
                ; child it is waiting on.  The leftmost child starts at index+1,
