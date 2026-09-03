@@ -105,7 +105,10 @@
          (erl-state-send
           s
           (kont-binop-expr2->val (erl-k->kont k))
-          (erl-state->in s)))
+          (erl-state->in s)
+          (omap::update*
+            (erl-state->bind s)
+            (kont-binop-expr2->left-bind (erl-k->kont k)))))
         ((equal (kont-binop-expr2->op (erl-k->kont k)) '!)
          (update-erl-state->in
           s
@@ -128,7 +131,7 @@
 
 ; apply-k  ---------------------------------------------------------------------
 
-(defrule apply-k-of-expr-binop-1
+(defrule apply-k-of-expr-binop
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 0)
@@ -204,14 +207,53 @@
          (not (equal (kont-binop-expr2->op (erl-k->kont k)) '!)))
     (equal (apply-k s (cons k nil))
            (update-erl-state->in-bind
-                s
-                (apply-erl-binop
-                  (kont-binop-expr2->op (erl-k->kont k))
-                  (kont-binop-expr2->val (erl-k->kont k))
-                  (erl-state->in s))
-                (omap::update*
-                  (erl-state->bind s)
-                  (kont-binop-expr2->left-bind (erl-k->kont k))))))
+            s
+            (apply-erl-binop
+              (kont-binop-expr2->op (erl-k->kont k))
+              (kont-binop-expr2->val (erl-k->kont k))
+              (erl-state->in s))
+            (omap::update*
+              (erl-state->bind s)
+              (kont-binop-expr2->left-bind (erl-k->kont k))))))
+  :enable apply-k-of-step)
+
+(defrule apply-k-of-binop-expr2-compatible-send
+  (implies
+    (and (wf-state-p s)
+         (omap::compatiblep 
+           (erl-state->bind s)
+           (kont-binop-expr2->left-bind (erl-k->kont k)))
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :binop-expr2)
+         (equal (kont-binop-expr2->op (erl-k->kont k)) '!)
+         (pid-p (kont-binop-expr2->val (erl-k->kont k))))
+    (equal (apply-k s (cons k nil))
+           (erl-state-send
+             s
+             (kont-binop-expr2->val (erl-k->kont k))
+             (erl-state->in s)
+             (omap::update*
+              (erl-state->bind s)
+              (kont-binop-expr2->left-bind (erl-k->kont k))))))
+  :enable apply-k-of-step)
+
+(defrule apply-k-of-binop-expr2-compatible-bad-send
+  (implies
+    (and (wf-state-p s)
+         (omap::compatiblep 
+           (erl-state->bind s)
+           (kont-binop-expr2->left-bind (erl-k->kont k)))
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :binop-expr2)
+         (equal (kont-binop-expr2->op (erl-k->kont k)) '!)
+         (not (pid-p (kont-binop-expr2->val (erl-k->kont k)))))
+    (equal (apply-k s (cons k nil))
+           (update-erl-state->in
+            s
+            (make-erl-val-excpt
+              :err (make-erl-err
+                     :class (make-err-class-error)
+                     :reason (make-exit-reason-badarg))))))
   :enable apply-k-of-step)
 
 (defrule apply-k-of-binop-expr2-incompatible
@@ -247,8 +289,8 @@
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
     (> (erl-k->fuel k) 1))
-  :disable apply-k-of-expr-binop-1
-  :use ((:instance apply-k-of-expr-binop-1)
+  :disable apply-k-of-expr-binop
+  :use ((:instance apply-k-of-expr-binop)
         (:instance fuel-crock
           (s s)
           (k (erl-k (+ -1 (erl-k->fuel k))
@@ -266,8 +308,8 @@
                 :fuel (1- (erl-k->fuel k))
                 :kont (make-kont-expr
                         :expr (node-binop->left (kont-expr->expr (erl-k->kont k)))))))))
-  :disable apply-k-of-expr-binop-1
-  :use (:instance apply-k-of-expr-binop-1))
+  :disable apply-k-of-expr-binop
+  :use (:instance apply-k-of-expr-binop))
 
 (defrule apply-k-of-binop-has-enough-fuel-when-wf-2
   (implies
@@ -275,8 +317,8 @@
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
     (> (erl-k->fuel k) 2))
-   :disable (apply-k-of-expr-binop-1
+   :disable (apply-k-of-expr-binop
              apply-k-of-binop-has-enough-fuel-when-wf-1)
   :enable apply-k
   :use ((:instance apply-k-of-binop-has-enough-fuel-when-wf-1)
-        (:instance apply-k-of-expr-binop-1)))
+        (:instance apply-k-of-expr-binop)))

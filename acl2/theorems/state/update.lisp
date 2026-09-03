@@ -54,7 +54,7 @@
 (defrule wf-state-of-erl-state-send
   (implies
     (wf-state-p s)
-    (wf-state-p (erl-state-send s dst val)))
+    (wf-state-p (erl-state-send s dst val bind)))
   :enable wf-state-p)
 
 (defrule wf-state-of-update-erl-state->outbox

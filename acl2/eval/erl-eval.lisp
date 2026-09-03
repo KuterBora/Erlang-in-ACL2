@@ -221,7 +221,11 @@
             (if (equal k.op '!)
                 (if (pid-p k.val)
                     (make-erl-s-klst
-                      :s (erl-state-send s k.val s.in))
+                      :s (erl-state-send
+                           s
+                           k.val
+                           s.in
+                           (omap::update* s.bind k.left-bind)))
                     (make-erl-s-klst
                       :s
                         (update-erl-state->in 

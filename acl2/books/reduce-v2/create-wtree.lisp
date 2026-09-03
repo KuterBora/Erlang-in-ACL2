@@ -368,6 +368,25 @@
          (check-children i chl
            (create-wtree0 n self index parent children pids net)))
        :enable check-children)
+
+     (defrule member-of-check-children-is-assoc
+       (implies
+         (and (network-p net) (pid-lst-p children)
+              (check-children self children net)
+              (member-equal x children))
+         (omap::assoc x net))
+       :enable check-children)
+
+     (defrule not-member-spawn-of-check-children
+       (implies
+         (and (network-p net) (pid-set-p pids)
+              (set::subset (omap::keys net) pids)
+              (pid-lst-p children)
+              (check-children self children net))
+         (not (member-equal (spawn pids) children)))
+       :use ((:instance member-of-check-children-is-assoc (x (spawn pids))))
+       :disable member-of-check-children-is-assoc)
+
      (defrule lookup-of-check-children-of-create-wtree0
        (implies
          (and

@@ -118,7 +118,7 @@
 
 ; apply-k  ---------------------------------------------------------------------
 
-(defrule apply-k-of-expr-cons-1
+(defrule apply-k-of-expr-cons
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 0)
@@ -252,5 +252,5 @@
                          :fuel (1- (erl-k->fuel k)) 
                          :kont (make-kont-expr 
                                  :expr (node-cons->hd (kont-expr->expr (erl-k->kont k)))))))))
-  :disable apply-k-of-expr-cons-1
-  :use (:instance apply-k-of-expr-cons-1))
+  :disable apply-k-of-expr-cons
+  :use (:instance apply-k-of-expr-cons))

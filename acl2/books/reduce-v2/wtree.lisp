@@ -228,7 +228,14 @@
        (cproc (omap::lookup cpid net))
        ((unless (leaf-p cproc)) nil)
        (bind (erl-state->bind (proc->s cproc)))
-       ((unless (equal (omap::lookup 'Parent bind) pid)) nil))
+       ((unless (equal (omap::lookup 'Parent bind) pid)) nil)
+       ; No child is listed twice.  The reduce loop drops ChildHd from CPids
+       ; once it has folded in that child's message, and a child that occurred
+       ; again would still be listed as outstanding afterwards -- so its
+       ; sent-message-wf, which by then rests on having been dropped, would
+       ; fail.  Its own message cannot arrive twice either: it terminates after
+       ; sending one.
+       ((when (member-equal cpid (cdr children))) nil))
       (check-children pid (cdr children) net))
   ///
     (defcong pid-equiv equal (check-children pid children net) 1)
@@ -270,6 +277,7 @@
             (omap::lookup 'Parent
               (erl-state->bind (proc->s (omap::lookup cpid net))))
             pid)
+          (not (member-equal cpid chl))
           (check-children pid chl net))
         (check-children pid (cons cpid chl) net))))
 
@@ -282,6 +290,11 @@
        (net (network-fix net))
        ((unless (omap::assoc pid net)) nil)
        ((unless (pid-p parent)) (root-p (omap::lookup pid net)))
+       ; A node is not its own parent.  This is a structural fact about the
+       ; tree, but the invariant proofs need it: a :run step updates one pid,
+       ; and without this they cannot rule out that the pid being updated is
+       ; also its own parent -- in which case a node that terminates would
+       ; observe its own parent as terminated.
        ((when (equal parent pid)) nil)
        ((unless (omap::assoc parent net)) nil)
        (pproc (omap::lookup parent net))

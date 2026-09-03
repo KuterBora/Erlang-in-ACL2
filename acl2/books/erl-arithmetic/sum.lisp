@@ -187,7 +187,7 @@
                          nil))
          (list (erl-k (+ -5 (erl-k->fuel k))
                      '(:local-call sum))))))
-  :use ((:instance apply-k-of-local-call-when-match-wf))
+  :use ((:instance apply-k-of-local-call-when-match))
   :enable (apply-k-of-binop-expr1 apply-k-of-cons))
 
 ; steps: 252227
@@ -338,7 +338,6 @@
       (equal (kont-local-call->call (erl-k->kont k)) 'sum)
       
       ; the arguments are well-formed
-      (wf-state-p s)
       (equal (erl-val-kind (erl-state->in s)) :cons)
       (car (erl-val-cons->lst (erl-state->in s)))
       (not (cdr (erl-val-cons->lst (erl-state->in s))))
@@ -379,6 +378,7 @@
       (equal (kont-local-call->call (erl-k->kont k)) 'sum)
       
       ; the arguments are well-formed
+      (equal (erl-val-kind (erl-state->in s)) :cons)
       (car (erl-val-cons->lst (erl-state->in s)))
       (not (cdr (erl-val-cons->lst (erl-state->in s))))
       (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
@@ -393,5 +393,5 @@
       (erl-state->in (apply-k s (cons k nil)))
       (make-erl-val-integer 
         :val  (/ (* x (+ x 1)) 2))))
-  :disable apply-k-of-sum-of-x
+  :disable (apply-k-of-sum-of-x apply-k-of-sum)
   :use (:instance apply-k-of-sum-of-x))
