@@ -96,6 +96,12 @@
     (proc-p (omap::lookup pid net)))
   :enable network-p)
 
+(defrule proc->pid-of-lookup-of-network
+  (implies
+    (and (network-p net) (omap::assoc pid net))
+    (equal (proc->pid (omap::lookup pid net)) pid))
+  :enable (omap::lookup network-fix network-p))
+
 (defrule network-p-of-update
   (implies
     (and (network-p net) (pid-p pid)

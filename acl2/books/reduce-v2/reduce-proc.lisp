@@ -75,7 +75,7 @@
             :self self
             :world (sum-reduce-w))
       :klst (list (make-erl-k
-                    :fuel 100
+                    :fuel (+ 100 (* 100 (len children)))
                     :kont (make-kont-expr
                             :expr (make-node-call
                                     :fn 'sum_reduce
