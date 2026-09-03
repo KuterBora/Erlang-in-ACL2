@@ -6,21 +6,10 @@
 
 ; Updating a Wtree -------------------------------------------------------------
 
-(defrule head-of-network-p
-  (implies
-    (and (network-p net) (not (omap::emptyp net)))
-    (pid-p (mv-nth 0 (omap::head net))))
-  :enable (network-p))
-
-(defrule crock
-  (implies
-    (and (network-p net) (not (omap::emptyp net)))
-    (equal (omap::lookup (mv-nth 0 (omap::head net)) net)
-           (mv-nth 1 (omap::head net)))))
-
-(defrule size-crock-31
+; TODO: This probably exists in a community book.
+(local (defrule size-crock
   (implies (< 0 (omap::size m)) (not (omap::emptyp m)))
-  :enable omap::size)
+  :enable omap::size))
 
 (defrule wtree0-p-of-update
   (implies

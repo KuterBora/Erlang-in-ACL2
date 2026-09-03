@@ -1,5 +1,6 @@
 (in-package "ACL2")
-(include-book "wtree")
+(include-book "../wtree")
+(include-book "spawn")
 
 (local (include-book "arithmetic-3/top" :dir :system))
 (set-induction-depth-limit 1)

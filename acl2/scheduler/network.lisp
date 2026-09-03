@@ -74,6 +74,18 @@
   (implies (network-p n) (pid-set-p (omap::keys n)))
   :enable (network-p pid-set-p omap::keys))
 
+(defrule head-of-network-p
+  (implies
+    (and (network-p net) (not (omap::emptyp net)))
+    (pid-p (mv-nth 0 (omap::head net))))
+  :enable (network-p))
+
+(defrule lookup-of-head-key-of-network
+  (implies
+    (and (network-p net) (not (omap::emptyp net)))
+    (equal (omap::lookup (mv-nth 0 (omap::head net)) net)
+           (mv-nth 1 (omap::head net)))))
+
 (defrule pid-p-of-head-key-of-network
   (implies (and (network-p net) (not (omap::emptyp net)))
            (pid-p (omap::head-key net))))

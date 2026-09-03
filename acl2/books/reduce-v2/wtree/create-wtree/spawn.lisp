@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "reduce-proc")
+(include-book "../../reduce-proc")
 
 ; TODO: doc
 ; TODO defsection
