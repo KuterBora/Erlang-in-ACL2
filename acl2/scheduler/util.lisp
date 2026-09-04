@@ -33,6 +33,31 @@
       (implies (and (erl-vlst-p x) x) (consp x))
     :enable erl-vlst-p)))
 
+(defrule bind-of-lookup-of-update-of-outbox
+  (implies
+    (and (network-p net) (omap::assoc pid net))
+    (equal
+      (erl-state->bind
+        (proc->s
+          (omap::lookup q
+            (omap::update pid
+              (change-proc (omap::lookup pid net)
+                :s (update-erl-state->outbox
+                     (proc->s (omap::lookup pid net)) ob))
+              net))))
+      (erl-state->bind (proc->s (omap::lookup q net)))))
+  :enable omap::lookup-of-update)
+
+(defrule bind-of-lookup-of-update-when-bind-equal
+  (implies
+    (and (network-p net) (omap::assoc q net)
+         (equal (erl-state->bind (proc->s qproc))
+                (erl-state->bind (proc->s (omap::lookup q net)))))
+    (equal (erl-state->bind (proc->s (omap::lookup x (omap::update q qproc net))))
+           (erl-state->bind (proc->s (omap::lookup x net)))))
+  :enable omap::lookup-of-update)
+
+; Empty Outbox Predicate
 (define outbox-emptyp ((outbox outbox-p))
   :returns (r booleanp)
   :measure (acl2-count (outbox-fix outbox))
@@ -42,4 +67,19 @@
       (and (not (omap::head-val outbox))
            (outbox-emptyp (omap::tail outbox))))
   ///
-    (defcong outbox-equiv equal (outbox-emptyp outbox) 1))
+    (defcong outbox-equiv equal (outbox-emptyp outbox) 1)
+    
+    (defrule lookup-when-outbox-emptyp
+      (implies
+        (and (outbox-p outbox) (outbox-emptyp outbox))
+        (not (omap::lookup k outbox)))
+      :enable omap::lookup)
+    
+    (defrule outbox-emptyp-of-drain
+      (implies
+        (and (outbox-p outbox)
+             (omap::assoc parent outbox)
+             (omap::emptyp (omap::tail outbox)))
+        (outbox-emptyp (omap::update parent nil outbox)))
+      :use ((:instance omap::assoc-of-tail-when-not-head
+              (key parent) (map outbox)))))

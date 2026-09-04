@@ -185,6 +185,16 @@
              (key pid) (map net))))
      ("Subgoal *1/2" :expand (wtree0-p net net0 size))))
 
+(defrule check-children-of-wtree-node
+  (implies
+    (and (network-p net) (wtree-p net) (omap::assoc pid net))
+    (check-children pid
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
+      net))
+  :enable wtree-p
+  :cases ((omap::emptyp net)))
+
 (defrule check-parent-of-wtree0-p
   (implies
     (and
@@ -204,6 +214,24 @@
               (key pid) (map net))))
      ("Subgoal *1/2" :expand (wtree0-p net net0 size))))
 
+(defrule check-parent-of-wtree-p
+  (implies
+    (and
+      (network-p net) (wtree-p net) (omap::assoc pid net))
+    (check-parent pid
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+      net))
+  :enable wtree-p
+  :cases ((omap::emptyp net)))
+
+(defrule parent-not-self-of-wtree
+  (implies
+    (and (network-p net) (wtree-p net) (omap::assoc pid net))
+    (not (equal (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+                pid)))
+  :enable check-parent
+  :disable check-parent-of-wtree-p
+  :use check-parent-of-wtree-p)
 
 (defrule root-of-wtree0-p
   (implies
@@ -244,6 +272,18 @@
         :use ((:instance omap::assoc-of-tail-when-not-head
                 (key pid) (map net))))
      ("Subgoal *1/2" :expand (wtree0-p net net0 size))))
+
+(defrule check-indices-of-wtree-node
+  (implies
+    (and (network-p net) (wtree-p net) (omap::assoc pid net))
+    (check-indices
+      (erl-val-integer->val
+        (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
+      net))
+  :enable wtree-p
+  :cases ((omap::emptyp net)))
 
 (defrule wtree0-of-tail-of-wtree0-p
   (implies

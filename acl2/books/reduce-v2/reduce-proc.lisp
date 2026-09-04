@@ -126,4 +126,17 @@
       (equal (omap::lookup 'ChildPids
                (erl-state->bind (proc->s (make-reduce-proc self parent children index))))
              (make-erl-val-cons :lst (pid-lst-fix children)))
+      :enable (omap::from-lists omap::lookup-of-update))
+    
+    (defrule bindings-of-make-reduce-proc
+      (implies
+        (equal s (proc->s (make-reduce-proc self parent children index)))
+        (equal
+          (bind-fix
+            (omap::from-lists
+              (list 'ChildPids 'Parent 'Index)
+              (list (omap::lookup 'ChildPids (erl-state->bind s))
+                    (omap::lookup 'Parent (erl-state->bind s))
+                    (omap::lookup 'Index (erl-state->bind s)))))
+          (erl-state->bind s)))
       :enable (omap::from-lists omap::lookup-of-update)))

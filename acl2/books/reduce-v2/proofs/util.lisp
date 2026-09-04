@@ -48,7 +48,19 @@
       :enable sum)
     (defrule sum-range-of-same
       (implies (natp i) (equal (sum-range i i) i))
-      :disable (sum-range-of-sum sum-range-of-one sum-range-of-zero)))
+      :disable (sum-range-of-sum sum-range-of-one sum-range-of-zero))
+    (defrule sum-range-of-fold-childless
+      (implies (and (natp i) (natp c) (< i c))
+               (equal (+ c (sum-range i (+ -1 c))) (sum-range i c)))
+      :enable sum
+      :disable (sum-range-of-one sum-range-of-zero sum-range))
+    (defrule sum-range-fold
+      (implies
+        (and (natp i) (natp c) (natp r) (< i c) (<= c r))
+        (equal (+ (sum-range i (+ -1 c)) (sum-range c r))
+               (sum-range i r)))
+      :use (:instance sum-range-of-add (i i) (j (+ -1 c)) (n r))
+      :disable (sum-range sum-range-of-add)))
 
 
 ; General Utility -------------------------------------------------------------
@@ -81,6 +93,10 @@
     (omap::assoc (mv-nth 0 (omap::head a)) b))
   :in-theory (enable* omap::submap))
 
+(defrule member-of-cdr-when-not-car
+  (implies (and (member-equal x l) (not (equal x (car l))))
+           (member-equal x (cdr l))))
+
 ; Inbox Utility ---------------------------------------------------------------
 
 ; Check if the inbox contains a message {pid, _}
@@ -98,7 +114,27 @@
       (inbox-contains (cdr inbox) pid))
   ///
     (defcong erl-vlst-equiv equal (inbox-contains inbox pid) 1)
-    (defcong pid-equiv equal (inbox-contains inbox pid) 2))
+    (defcong pid-equiv equal (inbox-contains inbox pid) 2)
+    
+    (defrule inbox-contains-of-append-1
+      (implies
+        (and (erl-vlst-p a) (erl-vlst-p b)
+             (inbox-contains a pid))
+        (inbox-contains (append a b) pid)))
+    (defrule inbox-contains-of-append-2
+      (implies
+        (and (erl-vlst-p a) (erl-vlst-p b)
+             (inbox-contains b pid))
+        (inbox-contains (append a b) pid)))
+    
+    (defrule inbox-contains-of-append-message
+      (implies
+        (and
+          (erl-vlst-p l) (pid-p pid) (erl-val-p m)
+          (equal (erl-val-kind m) :tuple)
+          (equal (len (erl-val-tuple->lst m)) 2)
+          (equal (car (erl-val-tuple->lst m)) pid))
+        (inbox-contains (append l (list m)) pid))))
 
 ; The negation of inbox-contains
 (define inbox-without ((inbox erl-vlst-p) (pid pid-p))
@@ -116,6 +152,14 @@
   ///
     (defcong erl-vlst-equiv equal (inbox-without inbox pid) 1)
     (defcong pid-equiv equal (inbox-without inbox pid) 2))
+
+(defrule inbox-contains-of-inbox-without
+  (implies
+    (and (erl-vlst-p inbox) (pid-p pid) (pid-p x)
+         (not (equal pid x))
+         (inbox-contains inbox pid))
+    (inbox-contains (inbox-without inbox x) pid))
+  :enable (inbox-contains inbox-without))
 
 ; Retrive the value of a message {pid, value},
 ; or return the null value.
@@ -159,4 +203,22 @@
   ///
     (defcong pid-equiv equal (parent-still-waiting-p a b c) 1)
     (defcong erl-val-equiv equal (parent-still-waiting-p a b c) 2)
-    (defcong network-equiv equal (parent-still-waiting-p a b c) 3))
+    (defcong network-equiv equal (parent-still-waiting-p a b c) 3)
+    
+    (defrule parent-still-waiting-p-when-not-pid
+      (implies
+        (not (pid-p (erl-val-fix parent)))
+        (parent-still-waiting-p self parent net)))
+    
+    (defrule parent-still-waiting-p-of-update
+      (implies
+        (and
+          (network-p net) (network-p (omap::update q qproc net))
+          (omap::assoc q net)
+          (equal (erl-state->bind (proc->s qproc))
+                 (erl-state->bind (proc->s (omap::lookup q net))))
+          (or (equal (proc->ps qproc) (proc->ps (omap::lookup q net)))
+              (equal (proc->ps qproc) :receive))
+          (parent-still-waiting-p self parent net))
+        (parent-still-waiting-p self parent (omap::update q qproc net)))
+      :enable omap::lookup-of-update))

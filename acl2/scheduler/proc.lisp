@@ -36,7 +36,11 @@
         (("Goal"
             :in-theory (e/d (pid-p) (proc->pid pid-p-of-proc->pid))
             :use (:instance pid-p-of-proc->pid)))))
-    (defcong proc-equiv equal (proc->pid p) 1))
+    (defcong proc-equiv equal (proc->pid p) 1)
+    
+    (defrule proc->pid-of-proc
+      (equal (proc->pid (proc ps s inew itried klst))
+             (erl-state->self (erl-state-fix s)))))
 
 (define proc->outbox ((p proc-p))
   :returns (o outbox-p)

@@ -102,6 +102,14 @@
     (equal (proc->pid (omap::lookup pid net)) pid))
   :enable (omap::lookup network-fix network-p))
 
+(defrule erl-state->self-of-lookup-of-network
+  (implies
+    (and (network-p net) (omap::assoc pid net))
+    (equal (erl-state->self (proc->s (omap::lookup pid net))) pid))
+  :enable proc->pid
+  :disable proc->pid-of-lookup-of-network
+  :use proc->pid-of-lookup-of-network)
+
 (defrule network-p-of-update
   (implies
     (and (network-p net) (pid-p pid)

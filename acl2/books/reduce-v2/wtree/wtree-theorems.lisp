@@ -96,3 +96,36 @@
         (:instance wtree0-p-of-update-net0
           (net (omap::update pid proc net)) (net0 net)
           (size (omap::size net)))))
+
+; Same as above, but forces omap::assoc.
+; TODO: At some point, I might only have this lemma and discard
+;       the one above.
+(defrule wtree-p-of-update-when-wtree-bindings-equal
+  (implies
+    (and
+      (network-p net) (wtree-p net)
+      (pid-p p) (proc-p proc)
+      (omap::assoc p net)
+      (network-p (omap::update p proc net))
+      (equal (erl-state->self (proc->s proc)) p)
+      (iff (omap::assoc 'Index (wtree-bind proc))
+           (omap::assoc 'Index (wtree-bind (omap::lookup p net))))
+      (iff (omap::assoc 'Parent (wtree-bind proc))
+           (omap::assoc 'Parent (wtree-bind (omap::lookup p net))))
+      (iff (omap::assoc 'ChildPids (wtree-bind proc))
+           (omap::assoc 'ChildPids (wtree-bind (omap::lookup p net))))
+      (equal (omap::lookup 'Index (wtree-bind proc))
+             (omap::lookup 'Index (wtree-bind (omap::lookup p net))))
+      (equal (omap::lookup 'Parent (wtree-bind proc))
+             (omap::lookup 'Parent (wtree-bind (omap::lookup p net))))
+      (equal (omap::lookup 'ChildPids (wtree-bind proc))
+             (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))
+    (wtree-p (omap::update p proc net)))
+  :enable proc->pid
+  :disable
+    (wtree-p-of-update wtree-nodes-are-leaf-or-root
+     leaf-root-p-when-wtree-bindings-equal)
+  :use ((:instance wtree-nodes-are-leaf-or-root (pid p))
+        (:instance wtree-p-of-update (pid p) (proc proc))
+        (:instance leaf-root-p-when-wtree-bindings-equal
+          (p1 proc) (p2 (omap::lookup p net)))))

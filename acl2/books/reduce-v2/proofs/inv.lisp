@@ -3,7 +3,6 @@
 (include-book "util")
 (include-book "inv-helpers")
 
-
 ; Invariant for Reduce Correctness --------------------------------------------
 
 (define inv ((pid pid-p) (net network-p))
@@ -268,7 +267,21 @@
             t))))
   ///
     (defcong pid-equiv equal (inv pid net) 1)
-    (defcong network-equiv equal (inv pid net) 2))
+    (defcong network-equiv equal (inv pid net) 2)
+    
+    (defrule wtree-p-of-inv
+      (implies (and (network-p net) (inv pid net)) (wtree-p net)))
+    
+    (defrule parent-still-waiting-p-of-inv
+      (implies
+        (and
+          (network-p net) (pid-p pid) (inv pid net)
+          (not (equal (proc->ps (omap::lookup pid net)) :terminated))
+          (or (leaf-p (omap::lookup pid net))
+              (root-p (omap::lookup pid net))))
+        (parent-still-waiting-p pid
+          (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+          net))))
 
 
 ; The invariant should hold for every pid in the network. 

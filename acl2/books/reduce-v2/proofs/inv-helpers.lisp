@@ -57,6 +57,13 @@
       :hints (("Goal" :expand ((received-messages-wf x y z)
                                (received-messages-wf x y z-equiv)))))
     
+    (defrule received-messages-wf-of-nil
+      (implies
+        (and (erl-vlst-p inbox)
+             (received-messages-wf inbox nil net))
+        (not inbox))
+      :rule-classes :forward-chaining)
+
     ; Removing a message from the inbox maintains the invariant.
     (defrule received-messages-wf-of-inbox-without
       (implies
@@ -65,7 +72,38 @@
              (received-messages-wf inbox cpids net))
         (received-messages-wf (inbox-without inbox pid)
                               (remove-equal pid cpids) net))
-      :enable inbox-without))
+      :enable inbox-without)
+    
+    (defrule not-inbox-contains-of-received-messages-wf
+      (implies
+        (and
+          (network-p net) (omap::assoc sender net)
+          (not (outbox-emptyp (proc->outbox (omap::lookup sender net))))
+          (received-messages-wf inbox cpids net))
+        (not (inbox-contains inbox sender)))
+      :enable inbox-contains)
+    
+    (defrule received-messages-wf-of-update-of-non-terminated
+      (implies
+        (and
+          (network-p net) (network-p (omap::update q qproc net))
+          (omap::assoc q net)
+          (not (equal (proc->ps (omap::lookup q net)) :terminated))
+          (received-messages-wf inbox cpids net))
+        (received-messages-wf inbox cpids (omap::update q qproc net)))
+      :enable omap::lookup-of-update)
+    
+    (defrule received-messages-wf-fields
+      (implies
+        (and (network-p net) (pid-p pid)
+             (received-messages-wf inbox cpids net)
+             (inbox-contains inbox pid))
+        (and (omap::assoc pid net)
+             (equal (proc->ps (omap::lookup pid net)) :terminated)
+             (outbox-emptyp (proc->outbox (omap::lookup pid net)))
+             (equal (inbox->value inbox pid)
+                    (erl-state->in (proc->s (omap::lookup pid net))))))
+      :enable (inbox->value inbox-contains)))
 
 
 ; Sent Messages Well Formed ---------------------------------------------------
@@ -82,7 +120,6 @@
 (define sent-message-wf
   ((self proc-p) (outbox outbox-p) (parent erl-val-p) (net network-p))
   :returns (r booleanp)
-  :enabled t
   (b* ((self (proc-fix self))
        (outbox (outbox-fix outbox))
        (parent (erl-val-fix parent))
@@ -159,12 +196,10 @@
     (defcong erl-val-equiv equal (sent-message-wf a b c d) 3)
     (defcong network-equiv equal (sent-message-wf a b c d) 4))
 
-
 ; Klst Well Formed ------------------------------------------------------------
 
 (define reduce-receive-klst-p ((klst erl-klst-p) (rbind bind-p))
   :returns (r booleanp)
-  :enabled t
   (b* ((klst (erl-klst-fix klst))
        (rbind (bind-fix rbind))
        ((unless (equal (len klst) 3)) nil)
@@ -201,15 +236,25 @@
             :module 'local))))
   ///
     (defcong erl-klst-equiv equal (reduce-receive-klst-p klst rbind) 1)
-    (defcong bind-equiv equal (reduce-receive-klst-p klst rbind) 2))
+    (defcong bind-equiv equal (reduce-receive-klst-p klst rbind) 2)
+    
+    (defrule wtree-bind0-of-reduce-receive-klst-p
+      (implies (reduce-receive-klst-p nklst rbind)
+               (equal (wtree-bind0 bind nklst) (bind-fix rbind)))
+      :enable wtree-bind0
+      :prep-lemmas
+        ((defrule car-of-last-of-len-3
+           (implies (equal (len x) 3)
+                    (equal (car (last x)) (caddr x)))
+           :expand ((len x) (len (cdr x)) (len (cddr x))
+                    (len (cdddr x)) (last x) (last (cdr x))
+                    (last (cddr x))))))
 
-; I need this rule a few times, but it slows down everything
-; quite a bit if I enable it.
-(defruled normalize-reduce-receive-klst-p
-  (implies
-    (reduce-receive-klst-p klst rbind)
-    (reduce-receive-klst-p
-      klst
-      (kont-function-return->bind (erl-k->kont (caddr (erl-klst-fix klst)))))))
-
-
+    ; I needed this rule a few times, but it naturally slows down everything
+    ; quite a bit if I enable it.
+    (defruled normalize-reduce-receive-klst-p
+      (implies
+        (reduce-receive-klst-p klst rbind)
+        (reduce-receive-klst-p
+          klst
+          (kont-function-return->bind (erl-k->kont (caddr (erl-klst-fix klst))))))))
