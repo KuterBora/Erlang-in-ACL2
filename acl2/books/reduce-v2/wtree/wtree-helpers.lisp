@@ -7,12 +7,15 @@
 
 ; Bindings of Wtree ------------------------------------------------------------
 
-; Auxillary variables of a Wtree's node which keep track
+; Wtree-bind are auxillary variables of a Wtree's node which keep track
 ; of the parent, children, and index the process was spawned with.
 ;
 ; BOZO: This was a last minute fix, as I had somehow forgotten that
-; a function call loses the scope before the call. There is likley a
-; better solution.
+; a function call loses the scope before the call.In fact, this will
+; not work if there is more code, after the call to reduce, which
+; there would definitely be. A better solution might be to seperate the
+; auxillary variables from the Erlang process, and have a different data
+; structure that keeps track of them.
 (define wtree-bind0 ((bind bind-p) (klst erl-klst-p))
   :returns (b bind-p)
   (b* ((klst (erl-klst-fix klst))
@@ -787,3 +790,56 @@
          (check-indices i (cons cpid chl) net))
        :expand (check-indices i (cons cpid chl) net)
        :disable check-indices))
+
+; This is very important for the reduce prove
+(defrule check-indices-of-suffix
+  (implies
+    (and (network-p net) (pid-lst-p children) (pid-lst-p cps) cps
+         (prefixp (rev cps) (rev children))
+         (check-indices i children net))
+    (check-indices
+      (1- (erl-val-integer->val
+            (omap::lookup 'Index (wtree-bind (omap::lookup (car cps) net)))))
+      cps net))
+  :enable check-indices
+  :induct (check-indices i children net)
+  :hints (("Subgoal *1/3" :cases ((equal cps children)))
+          ("Subgoal *1/2" :cases ((equal cps children)))
+          ("Subgoal *1/1" :cases ((equal cps children))))
+  ; TODO: I tried using the community book, but it did not work.
+  :prep-lemmas
+    ((defrule len-when-prefixp
+      (implies (prefixp x y) (<= (len x) (len y)))
+      :rule-classes :linear :enable prefixp)
+    (defrule prefixp-of-append-when-shorter
+      (implies (and (prefixp x (append y z)) (<= (len x) (len y)))
+               (prefixp x y)) :enable prefixp)
+    (defrule equal-when-prefixp-and-same-len
+      (implies
+        (and (prefixp x y) (equal (len x) (len y))
+             (true-listp x) (true-listp y))
+        (equal x y))
+      :enable prefixp :rule-classes :forward-chaining)
+    (defrule suffix-cases
+      (implies
+        (and (true-listp cps) (true-listp children)
+             cps (prefixp (rev cps) (rev children)))
+        (or (equal cps children)
+            (prefixp (rev cps) (rev (cdr children)))))
+      :expand ((rev children))
+      :use
+        ((:instance equal-when-prefixp-and-same-len
+          (x (rev cps)) (y (rev children)))
+        (:instance len-when-prefixp
+          (x (rev cps))
+          (y (append (rev (cdr children)) (list (car children)))))))
+    (defrule prefix-of-nil
+      (implies (consp cps) (not (prefixp cps nil)))
+      :enable prefixp)
+    (defrule prefixp-of-rev-cdr-when-not-whole
+      (implies
+        (and (true-listp cps) (true-listp children)
+            cps (prefixp (rev cps) (rev children))
+            (not (equal cps children)))
+        (prefixp (rev cps) (rev (cdr children))))
+      :use suffix-cases)))

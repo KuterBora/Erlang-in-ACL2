@@ -65,6 +65,8 @@
 
 ; General Utility -------------------------------------------------------------
 
+; Some of these should move to other files.
+
 (defrule erl-vlst-p-of-remove-equal
   (implies (erl-vlst-p l) (erl-vlst-p (remove-equal x l)))
   :enable erl-vlst-p)
@@ -87,6 +89,12 @@
          (pid-lst-p l2))
        :enable prefixp)))
 
+(defrule submap-of-update-new-key
+  (implies (and (omap::mapp m) (not (omap::assoc k m)))
+           (omap::submap m (omap::update k v m)))
+  :enable (omap::submap-to-submap-sk omap::submap-sk
+           omap::lookup-of-update))
+
 (defrule assoc-of-head-of-submap-crock
   (implies
     (and (omap::submap a b) (not (omap::emptyp a)))
@@ -107,10 +115,12 @@
        (pid (pid-fix pid))
        ((unless inbox) nil)
        (m (car inbox))
-       ((if (and (equal (erl-val-kind m) :tuple)
-                 (equal (len (erl-val-tuple->lst m)) 2)
-                 (equal (car (erl-val-tuple->lst m)) pid)))
-        t))
+       ((if
+         (and
+          (equal (erl-val-kind m) :tuple)
+          (equal (len (erl-val-tuple->lst m)) 2)
+          (equal (car (erl-val-tuple->lst m)) pid)))
+         t))
       (inbox-contains (cdr inbox) pid))
   ///
     (defcong erl-vlst-equiv equal (inbox-contains inbox pid) 1)
@@ -127,6 +137,21 @@
              (inbox-contains b pid))
         (inbox-contains (append a b) pid)))
     
+    (defrule not-inbox-contains-of-car
+      (implies
+        (and
+          (not (inbox-contains inbox pid))
+          (pid-p pid) (consp inbox)
+          (equal (erl-val-kind (car inbox)) :tuple)
+          (equal (len (erl-val-tuple->lst (car inbox))) 2))
+        (not (equal (car (erl-val-tuple->lst (car inbox))) pid))))
+
+    (defrule not-inbox-contains-of-cdr
+      (implies
+        (and (not (inbox-contains inbox pid)) (erl-vlst-p inbox))
+        (not (inbox-contains (cdr inbox) pid)))
+      :enable erl-vlst-p)
+
     (defrule inbox-contains-of-append-message
       (implies
         (and

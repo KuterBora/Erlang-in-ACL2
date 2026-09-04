@@ -10,7 +10,8 @@
   :returns (r booleanp)
   :guard-hints
     (("Goal"
-      :in-theory (enable omap::from-lists wtree-nodes-are-leaf-or-root)
+      :in-theory (enable omap::from-lists wtree-nodes-are-leaf-or-root
+                         reduce-receive-klst-p)
       :use (:instance wtree-nodes-are-leaf-or-root
             (net net)
             (pid
@@ -79,7 +80,7 @@
                ((if (null children)) nil)
 
                ; nothing has been sent yet, a node sends only when it
-               ; terminates, so the parent the parent has not received.
+               ; terminates, so the parent must not have received.
                ((unless (parent-still-waiting-p pid parent net)) nil)
 
                ; during receive the latest value is wiped.
@@ -92,6 +93,10 @@
                ((unless (omap::assoc 'ChildHd bind)) nil)
                ((unless (omap::assoc 'ChildTl bind)) nil)
                ((unless (omap::assoc 'LeftTotal bind)) nil)
+
+               ; RightTotal should not be bound. This ends up being
+               ; a road block otherwise.
+               ((if (omap::assoc 'RightTotal bind)) nil)
                
                ; Parent never changes.
                ((unless (equal parent (omap::lookup 'ParentPid bind))) nil)
@@ -136,11 +141,12 @@
                ; The outbox must be empty, as the process will only send a
                ; message when it is done computing the sum.
                ((unless (null (proc->outbox proc))) nil)
-               ; ??? The parent, if any, must not have received the message yet.
+               ; The parent, if any, must not have received the message yet.
                ; However, this could be a property of the parent.
 
                ; The world and module do not change
-               ((unless (equal (erl-state->world (proc->s proc)) (sum-reduce-w))) nil)
+               ((unless (equal (erl-state->world (proc->s proc))
+                               (sum-reduce-w))) nil)
                ((unless (equal (erl-state->module (proc->s proc)) 'local)) nil)
 
                ; Inbox-new is empty, else the process would be unblocked
@@ -152,33 +158,36 @@
                ((unless (received-messages-wf inbox cps net)) nil)
                ((if (inbox-contains inbox chd)) nil)
 
-               ; ???: For messages not have yet received;
+               ; For messages not have yet received;
                ; the sender is either
                ; - not terminated
                ; - or has the message in the outbox
-
+               ; Though I check this on the sender side.
+ 
                ; Klst is correct
                (klst (proc->klst proc))
+               ; TODO: passing rbind may have become unnecessary,
+               ;  since the definition of wtree has changed. It does
+               ;  not seem to hurt for now.
                (rbind
                 (omap::from-lists
                   (list 'ChildPids 'Parent 'Index)
                   (list (make-erl-val-cons :lst children)
                         parent
                         (make-erl-val-integer :val index))))
-               ((unless (reduce-receive-klst-p klst rbind)) nil))
-             ; Deadlock freedom is deliberately not claimed here.  It is a
-             ; property of the whole network, and a node that blocks may itself
-             ; have been the last runnable one, so carrying it per node would
-             ; make every step re-establish it -- and re-establishing it at a
-             ; block means descending the ChildHd chain looking for a witness.
-             ; It belongs in its own theorem over inv-all.
+               ((unless (reduce-receive-klst-p klst rbind)) nil)
+               
+               ; There must be enough fuel. calls to apply-k use 6 fuel.
+               ; Meanwhile, I picked 100 as a minumum because I can.
+               ((unless (> (erl-k->fuel (car klst))
+                           (+ 100 (* 6 (len cps))))) nil))
              t))
         (:receive
           (b* (; if the node has no children, then it should not try to receive.
                ((if (null children)) nil)
 
-               ; nothing has been sent yet -- a node sends only when it
-               ; terminates -- so the parent is still waiting for it
+               ; nothing has been sent yet, a node sends only when it
+               ; terminates, so the parent must not have received.
                ((unless (parent-still-waiting-p pid parent net)) nil)
 
                ; during receive the latest value is wiped.
@@ -191,6 +200,10 @@
                ((unless (omap::assoc 'ChildHd bind)) nil)
                ((unless (omap::assoc 'ChildTl bind)) nil)
                ((unless (omap::assoc 'LeftTotal bind)) nil)
+
+               ; RightTotal should not be bound. This ends up being
+               ; a road block otherwise.
+               ((if (omap::assoc 'RightTotal bind)) nil)
                
                ; Parent never changes.
                ((unless (equal parent (omap::lookup 'ParentPid bind))) nil)
@@ -201,8 +214,6 @@
                (cps (erl-val-cons->lst cps))
                ((unless cps) nil)
                ; TODO: I might need a better representation for this:
-               ; The remaining children are a postfix of the original children.
-               ; sublist might be sufficient.
                ((unless (prefixp (rev cps) (rev children))))
                
                ; ChildHead and ChildTail are bound correctly.
@@ -226,11 +237,6 @@
 
                (chdbind (wtree-bind chdproc))
                (cindex (erl-val-integer->val (omap::lookup 'Index chdbind)))
-               ; The other index ordering: the node sits strictly below the
-               ; child it is waiting on.  The leftmost child starts at index+1,
-               ; and each later child starts one past the previous child's
-               ; rightmost descendant, which the :terminated arm bounds below
-               ; by that child's index.
                ((unless (< index cindex)) nil)
 
                ; LeftTotal
@@ -257,28 +263,50 @@
 
                ; Klst is correct
                (klst (proc->klst proc))
+               ; TODO: passing rbind may have become unnecessary,
+               ;  since the definition of wtree has changed. It does
+               ;  not seem to hurt for now.
                (rbind
                 (omap::from-lists
                   (list 'ChildPids 'Parent 'Index)
                   (list (make-erl-val-cons :lst children)
                         parent
                         (make-erl-val-integer :val index))))
-               ((unless (reduce-receive-klst-p klst rbind)) nil))
+               ((unless (reduce-receive-klst-p klst rbind)) nil)
+
+               ; There must be enough fuel. calls to apply-k use 6 fuel.
+               ; Meanwhile, I picked 100 as a minumum because I can.
+               ((unless (> (erl-k->fuel (car klst))
+                           (+ 100 (* 6 (len cps))))) nil))
             t))))
   ///
     (defcong pid-equiv equal (inv pid net) 1)
     (defcong network-equiv equal (inv pid net) 2)
     
     (defrule wtree-p-of-inv
-      (implies (and (network-p net) (inv pid net)) (wtree-p net)))
+      (implies (inv pid net) (wtree-p net)))
     
+    (defrule integer-value-of-inv-terminated
+      (implies
+        (and
+          (network-p net) (pid-p pid)
+          (or (leaf-p (omap::lookup pid net))
+              (root-p (omap::lookup pid net)))
+          (equal (proc->ps (omap::lookup pid net)) :terminated)
+          (inv pid net))
+        (equal
+          (erl-val-kind
+            (erl-state->in (proc->s (omap::lookup pid net))))
+          :integer)))
+
     (defrule parent-still-waiting-p-of-inv
       (implies
         (and
-          (network-p net) (pid-p pid) (inv pid net)
-          (not (equal (proc->ps (omap::lookup pid net)) :terminated))
+          (network-p net) (pid-p pid)
           (or (leaf-p (omap::lookup pid net))
-              (root-p (omap::lookup pid net))))
+              (root-p (omap::lookup pid net)))
+          (not (equal (proc->ps (omap::lookup pid net)) :terminated))
+          (inv pid net))
         (parent-still-waiting-p pid
           (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
           net))))
@@ -299,10 +327,9 @@
 
     (defrule inv-of-inv-all0
       (implies
-        (and (network-p net) (pid-p pid)
-             (inv-all0 net net0) (omap::assoc pid net))
-        (inv pid net0))
-      :enable omap::lookup))
+        (and (network-p net) (omap::assoc pid net)
+             (inv-all0 net net0))
+        (inv pid net0))))
 
 (define inv-all ((net network-p))
   :returns (r booleanp)
@@ -313,6 +340,6 @@
 
     (defrule inv-of-inv-all
       (implies
-        (and (network-p net) (pid-p pid)
-             (inv-all net) (omap::assoc pid net))
+        (and (network-p net) (omap::assoc pid net)
+             (inv-all net))
         (inv pid net))))

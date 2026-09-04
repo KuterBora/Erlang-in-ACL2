@@ -107,6 +107,10 @@
     (lambda (x) (equal (erl-val-kind x) :pid))
   :fix-value (make-erl-val-pid :id 0))
 
+(defrule erl-val-kind-of-pid-p
+  (implies (pid-p v) (equal (erl-val-kind v) :pid))
+  :enable pid-p)
+
 (fty::deflist pid-lst
   :elt-type pid
   :true-listp t)

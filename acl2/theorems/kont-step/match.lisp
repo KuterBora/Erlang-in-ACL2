@@ -38,7 +38,7 @@
   :enable eval-k)
 
 
-; ; kont-match
+; kont-match
 (defrule eval-k-of-match->klst
   (implies 
     (equal (kont-kind (erl-k->kont k)) :match)

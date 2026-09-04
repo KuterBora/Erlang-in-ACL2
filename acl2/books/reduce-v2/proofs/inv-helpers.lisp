@@ -5,7 +5,6 @@
 
 ; Helpers for the reduce invariant.
 
-
 ; Received Messages Well Formed -----------------------------------------------
 
 ; forall messages in inbox
@@ -42,7 +41,9 @@
        ; the sender must have sent its own value
        ; which will be equal to its sum-range.
        (sval (erl-state->in (proc->s sproc)))
-       ((unless (equal sval val)) nil))
+       ((unless (equal sval val)) nil)
+       ; the value is an integer
+       ((unless (equal (erl-val-kind val) :integer)) nil))
       ; Ensure that no two messages have arrived from the same sender
       ; by dropping it from cpids.
       (received-messages-wf (cdr inbox) (remove-equal sender cpids) net))
@@ -198,63 +199,119 @@
 
 ; Klst Well Formed ------------------------------------------------------------
 
+; Initial klst
+(defconst *reduce-receive-body*
+  '((:call sum_reduce
+           (:cons (:var parentpid)
+                  (:cons (:var childtl)
+                         (:cons (:binop + (:var lefttotal)
+                                          (:var righttotal))
+                                (:nil)))))))
+; Continuation after the receive
+(defconst *reduce-receive-clauses*
+  '(((cases (:tuple (:cons (:var childhd)
+                           (:cons (:var righttotal) (:nil)))))
+     (guards)
+     (body (:call sum_reduce
+                  (:cons (:var parentpid)
+                         (:cons (:var childtl)
+                                (:cons (:binop + (:var lefttotal)
+                                                 (:var righttotal))
+                                       (:nil)))))))))
+
+; TODO: This was another last minute realization. It is caused because
+; my implementation of reduce is not tail recursive.
+; As a worker node calls
+; reduce again and again, it will accumluate a list of continuations
+; where every three row of continuations are:
+; 1- exprs nil, remaining form the body of the matched receive clauses
+; 2- exprs nil, remaining from the body of reduce function clauses
+; 3- function-return, the return from the call to reduce
+; I would prefer to look for a better way to solve this problem, alas,
+; I realized this very late when removing a skip-proofs, which is,
+; after all, "a quick way to introduce unsoundness".
+(define reduce-klst-lst-p ((klst erl-klst-p) (rbind bind-p))
+  :returns (r booleanp)
+  :measure (len (erl-klst-fix klst))
+  (b* ((klst (erl-klst-fix klst))
+       (rbind (bind-fix rbind))
+       ((unless (<= 3 (len klst))) nil)
+       (k1 (car klst))
+       (k2 (cadr klst))
+       (k3 (caddr klst))
+       ((unless (> (erl-k->fuel k1) 100)) nil)
+       ((unless (> (erl-k->fuel k2) 100)) nil)
+       ((unless (> (erl-k->fuel k3) 100)) nil)
+       ((unless (equal (erl-k->kont k1) (make-kont-exprs :exprs nil))) nil)
+       ((unless (equal (erl-k->kont k2) (make-kont-exprs :exprs nil))) nil)
+       ((unless (equal (kont-kind (erl-k->kont k3)) :function-return)) nil)
+       ((unless (equal (kont-function-return->module (erl-k->kont k3)) 'local)) nil)
+       ; The last bindings is the one the process was spawned with.
+       ((unless (cdddr klst))
+        (equal (kont-function-return->bind (erl-k->kont k3)) rbind)))
+      (reduce-klst-lst-p (cdddr klst) rbind))
+  ///
+    (defcong erl-klst-equiv equal (reduce-klst-lst-p klst rbind) 1)
+    (defcong bind-equiv equal (reduce-klst-lst-p klst rbind) 2)
+
+    (defrule last-of-reduce-klst-lst-p
+      (implies
+        (reduce-klst-lst-p klst rbind)
+        (and
+          (equal
+            (kont-kind (erl-k->kont (car (last (erl-klst-fix klst)))))
+            :function-return)
+          (equal
+            (kont-function-return->bind
+              (erl-k->kont (car (last (erl-klst-fix klst)))))
+            (bind-fix rbind)))))
+    (defrule wtree-bind0-of-reduce-klst-lst-p
+      (implies (reduce-klst-lst-p klst rbind)
+               (equal (wtree-bind0 bind klst) (bind-fix rbind)))
+      :enable wtree-bind0))
+
+; Check if the klst of a process that is awaiting to receive is well fromed. 
 (define reduce-receive-klst-p ((klst erl-klst-p) (rbind bind-p))
   :returns (r booleanp)
   (b* ((klst (erl-klst-fix klst))
        (rbind (bind-fix rbind))
-       ((unless (equal (len klst) 3)) nil)
+       ((unless (<= 3 (len klst))) nil)
        (k1 (car klst))
        (k2 (cadr klst))
        (k3 (caddr klst))
-       ; All continuations must have enough fuel.
-       ; Let's say at least 100. For this example,
-       ; it is not that important. 
+       ; There must be enough fuel, let's overshoot and say > 100.
        ((unless (> (erl-k->fuel k1) 100)) nil)
        ((unless (> (erl-k->fuel k2) 100)) nil)
        ((unless (> (erl-k->fuel k3) 100)) nil)
-       ; The three continuations must be the following:
+       ; The three continuations at the head must be the following:
        (kont1 (erl-k->kont k1))
        (kont2 (erl-k->kont k2))
-       (kont3 (erl-k->kont k3)))
-      (and
-        (equal
-          kont1
-          (make-kont-receive
-            :clauses '(((cases (:tuple (:cons (:var childhd)
-                                             (:cons (:var righttotal) (:nil)))))
-                        (guards)
-                        (body (:call sum_reduce
-                                     (:cons (:var parentpid)
-                                            (:cons (:var childtl)
-                                                   (:cons (:binop + (:var lefttotal)
-                                                                    (:var righttotal))
-                                                          (:nil))))))))))
-        (equal kont2 (make-kont-exprs :exprs nil))
-        (equal kont3
-          (make-kont-function-return
-            :bind rbind
-            :module 'local))))
+       (kont3 (erl-k->kont k3))
+       ((unless
+          (equal kont1
+                 (make-kont-receive :clauses *reduce-receive-clauses*)))
+        nil)
+       ((unless (equal kont2 (make-kont-exprs :exprs nil))) nil)
+       ((unless (equal (kont-kind kont3) :function-return)) nil)
+       ((unless (equal (kont-function-return->module kont3) 'local)) nil)
+       ; Ensure that the auxillary varaibles have not changed.
+       ((unless (cdddr klst))
+        (equal (kont-function-return->bind kont3) rbind)))
+      ; If there are more continuations, then they must be call stacks
+      ; of previous calls to reduce.
+      (reduce-klst-lst-p (cdddr klst) rbind))
   ///
     (defcong erl-klst-equiv equal (reduce-receive-klst-p klst rbind) 1)
     (defcong bind-equiv equal (reduce-receive-klst-p klst rbind) 2)
-    
+
     (defrule wtree-bind0-of-reduce-receive-klst-p
       (implies (reduce-receive-klst-p nklst rbind)
                (equal (wtree-bind0 bind nklst) (bind-fix rbind)))
-      :enable wtree-bind0
-      :prep-lemmas
-        ((defrule car-of-last-of-len-3
-           (implies (equal (len x) 3)
-                    (equal (car (last x)) (caddr x)))
-           :expand ((len x) (len (cdr x)) (len (cddr x))
-                    (len (cdddr x)) (last x) (last (cdr x))
-                    (last (cddr x))))))
-
-    ; I needed this rule a few times, but it naturally slows down everything
-    ; quite a bit if I enable it.
+      :enable wtree-bind0)
+    
     (defruled normalize-reduce-receive-klst-p
       (implies
-        (reduce-receive-klst-p klst rbind)
-        (reduce-receive-klst-p
-          klst
-          (kont-function-return->bind (erl-k->kont (caddr (erl-klst-fix klst))))))))
+        (reduce-receive-klst-p (proc->klst p) rbind)
+        (reduce-receive-klst-p (proc->klst p) (wtree-bind p)))
+      :enable wtree-bind
+      :disable (wtree-bind0-to-wtree-bind reduce-receive-klst-p)))
