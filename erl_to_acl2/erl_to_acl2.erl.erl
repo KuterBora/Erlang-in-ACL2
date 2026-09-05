@@ -1,17 +1,73 @@
--module(expr_to_acl2).
--export([tesst/1, expr_to_lisp/1, exprs_to_lisp/1, clause_list_to_lisp/1, clause_to_lisp/1]).
+-module(erl_to_acl2).
+-export([exprs_to_acl2/1, module_to_acl2/1]).
+-export([test_expr/1, test_module/1]).
 
-%% indentation is not supported. There is only some for debugging purposes.
+%% indentation is not supported. What exists now is for debugging purposes.
 
-test(AST) ->
+test_expr(Str) ->
     io:format(
-        "AST:\n ~p~nResult:~n~s",
-        [get_AST(AST), exprs_to_lisp(get_AST(AST))]).
+        "Erlang:\n ~p~nACL2:~n~s",
+        [get_AST(Str), exprs_to_lisp(get_AST(Str))]).
+
+test_module(Module) ->
+    io:format(
+        "Erlang:\n ~p~nACL2:~n~s",
+        [get_module(Module), module_to_lisp(get_module(Module))]).
+
+
+exprs_to_acl2(Str) ->
+    exprs_to_lisp(get_AST(Str)).
+
+module_to_acl2(Str) ->
+    module_to_lisp(get_module(Str)).
+
+
+get_module(Str) ->
+    {ok, Tokens, _} = erl_scan:string(Str),
+    parse_forms(Tokens).
+
+parse_forms([]) -> [];
+parse_forms(Tokens) ->
+    {FormTokens, Rest} = take_form(Tokens, []),
+    case erl_parse:parse_form(FormTokens) of
+        {ok, Form} ->
+            [Form | parse_forms(Rest)];
+        Error ->
+            Error
+    end.
+
+take_form([{dot, _} = Dot | Rest], Acc) ->
+    {lists:reverse([Dot | Acc]), Rest};
+take_form([Token | Rest], Acc) ->
+    take_form(Rest, [Token | Acc]).
 
 get_AST(Str) ->
     {ok, Tokens, _} = erl_scan:string(Str),
     {ok, AST} = erl_parse:parse_exprs(Tokens),
     AST.
+
+% No support for import of export yet! You will have to configure those manually.
+module_to_lisp([{attribute, _, module, Name} | FnDefs]) ->
+    LispFnDefs = fn_defs_to_lisp(FnDefs),
+    "((attrs (module . "
+    ++ atom_to_list(Name) ++ ") (export) (import))"
+    ++ "\n (fn-defns\n "
+    ++ LispFnDefs
+    ++ "))".
+
+fn_defs_to_lisp([]) -> "";
+fn_defs_to_lisp([Fn | Tl]) ->
+    fn_to_lisp(Fn) ++ "\n" ++ fn_defs_to_lisp(Tl).
+
+fn_to_lisp({function, _, Name, Arity, Cls}) ->
+    "(((name . "
+    ++ atom_to_list(Name)
+    ++ ") (arity . "
+    ++ integer_to_list(Arity)
+    ++ "))\n"
+    ++ clause_list_to_lisp(Cls)
+    ++ ")".
+    
 
 exprs_to_lisp([]) -> "nil";
 exprs_to_lisp([AST]) -> "(" ++ expr_to_lisp(AST) ++ ")";
@@ -104,5 +160,3 @@ clause_to_lisp(Cl) ->
             ++ "(guards " ++ guards_to_lisp(Guards) ++ ")\n   "
             ++ "(body " ++ exprs_to_lisp0(Exprs) ++ "))\n"
     end.
-
-
