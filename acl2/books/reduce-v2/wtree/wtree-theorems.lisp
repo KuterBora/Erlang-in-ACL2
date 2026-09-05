@@ -131,3 +131,22 @@
         (:instance wtree-p-of-update (pid p) (proc proc))
         (:instance leaf-root-p-when-wtree-bindings-equal
           (p1 proc) (p2 (omap::lookup p net)))))
+
+(defruled first-child-of-check-indices
+  (implies
+    (and
+      (network-p net) (pid-p pid) (natp index)
+      (pid-lst-p children) children
+      (check-children pid children net)
+      (check-indices index children net))
+    (and
+      (omap::assoc (car children) net)
+      (leaf-p (omap::lookup (car children) net))
+      (equal
+        (omap::lookup 'Parent (wtree-bind (omap::lookup (car children) net)))
+        pid)
+      (equal
+        (erl-val-integer->val
+          (omap::lookup 'Index (wtree-bind (omap::lookup (car children) net))))
+        (+ 1 index))))
+  :enable (check-children check-indices))

@@ -454,6 +454,30 @@
   :enable (received-messages-wf inbox-contains)
   :induct (received-messages-wf inbox cpids net))
 
+(defrule received-messages-wf-of-inbox-without-car
+  (implies
+    (and
+      (network-p net) (erl-vlst-p cpids)
+      (consp cpids) (pid-p (car cpids))
+      (received-messages-wf inbox cpids net))
+    (received-messages-wf
+      (inbox-without inbox (car cpids)) (cdr cpids) net))
+  :use
+    ((:instance received-messages-wf-of-inbox-without (pid (car cpids)))
+     (:instance received-messages-wf-monotone
+      (inbox (inbox-without inbox (car cpids)))
+      (cpids1 (remove-equal (car cpids) cpids))
+      (cpids2 (cdr cpids))))
+  :disable (received-messages-wf-of-inbox-without)
+  :prep-lemmas
+  ((defruled received-messages-wf-monotone
+     (implies
+       (and (network-p net) (erl-vlst-p inbox)
+            (erl-vlst-p cpids1) (erl-vlst-p cpids2)
+            (subsetp-equal cpids1 cpids2)
+            (received-messages-wf inbox cpids1 net))
+       (received-messages-wf inbox cpids2 net))
+     :enable received-messages-wf)))
 
 ; sent-message-wf ----------------------------------------------------------------
 
@@ -534,3 +558,32 @@
     (sent-message-wf self outbox parent (omap::update p proc net)))
   :enable (sent-message-wf omap::lookup-of-update)
   :disable sent-message-wf-of-update)
+
+; sent-message-wf after a node termiates
+(defruled sent-message-wf-of-terminating-node
+  (implies
+    (and
+      (network-p net) (pid-p p) (proc-p proc)
+      (network-p (omap::update p proc net))
+      (omap::assoc p net)
+      (equal (erl-state->self (proc->s proc)) p)
+      (erl-val-p (omap::lookup 'Parent (wtree-bind proc)))
+      (not (equal (omap::lookup 'Parent (wtree-bind proc)) p))
+      (parent-still-waiting-p p
+        (omap::lookup 'Parent (wtree-bind proc)) net)
+      (equal (erl-val-kind (erl-state->in (proc->s proc))) :integer)
+      (equal
+        (proc->outbox proc)
+        (if (pid-p (omap::lookup 'Parent (wtree-bind proc)))
+            (omap::update (omap::lookup 'Parent (wtree-bind proc))
+              (list (make-erl-val-tuple
+                      :lst (list p (erl-state->in (proc->s proc)))))
+              nil)
+            nil)))
+     (sent-message-wf proc
+      (proc->outbox proc)
+      (omap::lookup 'Parent (wtree-bind proc))
+      (omap::update p proc net)))
+  :enable
+    (sent-message-wf proc->pid parent-still-waiting-p))
+

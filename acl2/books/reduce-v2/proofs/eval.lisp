@@ -11,10 +11,6 @@
          (equal (erl-val-kind (car x)) :pid)))
   :enable pid-p))
 
-(local (defrule len-of-pid-lst-when-consp
-  (implies (and (pid-lst-p x) x) (<= 1 (len x)))
-  :rule-classes :linear))
-
 ; idle -> receive
 (defrule apply-k-of-idle-with-children
   (implies

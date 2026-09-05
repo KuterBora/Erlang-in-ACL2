@@ -65,7 +65,8 @@
 
 ; General Utility -------------------------------------------------------------
 
-; Some of these should move to other files.
+; TODO: Some of these should move to other files, some of them are
+; probably useless.
 
 (defrule erl-vlst-p-of-remove-equal
   (implies (erl-vlst-p l) (erl-vlst-p (remove-equal x l)))
@@ -110,6 +111,10 @@
            (iff (omap::assoc x (omap::update q qproc net))
                 (omap::assoc x net))))
 
+(defrule assoc-of-update-same
+  (omap::assoc k (omap::update k v m))
+  :enable omap::assoc-of-update)
+
 (defrule lookup-of-update-of-new
   (implies (not (equal x q))
            (equal (omap::lookup x (omap::update q v m))
@@ -119,6 +124,16 @@
 (defrule prefixp-of-same
   (prefixp x x)
   :enable prefixp)
+
+; TODO: This should definitely move next to erl-value.lisp
+(defrule proc->outbox-of-proc
+  (equal (proc->outbox (proc ps s inbox-new inbox-tried klst))
+         (erl-state->outbox s))
+  :enable proc->outbox)
+
+(defrule len-of-pid-lst-when-consp
+  (implies (and (pid-lst-p x) x) (<= 1 (len x)))
+  :rule-classes :linear)
 
 ; Inbox Utility ---------------------------------------------------------------
 
