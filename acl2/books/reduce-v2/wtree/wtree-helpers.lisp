@@ -328,6 +328,21 @@
     (bindings-of-leaf omap::assoc-when-assoc-tail
      bindings-of-root omap::assoc-when-emptyp))
 
+(defrule leaf-root-p-of-bind-equal-of-update
+  (implies
+    (and
+      (network-p net) (omap::assoc q net)
+      (equal
+        (wtree-bind qproc)
+        (wtree-bind (omap::lookup q net))))
+    (and (equal (leaf-p (omap::lookup x (omap::update q qproc net)))
+                (leaf-p (omap::lookup x net)))
+         (equal (root-p (omap::lookup x (omap::update q qproc net)))
+                (root-p (omap::lookup x net)))))
+  :use ((:instance leaf-root-p-when-bind-equal
+          (p1 (omap::lookup x (omap::update q qproc net)))
+          (p2 (omap::lookup x net)))))
+
 ; TODO: I seem to need a lot of lemmas about leaf and root eqivalenece.
 ; There is a cleaner way of doing this, by defining fixtypes for leaf
 ; and root. I will implement it at some point.
@@ -353,7 +368,6 @@
   :disable
     (bindings-of-leaf omap::assoc-when-assoc-tail
      bindings-of-root omap::assoc-when-emptyp))
-
 
 ; Segment of the wtree that does not contain the root.
 (define non-root-segment-p ((net network-p))

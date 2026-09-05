@@ -105,6 +105,17 @@
   (implies (and (member-equal x l) (not (equal x (car l))))
            (member-equal x (cdr l))))
 
+(defrule assoc-of-update-when-assoc
+  (implies (omap::assoc q net)
+           (iff (omap::assoc x (omap::update q qproc net))
+                (omap::assoc x net))))
+
+(defrule lookup-of-update-of-new
+  (implies (not (equal x q))
+           (equal (omap::lookup x (omap::update q v m))
+                  (omap::lookup x m)))
+  :enable omap::lookup-of-update)
+
 ; Inbox Utility ---------------------------------------------------------------
 
 ; Check if the inbox contains a message {pid, _}
