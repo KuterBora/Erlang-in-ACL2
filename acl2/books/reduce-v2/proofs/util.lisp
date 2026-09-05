@@ -116,6 +116,10 @@
                   (omap::lookup x m)))
   :enable omap::lookup-of-update)
 
+(defrule prefixp-of-same
+  (prefixp x x)
+  :enable prefixp)
+
 ; Inbox Utility ---------------------------------------------------------------
 
 ; Check if the inbox contains a message {pid, _}

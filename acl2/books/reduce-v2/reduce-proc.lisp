@@ -132,14 +132,13 @@
       (implies
         (equal s (proc->s (make-reduce-proc self parent children index)))
         (equal
-          (bind-fix
-            (omap::from-lists
-              (list 'ChildPids 'Parent 'Index)
-              (list (omap::lookup 'ChildPids (erl-state->bind s))
-                    (omap::lookup 'Parent (erl-state->bind s))
-                    (omap::lookup 'Index (erl-state->bind s)))))
+          (omap::from-lists
+            (list 'ChildPids 'Parent 'Index)
+            (list (omap::lookup 'ChildPids (erl-state->bind s))
+                  (omap::lookup 'Parent (erl-state->bind s))
+                  (omap::lookup 'Index (erl-state->bind s))))
           (erl-state->bind s)))
-      :enable (omap::from-lists omap::lookup-of-update))
+      :enable (make-reduce-proc omap::from-lists omap::lookup-of-update))
    
     (defrule erl-state->bind-of-make-reduce-proc
       (equal
@@ -150,4 +149,12 @@
           (list (make-erl-val-cons :lst (pid-lst-fix children))
                 (erl-val-fix parent)
                 (make-erl-val-integer :val (nfix index)))))
-      :enable omap::from-lists))
+      :enable omap::from-lists)
+    
+    (defrule natp-of-index-of-make-reduce-proc
+      (implies
+        (equal s (proc->s (make-reduce-proc self parent children index)))
+        (natp (erl-val-integer->val
+                (omap::lookup 'Index (erl-state->bind s)))))
+      :rule-classes (:rewrite :type-prescription)
+      :enable (omap::from-lists omap::lookup-of-update)))

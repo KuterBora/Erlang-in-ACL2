@@ -343,3 +343,247 @@
      wtree-bind0-when-no-function-return))
 (local (defattach (quick-and-dirty-srs quick-and-dirty-srs-builtin)
          :system-ok t))
+
+(defrule proc-receive-when-match-last
+  (implies
+    (and
+      (erl-klst-p (proc->klst p))
+      (reduce-receive-klst-p (proc->klst p) rbind)
+      (equal (erl-state->world (proc->s p)) (sum-reduce-w))
+      (equal (erl-state->module (proc->s p)) 'local)
+      (not (erl-state->outbox (proc->s p)))
+      (omap::assoc 'ParentPid (erl-state->bind (proc->s p)))
+      (omap::assoc 'ChildHd (erl-state->bind (proc->s p)))
+      (omap::assoc 'ChildTl (erl-state->bind (proc->s p)))
+      (omap::assoc 'LeftTotal (erl-state->bind (proc->s p)))
+      (not (omap::assoc 'RightTotal (erl-state->bind (proc->s p))))
+      (equal (erl-val-kind (omap::lookup 'ChildHd
+                             (erl-state->bind (proc->s p)))) :pid)
+      (equal (erl-val-kind (omap::lookup 'ChildTl
+                             (erl-state->bind (proc->s p)))) :cons)
+      (not (erl-val-cons->lst (omap::lookup 'ChildTl
+                                (erl-state->bind (proc->s p)))))
+      (equal (erl-val-kind (omap::lookup 'LeftTotal
+                             (erl-state->bind (proc->s p)))) :integer)
+      (or
+        (pid-p (omap::lookup 'ParentPid (erl-state->bind (proc->s p))))
+        (equal (omap::lookup 'ParentPid (erl-state->bind (proc->s p)))
+               (make-erl-val-atom :val 'none)))
+      (pid-p (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
+      (wf-inbox-p (proc->inbox-new p))
+      (inbox-contains
+        (proc->inbox-new p)
+        (omap::lookup 'ChildHd (erl-state->bind (proc->s p)))))
+    (equal (proc-receive p)
+           (change-proc p
+             :ps :terminated
+             :inbox-tried nil
+             :inbox-new
+              (append
+                (proc->inbox-tried p)
+                (inbox-without
+                  (proc->inbox-new p)
+                  (omap::lookup 'ChildHd (erl-state->bind (proc->s p)))))
+             :s
+              (update-erl-state->bind-mod
+                (update-erl-state->outbox
+                  (update-erl-state->bind
+                    (update-erl-state->in (proc->s p)
+                      (make-erl-val-integer
+                        :val (+ (erl-val-integer->val
+                                  (omap::lookup 'LeftTotal
+                                    (erl-state->bind (proc->s p))))
+                                (erl-val-integer->val
+                                  (inbox->value
+                                    (proc->inbox-new p)
+                                    (omap::lookup 'ChildHd
+                                      (erl-state->bind (proc->s p))))))))
+                    (omap::update 'RightTotal (inbox->value (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p)))) (erl-state->bind (proc->s p))))
+                  (if (pid-p (omap::lookup 'ParentPid
+                               (erl-state->bind (proc->s p))))
+                      (omap::update (omap::lookup 'ParentPid
+                                       (erl-state->bind (proc->s p)))
+                        (list
+                          (make-erl-val-tuple
+                            :lst
+                              (list
+                                (erl-state->self (proc->s p))
+                                (make-erl-val-integer
+                                  :val
+                                    (+ (erl-val-integer->val
+                                         (omap::lookup 'LeftTotal
+                                           (erl-state->bind (proc->s p))))
+                                       (erl-val-integer->val
+                                         (inbox->value
+                                           (proc->inbox-new p)
+                                           (omap::lookup 'ChildHd
+                                             (erl-state->bind (proc->s p))))))))))
+                        nil)
+                    nil))
+                (bind-fix rbind)
+                'local))))
+  :enable (proc-receive inbox-contains inbox-without inbox->value)
+  :hints
+    (("Goal"
+      :expand ((:free (x) (inbox-contains nil x))
+               (:free (x) (inbox-without nil x))
+               (:free (x) (inbox->value nil x))
+               (inbox->value (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
+               (inbox-contains (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
+               (inbox-without (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))))
+     ("Subgoal *1/1"
+      :use ((:instance apply-k-of-reduce-receive-klst-when-match-last
+              (s (proc->s p))
+              (m (car (proc->inbox-new p)))
+              (klst (proc->klst p)))))
+     ("Subgoal *1/2"
+      :use ((:instance apply-k-of-reduce-receive-klst-when-match-last
+              (s (proc->s p))
+              (m (car (proc->inbox-new p)))
+              (klst (proc->klst p)))))
+     ("Subgoal *1/3"
+      :use ((:instance apply-k-of-reduce-receive-klst-when-match-last
+              (s (proc->s p))
+              (m (car (proc->inbox-new p)))
+              (klst (proc->klst p)))))
+     ("Subgoal *1/4"
+      :use ((:instance apply-k-of-reduce-receive-klst-when-match-last
+              (s (proc->s p))
+              (m (car (proc->inbox-new p)))
+              (klst (proc->klst p)))))
+     ("Subgoal *1/5"
+      :use ((:instance apply-k-of-reduce-receive-klst-when-match-last
+              (s (proc->s p))
+              (m (car (proc->inbox-new p)))
+              (klst (proc->klst p)))))))
+
+; TODO: Same as the big one above, but this time no peformance issues.
+(defruled proc-receive-of-match-without-more-children
+  (implies
+    (and
+      (bind-p rbind) (equal (proc->ps p) :receive)
+      (equal (erl-val-kind (erl-state->in (proc->s p))) :none)
+      (null (proc->inbox-tried p)) (null (proc->outbox p))
+      (equal (erl-state->world (proc->s p)) (sum-reduce-w))
+      (equal (erl-state->module (proc->s p)) 'local)
+      (equal
+        (erl-val-kind
+          (omap::lookup 'CPids (erl-state->bind (proc->s p))))
+        :cons)
+      (pid-lst-p
+        (erl-val-cons->lst
+          (omap::lookup 'CPids (erl-state->bind (proc->s p)))))
+      (erl-val-cons->lst
+        (omap::lookup 'CPids
+          (erl-state->bind (proc->s p))))
+      (equal
+        (omap::lookup 'ChildHd
+          (erl-state->bind (proc->s p)))
+        (car (erl-val-cons->lst
+               (omap::lookup 'CPids (erl-state->bind (proc->s p))))))
+      (equal
+        (erl-val-kind
+          (omap::lookup 'ChildTl (erl-state->bind (proc->s p))))
+        :cons)
+      (equal
+        (erl-val-cons->lst
+          (omap::lookup 'ChildTl (erl-state->bind (proc->s p))))
+        (cdr (erl-val-cons->lst
+                (omap::lookup 'CPids
+                  (erl-state->bind (proc->s p))))))
+      (equal
+        (erl-val-kind
+          (omap::lookup 'LeftTotal (erl-state->bind (proc->s p))))
+        :integer)
+      (erl-klst-p (proc->klst p)) (reduce-receive-klst-p (proc->klst p) rbind)
+      (null (cdr (erl-val-cons->lst
+                    (omap::lookup 'CPids (erl-state->bind (proc->s p))))))
+      (inbox-contains
+        (proc->inbox-new p)
+        (car (erl-val-cons->lst
+               (omap::lookup 'CPids (erl-state->bind (proc->s p))))))
+      (equal
+        (erl-val-kind
+          (inbox->value
+            (proc->inbox-new p)
+            (car (erl-val-cons->lst
+                  (omap::lookup 'CPids
+                    (erl-state->bind (proc->s p)))))))
+          :integer)
+      (omap::assoc 'ParentPid (erl-state->bind (proc->s p)))
+      (omap::assoc 'CPids (erl-state->bind (proc->s p)))
+      (omap::assoc 'ChildHd (erl-state->bind (proc->s p)))
+      (omap::assoc 'ChildTl (erl-state->bind (proc->s p)))
+      (omap::assoc 'LeftTotal (erl-state->bind (proc->s p)))
+      (not (omap::assoc 'RightTotal (erl-state->bind (proc->s p))))
+      (pid-p (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
+      (or (pid-p (omap::lookup 'ParentPid (erl-state->bind (proc->s p))))
+          (equal (omap::lookup 'ParentPid (erl-state->bind (proc->s p)))
+                 (make-erl-val-atom :val 'none)))
+      (wf-inbox-p (proc->inbox-new p)))
+    (and
+      (equal (proc->ps (proc-receive p)) :terminated)
+      (equal
+        (erl-state->in (proc->s (proc-receive p)))
+        (make-erl-val-integer
+          :val
+            (+ (erl-val-integer->val
+                  (omap::lookup 'LeftTotal
+                    (erl-state->bind (proc->s p))))
+               (erl-val-integer->val
+                 (inbox->value
+                   (proc->inbox-new p)
+                   (car (erl-val-cons->lst
+                          (omap::lookup 'CPids
+                            (erl-state->bind (proc->s p))))))))))
+        (iff (omap::assoc 'Index (wtree-bind (proc-receive p)))
+             (omap::assoc 'Index (wtree-bind p)))
+        (iff (omap::assoc 'Parent (wtree-bind (proc-receive p)))
+             (omap::assoc 'Parent (wtree-bind p)))
+        (iff (omap::assoc 'ChildPids (wtree-bind (proc-receive p)))
+             (omap::assoc 'ChildPids (wtree-bind p)))
+        (equal (omap::lookup 'Index (wtree-bind (proc-receive p)))
+               (omap::lookup 'Index (wtree-bind p)))
+        (equal (omap::lookup 'Parent (wtree-bind (proc-receive p)))
+               (omap::lookup 'Parent (wtree-bind p)))
+        (equal (omap::lookup 'ChildPids (wtree-bind (proc-receive p)))
+               (omap::lookup 'ChildPids (wtree-bind p)))
+        (equal (erl-state->self (proc->s (proc-receive p)))
+               (erl-state->self (proc->s p)))
+        (equal (erl-state->world (proc->s (proc-receive p))) (sum-reduce-w))
+        (equal (erl-state->module (proc->s (proc-receive p))) 'local)
+        (equal (proc->inbox-tried (proc-receive p)) nil)
+        (equal
+          (proc->inbox-new (proc-receive p))
+          (inbox-without
+            (proc->inbox-new p)
+            (car (erl-val-cons->lst
+                   (omap::lookup 'CPids
+                     (erl-state->bind (proc->s p)))))))
+        (erl-klst-p (proc->klst (proc-receive p)))
+        (equal
+          (proc->outbox (proc-receive p))
+          (if (pid-p (omap::lookup 'ParentPid
+                        (erl-state->bind (proc->s p))))
+              (omap::update
+                (omap::lookup 'ParentPid (erl-state->bind (proc->s p)))
+                (list (make-erl-val-tuple
+                        :lst
+                          (list
+                            (erl-state->self (proc->s p))
+                            (make-erl-val-integer
+                              :val (+ (erl-val-integer->val
+                                        (omap::lookup 'LeftTotal
+                                          (erl-state->bind (proc->s p))))
+                                      (erl-val-integer->val
+                                        (inbox->value
+                                          (proc->inbox-new p)
+                                          (car (erl-val-cons->lst
+                                                (omap::lookup 'CPids
+                                                  (erl-state->bind
+                                                    (proc->s p))))))))))))
+                  nil)
+              nil))))
+  :enable (wtree-bind proc->outbox omap::from-lists
+           omap::lookup-of-update)
+  :disable wtree-bind0-to-wtree-bind)

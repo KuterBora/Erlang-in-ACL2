@@ -532,3 +532,43 @@
           (kl2 (cdr klst)))))
 
 
+; More Properties of apply-k -----------------------------------------------------
+
+; wtree bindings do not change after idle -> receive/terminated
+(defrule wtree-bind0-of-first-run-with-children
+  (implies
+    (and
+      (equal s (proc->s (make-reduce-proc self parent children index)))
+      (equal klst (proc->klst (make-reduce-proc self parent children index)))
+      (pid-lst-p children) (natp index) children
+      (or (pid-p parent)
+          (equal parent (make-erl-val-atom :val 'none))))
+    (equal
+      (wtree-bind0 bind
+        (erl-val-receive->klst (erl-state->in (apply-k s klst))))
+      (bind-fix (erl-state->bind s))))
+  :use ((:instance apply-k-of-idle-with-children))
+  :disable apply-k-of-idle-with-children)
+
+; reduce-receive-klst-p holds after idle -> receive/terminated
+(defrule reduce-receive-klst-p-of-first-run-with-children
+  (implies
+    (and
+      (equal
+        (proc->s p)
+        (proc->s (make-reduce-proc self parent children index)))
+      (equal
+        (proc->klst p)
+        (proc->klst (make-reduce-proc self parent children index)))
+      (pid-lst-p children) (natp index) children
+      (or (pid-p parent)
+          (equal parent (make-erl-val-atom :val 'none))))
+    (reduce-receive-klst-p
+      (erl-val-receive->klst
+        (erl-state->in (apply-k (proc->s p) (proc->klst p))))
+      (wtree-bind p)))
+  :use ((:instance apply-k-of-idle-with-children
+          (s (proc->s p)) (klst (proc->klst p))))
+  :disable (apply-k-of-idle-with-children))
+
+

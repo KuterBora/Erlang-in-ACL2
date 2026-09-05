@@ -101,8 +101,45 @@
                    (make-reduce-proc self parent children index))))
         (equal (wtree-bind p) (erl-state->bind (proc->s p))))
       :enable (wtree-bind0 make-reduce-proc)
-      :disable wtree-bind0-to-wtree-bind))
+      :disable wtree-bind0-to-wtree-bind)
+    
+    (defruled wtree-bind-when-fields-equal
+      (implies
+        (and (equal (proc->s p1) (proc->s p2))
+             (equal (proc->klst p1) (proc->klst p2)))
+        (equal (wtree-bind p1) (wtree-bind p2)))
+      :disable wtree-bind0-to-wtree-bind)
 
+    (defrule wtree-bind-of-proc-receive
+      (implies
+        (and (equal (proc->s (proc-receive p)) (proc->s p))
+             (equal (proc->klst (proc-receive p)) (proc->klst p)))
+        (equal (wtree-bind (proc-receive p)) (wtree-bind p)))
+      :use ((:instance wtree-bind-when-fields-equal
+              (p1 (proc-receive p)) (p2 p)))
+      :disable (wtree-bind proc-receive))
+
+    (defrule wtree-bindings-of-make-reduce-proc
+      (implies
+        (and
+          (equal
+            (proc->s p)
+            (proc->s (make-reduce-proc self parent children index)))
+          (equal
+            (proc->klst p)
+            (proc->klst (make-reduce-proc self parent children index))))
+        (equal
+          (omap::from-lists
+            '(ChildPids Parent Index)
+            (list (omap::lookup 'ChildPids (wtree-bind p))
+                  (omap::lookup 'Parent (wtree-bind p))
+                  (omap::lookup 'Index (wtree-bind p))))
+          (erl-state->bind (proc->s p))))
+    :use ((:instance wtree-bind-of-new-proc)
+          (:instance bindings-of-make-reduce-proc (s (proc->s p))))
+    :disable
+      (wtree-bind-of-new-proc wtree-bind
+       bindings-of-make-reduce-proc)))
 
 ; Nodes of Wtree ---------------------------------------------------------------
 
