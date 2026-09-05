@@ -165,6 +165,64 @@
               (key pid) (map net))))
      ("Subgoal *1/2" :expand (wtree0-p net net0 size))))
 
+(defruled rightmost-child-of-parent-is-rightmost-of-last-child
+  (implies
+    (and
+      (network-p net) (omap::assoc pid net)
+      (or (leaf-p (omap::lookup pid net)) (root-p (omap::lookup pid net)))
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
+      (pid-p
+        (car (last (erl-val-cons->lst
+                     (omap::lookup 'ChildPids
+                       (wtree-bind (omap::lookup pid net)))))))
+      (omap::assoc
+        (car (last (erl-val-cons->lst
+                     (omap::lookup 'ChildPids
+                       (wtree-bind (omap::lookup pid net)))))) net)
+      (leaf-p (omap::lookup
+                (car (last (erl-val-cons->lst
+                             (omap::lookup 'ChildPids
+                               (wtree-bind (omap::lookup pid net)))))) net))
+      (rightmost-child pid net))
+    (equal
+      (rightmost-child
+        (car (last (erl-val-cons->lst
+                      (omap::lookup 'ChildPids
+                        (wtree-bind (omap::lookup pid net)))))) net)
+      (rightmost-child pid net)))
+  :enable rightmost-child
+  :expand ((rightmost-child0 pid net (omap::size net)))
+  :use ((:instance increase-fuel-of-rightmost-child0
+          (pid (car (last (erl-val-cons->lst
+                            (omap::lookup 'ChildPids
+                              (wtree-bind (omap::lookup pid net)))))))
+          (f1 (- (omap::size net) 1)) (f2 (omap::size net)))))
+
+(defruled rightmost-child-of-wtree-root
+  (implies
+    (and
+      (network-p net) (wtree-p net)
+      (pid-p pid) (omap::assoc pid net)
+      (root-p (omap::lookup pid net)))
+    (rightmost-child pid net))
+  :enable wtree-p
+  :use (:instance rightmost-child-of-wtree0-p
+        (net net) (net0 net) (size (omap::size net)))
+  :cases ((< 0 (omap::size net))))
+
+(defruled rightmost-child-when-member-of-check-indices
+  (implies
+    (and
+      (network-p net) (pid-lst-p cps)
+      (member-equal cpid cps)
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup cpid net))))
+      (check-indices i cps net))
+    (rightmost-child cpid net))
+  :enable check-indices
+  :induct (check-indices i cps net))
+
 (defrule check-children-of-wtree0-p
   (implies
     (and
@@ -300,3 +358,36 @@
         :use ((:instance omap::assoc-of-tail-when-not-head
                 (key pid) (map net))))
      ("Subgoal *1/2" :expand (wtree0-p net net0 size))))
+
+(defruled rightmost-child-of-wtree-node
+  (implies
+    (and
+      (network-p net) (wtree-p net)
+      (omap::assoc pid net)
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net)))))
+    (rightmost-child pid net))
+  :enable check-parent
+  :disable
+    (wtree-nodes-are-leaf-or-root rightmost-child-of-wtree-root
+     check-parent-of-wtree-p check-indices-of-wtree-node
+     rightmost-child-when-member-of-check-indices)
+  :use ((:instance wtree-nodes-are-leaf-or-root)
+        (:instance rightmost-child-of-wtree-root)
+        (:instance check-parent-of-wtree-p)
+        (:instance check-indices-of-wtree-node
+          (pid (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))))
+        (:instance rightmost-child-when-member-of-check-indices
+          (cpid pid)
+          (cps (erl-val-cons->lst
+                 (omap::lookup 'ChildPids
+                   (wtree-bind
+                     (omap::lookup
+                       (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+                       net)))))
+          (i (erl-val-integer->val
+               (omap::lookup 'Index
+                 (wtree-bind
+                   (omap::lookup
+                     (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+                     net))))))))

@@ -249,12 +249,86 @@
     (defrule parent-still-waiting-p-of-update
       (implies
         (and
-          (network-p net) (network-p (omap::update q qproc net))
-          (omap::assoc q net)
-          (equal (erl-state->bind (proc->s qproc))
-                 (erl-state->bind (proc->s (omap::lookup q net))))
-          (or (equal (proc->ps qproc) (proc->ps (omap::lookup q net)))
-              (equal (proc->ps qproc) :receive))
+          (network-p net) (network-p (omap::update p proc net))
+          (omap::assoc p net)
+          (equal (erl-state->bind (proc->s proc))
+                 (erl-state->bind (proc->s (omap::lookup p net))))
+          (or (equal (proc->ps proc) (proc->ps (omap::lookup p net)))
+              (equal (proc->ps proc) :receive))
           (parent-still-waiting-p self parent net))
-        (parent-still-waiting-p self parent (omap::update q qproc net)))
+        (parent-still-waiting-p self parent (omap::update p proc net)))
       :enable omap::lookup-of-update))
+
+; TODO: comments (deliver.lisp has similar ones)
+(defrule parent-still-waiting-p-of-update-of-run
+  (implies
+    (and
+      (network-p net) (network-p (omap::update p proc net))
+      (proc-p proc) (omap::assoc p net)
+      (pid-p self) (erl-val-p parent)
+      (or
+        (not (equal parent p))
+        (and
+          (not (equal (proc->ps proc) :terminated))
+          (or
+            (not (and (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+                      (equal (erl-val-kind
+                                (omap::lookup 'CPids
+                                  (erl-state->bind (proc->s proc))))
+                                :cons)))
+            (member-equal self
+              (erl-val-cons->lst
+                (omap::lookup 'CPids
+                  (erl-state->bind (proc->s proc))))))))
+      (parent-still-waiting-p self parent net))
+    (parent-still-waiting-p self parent (omap::update p proc net)))
+  :enable (parent-still-waiting-p omap::lookup-of-update))
+
+(defrule wtree-bindings-of-lookup-of-update-when-bindings-equal
+  (implies
+    (and
+      (network-p net)
+      (omap::assoc q net)
+      (equal (omap::lookup 'Index (wtree-bind qproc))
+             (omap::lookup 'Index (wtree-bind (omap::lookup q net))))
+      (equal (omap::lookup 'Parent (wtree-bind qproc))
+             (omap::lookup 'Parent (wtree-bind (omap::lookup q net))))
+      (equal (omap::lookup 'ChildPids (wtree-bind qproc))
+             (omap::lookup 'ChildPids (wtree-bind (omap::lookup q net)))))
+    (and
+      (equal (omap::lookup 'Index
+               (wtree-bind (omap::lookup x (omap::update q qproc net))))
+             (omap::lookup 'Index (wtree-bind (omap::lookup x net))))
+      (equal (omap::lookup 'Parent
+               (wtree-bind (omap::lookup x (omap::update q qproc net))))
+             (omap::lookup 'Parent (wtree-bind (omap::lookup x net))))
+      (equal (omap::lookup 'ChildPids
+               (wtree-bind (omap::lookup x (omap::update q qproc net))))
+             (omap::lookup 'ChildPids (wtree-bind (omap::lookup x net))))))
+  :enable omap::lookup-of-update)
+
+(defrule leaf-root-p-of-lookup-of-update-when-wtree-bindings-equal
+  (implies
+    (and
+      (network-p net)
+      (omap::assoc q net)
+      (iff (omap::assoc 'Index (wtree-bind qproc))
+           (omap::assoc 'Index (wtree-bind (omap::lookup q net))))
+      (iff (omap::assoc 'Parent (wtree-bind qproc))
+           (omap::assoc 'Parent (wtree-bind (omap::lookup q net))))
+      (iff (omap::assoc 'ChildPids (wtree-bind qproc))
+           (omap::assoc 'ChildPids (wtree-bind (omap::lookup q net))))
+      (equal (omap::lookup 'Index (wtree-bind qproc))
+             (omap::lookup 'Index (wtree-bind (omap::lookup q net))))
+      (equal (omap::lookup 'Parent (wtree-bind qproc))
+             (omap::lookup 'Parent (wtree-bind (omap::lookup q net))))
+      (equal (omap::lookup 'ChildPids (wtree-bind qproc))
+             (omap::lookup 'ChildPids (wtree-bind (omap::lookup q net)))))
+    (and
+      (equal (leaf-p (omap::lookup x (omap::update q qproc net)))
+             (leaf-p (omap::lookup x net)))
+      (equal (root-p (omap::lookup x (omap::update q qproc net)))
+             (root-p (omap::lookup x net)))))
+  :enable omap::lookup-of-update
+  :use ((:instance leaf-root-p-when-wtree-bindings-equal
+          (p1 qproc) (p2 (omap::lookup q net)))))

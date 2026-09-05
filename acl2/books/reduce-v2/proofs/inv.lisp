@@ -488,3 +488,49 @@
     (erl-val-fix-when-erl-val-p erl-val-p-when-erl-fun-p-rewrite
      erl-val-when-erl-fun omap::assoc-when-assoc-tail binary-append
      append-when-not-consp not-inbox-contains-of-received-messages-wf))
+
+; BOZO: yes, this is very verbose, but it covers all the cases.
+; TODO: comments
+(defrule sent-message-wf-of-update-of-run
+  (implies
+    (and
+      (network-p net) (network-p (omap::update p proc net))
+      (proc-p proc) (omap::assoc p net)
+      (not (equal (proc->ps proc) :idle))
+      (proc-p self) (erl-val-p parent)
+      (or
+        (not (and (equal parent p)
+                  (omap::assoc parent (outbox-fix outbox))
+                  (omap::lookup parent (outbox-fix outbox))))
+        (and
+          (not (equal (proc->ps proc) :terminated))
+          (or
+            (not (and (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+                      (equal (erl-val-kind
+                              (omap::lookup 'CPids
+                                (erl-state->bind (proc->s proc))))
+                            :cons)))
+            (member-equal (proc->pid self)
+              (erl-val-cons->lst
+                (omap::lookup 'CPids
+                  (erl-state->bind (proc->s proc))))))))
+      (or
+        (not (equal parent p))
+        (or (equal (proc->ps proc) :terminated)
+            (inbox-contains (proc->inbox-new proc) (proc->pid self))
+            (and (equal (proc->ps proc) :blocked)
+                 (inbox-contains (proc->inbox-tried proc)
+                                 (proc->pid self)))
+            (and (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+                 (equal (erl-val-kind
+                          (omap::lookup 'CPids
+                            (erl-state->bind (proc->s proc))))
+                        :cons)
+                 (not (member-equal (proc->pid self)
+                        (erl-val-cons->lst
+                          (omap::lookup 'CPids
+                            (erl-state->bind (proc->s proc)))))))))
+      (sent-message-wf self outbox parent net))
+    (sent-message-wf self outbox parent (omap::update p proc net)))
+  :enable (sent-message-wf omap::lookup-of-update)
+  :disable sent-message-wf-of-update)
