@@ -195,7 +195,17 @@
     (defcong proc-equiv equal (sent-message-wf a b c d) 1)
     (defcong outbox-equiv equal (sent-message-wf a b c d) 2)
     (defcong erl-val-equiv equal (sent-message-wf a b c d) 3)
-    (defcong network-equiv equal (sent-message-wf a b c d) 4))
+    (defcong network-equiv equal (sent-message-wf a b c d) 4)
+    
+    (defrule sent-message-wf-when-parent-has-message
+      (implies
+        (and
+          (network-p net) (outbox-p outbox)
+          (outbox-emptyp outbox)
+          (omap::assoc parent net)
+          (inbox-contains (proc->inbox-new (omap::lookup parent net))
+                          (proc->pid self)))
+        (sent-message-wf self outbox parent net))))
 
 ; Klst Well Formed ------------------------------------------------------------
 

@@ -157,7 +157,7 @@
       (omap::assoc pid net)
       (root-p (omap::lookup pid net)))
     (rightmost-child pid net0))
-  :enable wtree0-p
+  :enable (wtree0-p lookup-of-tail-when-assoc-tail-of-network)
   :induct (wtree0-induct pid net net0 size)
   :hints
     (("Subgoal *1/3"
@@ -177,7 +177,7 @@
       (erl-val-cons->lst
         (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
       net0))
-  :enable wtree0-p
+  :enable (wtree0-p lookup-of-tail-when-assoc-tail-of-network)
   :induct (wtree0-induct pid net net0 size)
   :hints
     (("Subgoal *1/3"
@@ -206,7 +206,7 @@
       pid
       (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
       net0))
-  :enable wtree0-p
+  :enable (wtree0-p lookup-of-tail-when-assoc-tail-of-network)
   :induct (wtree0-induct pid net net0 size)
   :hints
     (("Subgoal *1/3"
@@ -244,7 +244,7 @@
       (erl-val-integer->val
         (omap::lookup 'Index (wtree-bind (omap::lookup (rightmost-child pid net0) net0))))
       (+ -1 size)))
-  :enable wtree0-p
+  :enable (wtree0-p lookup-of-tail-when-assoc-tail-of-network)
   :induct (wtree0-induct pid net net0 size)
   :hints
     (("Subgoal *1/3"
@@ -265,7 +265,7 @@
       (erl-val-cons->lst
         (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
       net0))
-  :enable wtree0-p
+  :enable (wtree0-p lookup-of-tail-when-assoc-tail-of-network)
   :induct (wtree0-induct pid net net0 size)
   :hints
     (("Subgoal *1/3"

@@ -2,6 +2,7 @@
 (include-book "network")
 
 (set-induction-depth-limit 1)
+(local (in-theory (enable lookup-of-tail-when-assoc-tail-of-network)))
 
 ; Possible Scheduling Steps ---------------------------------------------------
 

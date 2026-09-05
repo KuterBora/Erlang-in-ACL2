@@ -138,7 +138,7 @@
   (implies (network-p net) (network-p (omap::tail net)))
   :enable network-p)
 
-(defrule lookup-of-tail-when-assoc-tail-of-network
+(defruled lookup-of-tail-when-assoc-tail-of-network
   (implies
     (and (network-p net) (pid-p pid) (omap::assoc pid (omap::tail net)))
     (equal (omap::lookup pid net)
@@ -170,7 +170,8 @@
       (implies
         (and (pid-p p) (network-p n) (runnable? (omap::tail n) p))
         (runnable? n p))
-      :enable proc-runnable?)
+      :enable (lookup-of-tail-when-assoc-tail-of-network
+               proc-runnable?))
     
     (defrule assoc-of-runnable?
       (implies
@@ -193,7 +194,8 @@
         (and (pid-p p1) (pid-p p2) (network-p n)
              (has-message-for-dst? (omap::tail n) p1 p2))
         (has-message-for-dst? n p1 p2))
-      :enable proc-has-message-for-dst?)
+      :enable (proc-has-message-for-dst?
+               lookup-of-tail-when-assoc-tail-of-network))
     
     (defrule assoc-of-lookup-when-has-message-for-dst?
       (implies
@@ -228,7 +230,8 @@
              (omap::assoc p1 (omap::tail net))
              (has-message-for-dst? net p1 p2))
         (has-message-for-dst? (omap::tail net) p1 p2))
-      :enable (proc-has-message-for-dst? network-fix)))
+      :enable (proc-has-message-for-dst? network-fix
+               lookup-of-tail-when-assoc-tail-of-network)))
 
 (define terminated? ((net network-p))
   (b* ((net (network-fix net))

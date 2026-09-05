@@ -3,6 +3,8 @@
 
 ; Even more theorems about wtree-p, and its helpers
 
+(local (in-theory (enable lookup-of-tail-when-assoc-tail-of-network)))
+
 ; Updating a Wtree -------------------------------------------------------------
 
 ; TODO: This probably exists in a community book.
