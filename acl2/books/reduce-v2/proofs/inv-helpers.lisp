@@ -325,3 +325,60 @@
         (reduce-receive-klst-p (proc->klst p) (wtree-bind p)))
       :enable wtree-bind
       :disable (wtree-bind0-to-wtree-bind reduce-receive-klst-p)))
+
+(defrule reduce-receive-klst-p-new-call-stack
+  (implies
+    (and
+      (reduce-receive-klst-p klst rbind)
+      (> (erl-k->fuel (car klst)) 106))
+    (reduce-receive-klst-p
+      (append
+        (list (erl-k (- (erl-k->fuel (car klst)) 6) (erl-k->kont (car klst)))
+              (erl-k (- (erl-k->fuel (car klst)) 6)
+                     (make-kont-exprs :exprs nil))
+              (erl-k (- (erl-k->fuel (car klst)) 3)
+                     (make-kont-function-return :bind b :module 'local))
+              (erl-k (- (erl-k->fuel (car klst)) 1)
+                     (make-kont-exprs :exprs nil)))
+        (cdr klst))
+      rbind))
+  :enable (reduce-receive-klst-p reduce-klst-lst-p))
+
+; Inbox Formed ----------------------------------------------------------------
+
+(define wf-inbox-p ((inbox erl-vlst-p))
+  :returns (r booleanp)
+  :measure (acl2-count (erl-vlst-fix inbox))
+  (b* ((inbox (erl-vlst-fix inbox))
+       ((unless inbox) t)
+       (m (car inbox))
+       ((unless (equal (erl-val-kind m) :tuple)) nil)
+       ((unless (equal (len (erl-val-tuple->lst m)) 2)) nil)
+       ((unless (equal (erl-val-kind (cadr (erl-val-tuple->lst m))) :integer))
+        nil))
+      (wf-inbox-p (cdr inbox)))
+  ///
+    (defcong erl-vlst-equiv equal (wf-inbox-p inbox) 1
+      :hints (("Goal" :expand ((wf-inbox-p inbox)
+                               (wf-inbox-p inbox-equiv)))))
+
+    (defrule wf-inbox-p-of-received-messages-wf
+      (implies (received-messages-wf inbox cpids net)
+               (wf-inbox-p inbox))
+      :enable received-messages-wf
+      :induct (received-messages-wf inbox cpids net))
+
+    (defrule wf-inbox-p-of-car
+      (implies
+        (and (wf-inbox-p inbox) (erl-vlst-p inbox) (consp inbox))
+        (and (erl-val-p (car inbox))
+             (equal (erl-val-kind (car inbox)) :tuple)
+             (equal (len (erl-val-tuple->lst (car inbox))) 2)
+             (equal (erl-val-kind (cadr (erl-val-tuple->lst (car inbox))))
+                    :integer)))
+      :enable erl-vlst-p)
+
+    (defrule wf-inbox-p-of-cdr
+      (implies (and (wf-inbox-p inbox) (erl-vlst-p inbox))
+               (wf-inbox-p (cdr inbox)))
+      :enable erl-vlst-p))
