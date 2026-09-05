@@ -347,7 +347,7 @@
 ; There is a cleaner way of doing this, by defining fixtypes for leaf
 ; and root. I will implement it at some point.
 ; - This lemma is also disabled. I have to call to call it manually,
-;   which is tedious. 
+;   which is tedious.
 (defruled leaf-root-p-when-wtree-bindings-equal
   (implies
     (and (iff (omap::assoc 'Index (wtree-bind p1))

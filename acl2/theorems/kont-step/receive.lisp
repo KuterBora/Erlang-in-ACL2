@@ -107,7 +107,7 @@
                                                 (kont-expr->expr (erl-k->kont k))))))))))
   :enable apply-k-of-step)
 
-(defruled apply-k-of-receive-no-match
+(defrule apply-k-of-receive-no-match
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 0)
@@ -117,7 +117,7 @@
            (mv-nth 0 (eval-receive s (kont-receive->clauses (erl-k->kont k))))))
   :enable apply-k-of-step)
 
-(defruled apply-k-of-receive-when-match
+(defrule apply-k-of-receive-when-match
   (implies
     (and (wf-state-p s)
          (> (erl-k->fuel k) 0)
