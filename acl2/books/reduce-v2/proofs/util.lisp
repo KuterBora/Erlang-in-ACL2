@@ -135,6 +135,21 @@
   (implies (and (pid-lst-p x) x) (<= 1 (len x)))
   :rule-classes :linear)
 
+(defrule prefixp-of-rev-of-cdr
+  (implies (prefixp (rev l) x)
+           (prefixp (rev (cdr l)) x))
+  :use ((:instance prefixp-transitive-local
+          (x (rev (cdr l))) (y (rev l)) (z x)))
+  :prep-lemmas
+  ((defrule prefixp-of-self-append
+    (prefixp x (append x y)) :enable prefixp)
+   (defrule prefixp-transitive-local
+     (implies (and (prefixp x y) (prefixp y z)) (prefixp x z))
+     :enable prefixp)
+   (defrule prefixp-of-rev-cdr-rev
+     (prefixp (rev (cdr l)) (rev l))
+     :expand ((rev l)))))
+
 ; Inbox Utility ---------------------------------------------------------------
 
 ; Check if the inbox contains a message {pid, _}
@@ -351,3 +366,43 @@
   :enable omap::lookup-of-update
   :use ((:instance leaf-root-p-when-wtree-bindings-equal
           (p1 qproc) (p2 (omap::lookup q net)))))
+
+(defruled check-indices-props
+  (implies
+    (and (network-p net) (pid-lst-p cps)
+         (consp cps) (consp (cdr cps))
+         (check-indices i cps net))
+    (and (omap::assoc (car cps) net)
+         (leaf-p (omap::lookup (car cps) net))
+         (equal
+          (erl-val-integer->val
+            (omap::lookup 'Index
+              (wtree-bind (omap::lookup (car cps) net))))
+          (+ 1 (nfix i)))
+         (omap::assoc (cadr cps) net)
+         (leaf-p (omap::lookup (cadr cps) net))
+         (or
+           (erl-val-cons->lst
+                  (omap::lookup 'ChildPids
+                    (wtree-bind (omap::lookup (car cps) net))))
+           (equal (erl-val-integer->val
+                    (omap::lookup 'Index
+                      (wtree-bind (omap::lookup (cadr cps) net))))
+                  (+ 2 (nfix i))))
+         (or
+           (not
+             (erl-val-cons->lst
+              (omap::lookup 'ChildPids
+                (wtree-bind (omap::lookup (car cps) net)))))
+           (and (rightmost-child (car cps) net)
+                (equal (erl-val-integer->val
+                         (omap::lookup 'Index
+                           (wtree-bind (omap::lookup (cadr cps) net))))
+                       (+ 1 (nfix
+                              (erl-val-integer->val
+                                (omap::lookup 'Index
+                                  (wtree-bind
+                                    (omap::lookup
+                                      (rightmost-child (car cps) net)
+                                      net)))))))))))
+  :enable check-indices)

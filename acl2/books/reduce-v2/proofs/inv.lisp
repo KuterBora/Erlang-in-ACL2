@@ -587,3 +587,15 @@
   :enable
     (sent-message-wf proc->pid parent-still-waiting-p))
 
+(defruled sent-message-wf-when-inv-terminated
+  (implies
+    (and
+      (network-p net) (pid-p pid) (inv pid net)
+      (equal (proc->ps (omap::lookup pid net)) :terminated)
+      (or (leaf-p (omap::lookup pid net))
+          (root-p (omap::lookup pid net))))
+    (sent-message-wf (omap::lookup pid net)
+      (proc->outbox (omap::lookup pid net))
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+      net))
+  :enable inv)
