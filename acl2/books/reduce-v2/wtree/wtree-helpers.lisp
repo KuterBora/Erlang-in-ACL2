@@ -562,7 +562,7 @@
           (null
             (erl-val-cons->lst
               (omap::lookup 'ChildPids (wtree-bind (omap::lookup rpid net))))))))
-    
+
     (defruled increase-fuel-of-rightmost-child0
       (implies
         (and (rightmost-child0 pid net f1)
@@ -603,7 +603,7 @@
                 omap::assoc-when-assoc-tail last network-p-of-tail)
       :induct (rightmost-child0 i net fuel)
       :expand (rightmost-child0 i (omap::update pid proc net) fuel))
-
+    
     (defrule rightmost-child0-of-end
       (implies
         (and
@@ -613,9 +613,11 @@
           (natp fuel) (> fuel 0))
         (equal
           (rightmost-child0 self
-            (omap::update self (make-reduce-proc self parent nil index) net) fuel)
-          self)))
-    
+            (omap::update self
+              (make-reduce-proc self parent nil index) net) fuel)
+          self))
+      :disable erl-state->bind-of-make-reduce-proc)
+
     (defrule rightmost-child0-when-no-children
       (implies
         (and

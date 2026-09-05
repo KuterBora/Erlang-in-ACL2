@@ -139,4 +139,15 @@
                     (omap::lookup 'Parent (erl-state->bind s))
                     (omap::lookup 'Index (erl-state->bind s)))))
           (erl-state->bind s)))
-      :enable (omap::from-lists omap::lookup-of-update)))
+      :enable (omap::from-lists omap::lookup-of-update))
+   
+    (defrule erl-state->bind-of-make-reduce-proc
+      (equal
+        (erl-state->bind
+          (proc->s (make-reduce-proc self parent children index)))
+        (omap::from-lists
+          (list 'ChildPids 'Parent 'Index)
+          (list (make-erl-val-cons :lst (pid-lst-fix children))
+                (erl-val-fix parent)
+                (make-erl-val-integer :val (nfix index)))))
+      :enable omap::from-lists))

@@ -89,6 +89,7 @@
 ; Theorems --------------------------------------------------------------------
 
 (local (set-minimal-arithmetic-theory))
+(local (in-theory (disable erl-state->bind-of-make-reduce-proc)))
 
 (local (defrule subset-crock
   (implies (set::subset x y) (set::subset x (set::insert a y)))
@@ -626,7 +627,6 @@
     (check-indices i chl (create-wtree0 n self index parent cwchl pids net)))
   :enable check-indices))
 
-; TODO: this takes a lot of steps.
 (local (defrule check-indices-of-create-wtree0-of-lookup
   (implies
     (and (network-p net) (pid-set-p pids) (pid-p self) (pid-p pid)
@@ -649,7 +649,7 @@
             (omap::lookup pid
               (create-wtree0 n self index parent children pids net)))))
       (create-wtree0 n self index parent children pids net)))
-  :enable (create-wtree0 omap::lookup-of-update)
+  :enable (create-wtree0 omap::lookup-of-update omap::from-lists)
   :disable (floor ceiling not |(< (if a b c) x)| |(< x (if a b c))|)
   :prep-lemmas
     ((set-default-arithmetic-theory))))
