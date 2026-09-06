@@ -2,6 +2,10 @@
 (include-book "inv")
 (include-book "../../../theorems/top")
 
+; BOZO: a lot of these can become way shorter and cheaper by proving some
+; core properties. However, I am leaving that work for after we have
+; implemented a meta-function/clause-processor.
+
 ; Apply-K Lemmas for INV ---------------------------------------------------------
 
 (local (defrule erl-val-kind-of-car-of-pid-lst
@@ -51,12 +55,13 @@
         ; enough fuel is left
         (equal (erl-k->fuel (car (erl-val-receive->klst (erl-state->in ns))))
                (+ 95 (* 100 (len children)))))))
-  :enable (reduce-receive-klst-p omap::from-lists match-args eval-match
-           wf-state-p pid-p make-reduce-proc eval-clauses-when-consp
-           apply-k-of-local-call-when-match eval-local-call eval-clauses
-           apply-k-of-local-call-no-match eval-guard-seq eval-guard eval-bif
-           eval-guard-seq eval-guard-seq-when-consp eval-guard-expr
-           apply-k-of-cons apply-k-of-binop-expr1))
+  :enable
+    (reduce-receive-klst-p omap::from-lists match-args eval-match
+     wf-state-p pid-p make-reduce-proc eval-clauses-when-consp
+     apply-k-of-local-call-when-match eval-local-call eval-clauses
+     apply-k-of-local-call-no-match eval-guard-seq eval-guard eval-bif
+     eval-guard-seq eval-guard-seq-when-consp eval-guard-expr
+     apply-k-of-cons apply-k-of-binop-expr1))
 
 ; idle -> terminated
 (defrule apply-k-of-idle-no-children
@@ -82,15 +87,16 @@
                         :lst (list self (make-erl-val-integer :val index))))
                 nil)
             nil)))))
-  :enable (wf-state-p pid-p make-reduce-proc omap::from-lists
-           apply-k-of-local-call-when-match apply-k-of-local-call-no-match
-           apply-k-of-cons apply-k-of-binop-expr1 eval-guard-expr eval-bif
-           eval-local-call eval-clauses eval-clauses-when-consp eval-guard
-           match-args eval-match eval-guard-seq eval-guard-seq-when-consp
-           omap::lookup-of-update))
+  :enable
+    (wf-state-p pid-p make-reduce-proc omap::from-lists
+     apply-k-of-local-call-when-match apply-k-of-local-call-no-match
+     apply-k-of-cons apply-k-of-binop-expr1 eval-guard-expr eval-bif
+     eval-local-call eval-clauses eval-clauses-when-consp eval-guard
+     match-args eval-match eval-guard-seq eval-guard-seq-when-consp
+     omap::lookup-of-update))
 
-; Expand eval receive
 
+; Properties of eval receive
 (local (defrule not-cddr-of-tuple-lst-of-len-2
   (implies (equal (len (erl-val-tuple->lst m)) 2)
           (not (cddr (erl-val-tuple->lst m))))
@@ -355,7 +361,6 @@
   :use ((:instance apply-k-of-append
           (kl1 (list (car klst))) (kl2 (cdr klst)))))
 
-
 (defruled apply-k-of-reduce-klst-lst-p
   (implies
     (and
@@ -451,7 +456,7 @@
      apply-k-of-binop-expr1 apply-k-of-local-call-no-match
      apply-k-of-cons eval-clauses)))
 
-
+; same as above but for klst insteaf of a single k
 (defrule apply-k-of-reduce-receive-klst-when-match-last
   (implies
     (and
@@ -546,7 +551,7 @@
   :use ((:instance apply-k-of-idle-with-children))
   :disable apply-k-of-idle-with-children)
 
-; reduce-receive-klst-p holds after idle -> receive/terminated
+; reduce-receive-klst-p holds after idle -> receive
 (defrule reduce-receive-klst-p-of-first-run-with-children
   (implies
     (and
