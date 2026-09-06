@@ -406,6 +406,19 @@
     (bindings-of-leaf omap::assoc-when-assoc-tail
      bindings-of-root omap::assoc-when-emptyp))
 
+(defruled wtree-node-fields
+  (implies
+    (or (leaf-p p) (root-p p))
+    (and
+      (pid-lst-p
+        (erl-val-cons->lst (omap::lookup 'ChildPids (wtree-bind p))))
+      (or
+        (pid-p (omap::lookup 'Parent (wtree-bind p)))
+        (equal (omap::lookup 'Parent (wtree-bind p))
+               (make-erl-val-atom :val 'none)))
+      (natp (erl-val-integer->val (omap::lookup 'Index (wtree-bind p))))))
+  :enable (leaf-p root-p))
+
 ; Segment of the wtree that does not contain the root.
 (define non-root-segment-p ((net network-p))
   :returns (r booleanp)

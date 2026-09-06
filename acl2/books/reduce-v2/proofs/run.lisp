@@ -1731,6 +1731,1171 @@
     ((:instance inv-of-receive-run-blocked)
      (:instance inv-of-receive-to-terminated))))
 
+; props of proc-receive after a message match
+(local (defruled proc-receive-match-node-type
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net)
+      (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (inbox-contains
+        (proc->inbox-new (omap::lookup p net))
+        (car (erl-val-cons->lst
+               (omap::lookup 'CPids
+                 (erl-state->bind
+                   (proc->s (omap::lookup p net)))))))
+      (cdr (erl-val-cons->lst
+             (omap::lookup 'CPids
+               (erl-state->bind (proc->s (omap::lookup p net))))))
+      (equal
+        (erl-val-kind
+          (inbox->value
+            (proc->inbox-new
+              (omap::lookup p net))
+            (car
+              (erl-val-cons->lst
+                (omap::lookup
+                  'CPids
+                  (erl-state->bind
+                    (proc->s (omap::lookup p net))))))))
+             :integer)
+      (inv
+        (car (erl-val-cons->lst
+               (omap::lookup 'CPids
+                 (erl-state->bind (proc->s (omap::lookup p net))))))
+        net)
+      (network-p (omap::update p (proc-receive (omap::lookup p net)) net)))
+    (and
+      (equal (erl-state->self (proc->s (proc-receive (omap::lookup p net)))) p)
+      (equal (leaf-p (proc-receive (omap::lookup p net)))
+             (leaf-p (omap::lookup p net)))
+      (equal (root-p (proc-receive (omap::lookup p net)))
+             (root-p (omap::lookup p net)))))
+  :use
+    ((:instance proc-receive-match-facts)
+     (:instance proc-receive-of-match-with-more-children
+       (p (omap::lookup p net)) (rbind (wtree-bind (omap::lookup p net))))
+     (:instance inv-receive-node-facts)
+     (:instance wtree-nodes-are-leaf-or-root (pid p))
+     (:instance leaf-root-p-when-wtree-bindings-equal
+                 (p1 (proc-receive (omap::lookup p net)))
+                 (p2 (omap::lookup p net))))))
+
+; The inbox is the same but with ChildHd removed.
+(local (defruled proc-receive-match-inbox
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net)
+      (omap::assoc p net) 
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (inbox-contains
+        (proc->inbox-new (omap::lookup p net))
+        (car (erl-val-cons->lst
+                (omap::lookup 'CPids
+                              (erl-state->bind
+                                (proc->s (omap::lookup p net)))))))
+      (cdr (erl-val-cons->lst
+            (omap::lookup 'CPids
+              (erl-state->bind (proc->s (omap::lookup p net))))))
+      (equal
+        (erl-val-kind
+          (inbox->value
+            (proc->inbox-new (omap::lookup p net))
+            (car (erl-val-cons->lst
+                   (omap::lookup 'CPids
+                      (erl-state->bind
+                        (proc->s (omap::lookup p net))))))))
+        :integer)
+      (inv (car (erl-val-cons->lst
+                  (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net))))))
+           net)
+      (network-p (omap::update p (proc-receive (omap::lookup p net)) net)))
+    (equal (proc->inbox-new (proc-receive (omap::lookup p net)))
+           (inbox-without
+              (proc->inbox-new (omap::lookup p net))
+              (car (erl-val-cons->lst
+                      (omap::lookup 'CPids
+                        (erl-state->bind (proc->s (omap::lookup p net)))))))))
+  :disable
+    (assoc-of-runnable? omap::assoc-when-assoc-tail omap::tail-when-emptyp
+     omap::assoc-when-assoc-of-tail-cheap root-when-assoc-of-tail-is-root
+     runnable-of-tail leaf-when-assoc-of-tail-is-leaf omap::lookup-when-emptyp
+     omap::assoc-when-emptyp assoc-of-non-root-segment leaf-equiv-when-bindings-equiv
+     root-equiv-when-bindings-equiv wtree0-nodes-are-leaf-or-root
+     wtree0-nodes-are-leaf-or-root-rev wtree0-of-zero reduce-receive-klst-p
+     len inv equal-of-kont-function-return)
+  :use
+    ((:instance proc-receive-match-facts)
+     (:instance normalize-reduce-receive-klst-p
+      (p (omap::lookup p net))
+      (rbind (omap::from-lists
+               (list 'ChildPids 'Parent 'Index)
+               (list (make-erl-val-cons
+                        :lst (erl-val-cons->lst
+                               (omap::lookup 'ChildPids
+                                 (wtree-bind (omap::lookup p net)))))
+                     (omap::lookup 'Parent
+                       (wtree-bind (omap::lookup p net)))
+                     (make-erl-val-integer
+                       :val (erl-val-integer->val
+                              (omap::lookup 'Index
+                                (wtree-bind (omap::lookup p net)))))))))
+      (:instance proc-receive-of-match-with-more-children
+                 (p (omap::lookup p net))
+                 (rbind (wtree-bind (omap::lookup p net))))
+      (:instance inv-receive-node-facts)
+      (:instance wtree-nodes-are-leaf-or-root (pid p))
+      (:instance leaf-root-p-when-wtree-bindings-equal
+                 (p1 (proc-receive (omap::lookup p net)))
+                 (p2 (omap::lookup p net))))))
+
+; The CPids are the same but with ChildHd removed.
+(local (defruled proc-receive-match-cpids
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net)
+      (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (inbox-contains
+        (proc->inbox-new (omap::lookup p net))
+        (car (erl-val-cons->lst
+                (omap::lookup 'CPids
+                              (erl-state->bind
+                                (proc->s (omap::lookup p net)))))))
+      (cdr (erl-val-cons->lst
+              (omap::lookup 'CPids
+                (erl-state->bind (proc->s (omap::lookup p net))))))
+      (equal
+        (erl-val-kind
+          (inbox->value
+            (proc->inbox-new (omap::lookup p net))
+            (car
+              (erl-val-cons->lst
+                (omap::lookup
+                  'CPids
+                  (erl-state->bind
+                    (proc->s (omap::lookup p net))))))))
+          :integer)
+      (inv (car (erl-val-cons->lst
+                  (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net))))))
+           net)
+      (network-p (omap::update p (proc-receive (omap::lookup p net)) net)))
+    (equal (erl-val-cons->lst
+             (omap::lookup 'CPids
+               (erl-state->bind
+                 (proc->s (proc-receive (omap::lookup p net))))))
+           (cdr (erl-val-cons->lst
+                  (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net))))))))
+  :disable
+    (assoc-of-runnable? omap::assoc-when-assoc-tail omap::tail-when-emptyp
+     omap::assoc-when-assoc-of-tail-cheap root-when-assoc-of-tail-is-root
+     runnable-of-tail leaf-when-assoc-of-tail-is-leaf omap::lookup-when-emptyp
+     omap::assoc-when-emptyp assoc-of-non-root-segment leaf-equiv-when-bindings-equiv
+     root-equiv-when-bindings-equiv wtree0-nodes-are-leaf-or-root
+     wtree0-nodes-are-leaf-or-root-rev wtree0-of-zero reduce-receive-klst-p
+     len inv equal-of-kont-function-return)
+  :use
+    ((:instance proc-receive-match-facts)
+     (:instance normalize-reduce-receive-klst-p
+      (p (omap::lookup p net))
+      (rbind (omap::from-lists
+               (list 'ChildPids 'Parent 'Index)
+               (list (make-erl-val-cons
+                        :lst (erl-val-cons->lst
+                               (omap::lookup 'ChildPids
+                                 (wtree-bind (omap::lookup p net)))))
+                     (omap::lookup 'Parent
+                       (wtree-bind (omap::lookup p net)))
+                     (make-erl-val-integer
+                       :val (erl-val-integer->val
+                              (omap::lookup 'Index
+                                (wtree-bind (omap::lookup p net)))))))))
+      (:instance proc-receive-of-match-with-more-children
+                 (p (omap::lookup p net))
+                 (rbind (wtree-bind (omap::lookup p net))))
+      (:instance inv-receive-node-facts)
+      (:instance wtree-nodes-are-leaf-or-root (pid p))
+      (:instance leaf-root-p-when-wtree-bindings-equal
+                 (p1 (proc-receive (omap::lookup p net)))
+                 (p2 (omap::lookup p net))))))
+
+; BOZO: I realize there is a lot of repetition. Many of these should be merged.
+(local (defruled proc-receive-match-more-props
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net)
+      (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (inbox-contains
+        (proc->inbox-new (omap::lookup p net))
+        (car (erl-val-cons->lst
+                (omap::lookup 'CPids
+                              (erl-state->bind
+                                (proc->s (omap::lookup p net)))))))
+      (cdr (erl-val-cons->lst
+              (omap::lookup 'CPids
+                (erl-state->bind (proc->s (omap::lookup p net))))))
+      (equal
+        (erl-val-kind
+          (inbox->value
+            (proc->inbox-new (omap::lookup p net))
+            (car
+              (erl-val-cons->lst
+                (omap::lookup 'CPids
+                  (erl-state->bind
+                    (proc->s (omap::lookup p net))))))))
+        :integer)
+      (inv (car (erl-val-cons->lst
+                  (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net))))))
+           net)
+      (network-p (omap::update p (proc-receive (omap::lookup p net)) net)))
+    (and
+      (equal (erl-state->self (proc->s (proc-receive (omap::lookup p net)))) p)
+      (equal (omap::lookup 'Index
+               (wtree-bind (proc-receive (omap::lookup p net))))
+             (omap::lookup 'Index (wtree-bind (omap::lookup p net))))
+      (equal (omap::lookup 'Parent
+                (wtree-bind (proc-receive (omap::lookup p net))))
+             (omap::lookup 'Parent (wtree-bind (omap::lookup p net))))
+      (equal (omap::lookup 'ChildPids
+               (wtree-bind (proc-receive (omap::lookup p net))))
+             (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net))))
+      ; (iff (omap::assoc 'Index
+      ;        (wtree-bind (proc-receive (omap::lookup p net))))
+      ;      (omap::assoc 'Index (wtree-bind (omap::lookup p net))))
+      ; (iff (omap::assoc 'Parent
+      ;        (wtree-bind (proc-receive (omap::lookup p net))))
+      ;      (omap::assoc 'Parent (wtree-bind (omap::lookup p net))))
+      ; (iff (omap::assoc 'ChildPids
+      ;         (wtree-bind (proc-receive (omap::lookup p net))))
+      ;      (omap::assoc 'ChildPids (wtree-bind (omap::lookup p net))))
+      (equal (leaf-p (proc-receive (omap::lookup p net)))
+             (leaf-p (omap::lookup p net)))
+      (equal (root-p (proc-receive (omap::lookup p net)))
+             (root-p (omap::lookup p net)))
+      (equal (proc->ps (proc-receive (omap::lookup p net))) :receive)
+      (null (proc->inbox-tried (proc-receive (omap::lookup p net))))
+      (equal (proc->inbox-new (proc-receive (omap::lookup p net)))
+             (inbox-without
+               (proc->inbox-new (omap::lookup p net))
+               (car (erl-val-cons->lst
+                      (omap::lookup 'CPids
+                        (erl-state->bind (proc->s (omap::lookup p net))))))))
+      (omap::assoc 'CPids
+                   (erl-state->bind (proc->s (proc-receive (omap::lookup p net)))))
+      (equal
+        (erl-val-kind
+          (omap::lookup 'CPids
+            (erl-state->bind
+              (proc->s (proc-receive (omap::lookup p net))))))
+        :cons)
+      (equal
+        (erl-val-cons->lst
+          (omap::lookup 'CPids
+            (erl-state->bind
+              (proc->s (proc-receive (omap::lookup p net))))))
+              (cdr (erl-val-cons->lst
+                      (omap::lookup 'CPids
+                        (erl-state->bind (proc->s (omap::lookup p net)))))))))
+  :disable (inv equal-of-kont-function-return)
+  :use
+    ((:instance proc-receive-match-facts)
+     (:instance proc-receive-match-node-type)
+     (:instance proc-receive-match-inbox)
+     (:instance proc-receive-match-cpids))))
+
+; Chd does not occur again.
+(local (defruled chd-not-in-rest-of-cpids
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net)
+      (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :receive))
+    (not
+      (member-equal
+        (car (erl-val-cons->lst
+               (omap::lookup 'CPids
+                 (erl-state->bind (proc->s (omap::lookup p net))))))
+        (cdr (erl-val-cons->lst
+                (omap::lookup 'CPids
+                  (erl-state->bind (proc->s (omap::lookup p net)))))))))
+  :disable (inv equal-of-kont-function-return)
+  :use ((:instance inv-receive-node-facts)
+        (:instance wtree-nodes-are-leaf-or-root (pid p))
+        (:instance check-children-of-wtree-node (pid p))
+        (:instance no-duplicatesp-of-check-children
+          (pid p) (children
+                    (erl-val-cons->lst
+                        (omap::lookup 'ChildPids
+                                (wtree-bind (omap::lookup p net))))))
+        (:instance no-duplicatesp-of-rev
+          (l (erl-val-cons->lst
+               (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net))))))
+        (:instance no-duplicatesp-of-rev
+          (l (erl-val-cons->lst
+               (omap::lookup 'CPids
+                 (erl-state->bind (proc->s (omap::lookup p net))))))))
+  :prep-lemmas
+    ((defrule no-duplicatesp-of-prefix
+      (implies (and (prefixp x y) (no-duplicatesp-equal y))
+                (no-duplicatesp-equal x))
+      :enable prefixp
+      :prep-lemmas
+        ((defrule member-of-prefix
+          (implies (and (prefixp x y) (member-equal e x)) (member-equal e y))
+          :enable prefixp))))))
+
+; same, but observed by other nodes
+; TODO: rename this to macth the other two "other node" theorems.
+(local (defrule inv-of-receive-run-match-of-other-node
+  (implies
+    (and
+      (network-p net) (wtree-p net)
+      (inv pid net) (inv p net)
+      (not (equal pid p))
+      (omap::assoc p net) (omap::assoc pid net) 
+      (inv
+        (car (erl-val-cons->lst
+                (omap::lookup 'CPids
+                   (erl-state->bind (proc->s (omap::lookup p net))))))
+        net)
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (inbox-contains
+        (proc->inbox-new (omap::lookup p net))
+        (car (erl-val-cons->lst
+               (omap::lookup 'CPids
+                 (erl-state->bind
+                     (proc->s (omap::lookup p net)))))))
+      (cdr
+        (erl-val-cons->lst
+          (omap::lookup 'CPids
+            (erl-state->bind (proc->s (omap::lookup p net))))))
+      (network-p (omap::update p (proc-receive (omap::lookup p net)) net)))
+    (inv pid (omap::update p (proc-receive (omap::lookup p net)) net)))
+  :do-not '(preprocess)
+  :enable (sent-message-wf-of-update-of-receive-match
+            parent-still-waiting-p-of-update-of-receive->receive)
+  :disable
+    (assoc-of-runnable? omap::assoc-when-assoc-tail omap::tail-when-emptyp
+     omap::assoc-when-assoc-of-tail-cheap root-when-assoc-of-tail-is-root
+     runnable-of-tail leaf-when-assoc-of-tail-is-leaf omap::lookup-when-emptyp
+     omap::assoc-when-emptyp assoc-of-non-root-segment leaf-equiv-when-bindings-equiv
+     root-equiv-when-bindings-equiv wtree0-nodes-are-leaf-or-root
+     wtree0-nodes-are-leaf-or-root-rev wtree0-of-zero reduce-receive-klst-p
+     len inv equal-of-kont-function-return omap::assoc-of-update
+     equal-of-kont-function-return sent-message-wf parent-still-waiting-p
+     parent-of-root parent-of-leaf index-of-root index-of-leaf)
+  :use
+    ((:instance inv-of-update-of-running-node
+        (proc (proc-receive (omap::lookup p net))))
+     (:instance proc-receive-match-more-props)
+     (:instance inv-node-parent-props)
+     (:instance inv-receive-node-facts)
+     (:instance chd-not-in-rest-of-cpids)
+     (:instance received-messages-wf-fields
+       (pid (car
+              (erl-val-cons->lst
+                (omap::lookup 'CPids
+                  (erl-state->bind
+                    (proc->s (omap::lookup p net)))))))
+       (inbox (proc->inbox-new (omap::lookup p net)))
+       (cpids (erl-val-cons->lst
+                (omap::lookup 'CPids
+                   (erl-state->bind
+                     (proc->s (omap::lookup p net)))))))
+      (:instance wtree-nodes-are-leaf-or-root (pid p))
+      (:instance wtree-nodes-are-leaf-or-root (pid pid)))))
+
+; Combining all the "other node" cases for running a node with receive state. 
+(local (defrule inv-of-receive-run-others
+  (implies
+    (and
+      (network-p net) (wtree-p net)
+      (inv pid net) (inv p net)
+      (not (equal pid p))
+      (omap::assoc p net) (omap::assoc pid net)
+      (inv
+        (car (erl-val-cons->lst
+              (omap::lookup 'CPids
+                (erl-state->bind (proc->s (omap::lookup p net))))))
+        net)
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (network-p (omap::update p (proc-receive (omap::lookup p net)) net)))
+    (inv pid (omap::update p (proc-receive (omap::lookup p net)) net)))
+  :disable (inv omap::assoc-of-update equal-of-kont-function-return)
+  :use
+    ((:instance inv-of-receive-run-other-blocked)
+     (:instance inv-of-receive-run-match-of-other-node)
+     (:instance inv-of-receive-run-other-terminate))))
+
+; Same as above, but for node in question (p).
+(local (defrule inv-of-update-of-receive-run
+  (implies
+    (and
+      (network-p net) (inv-all net)
+      (pid-p p) (pid-p pid) (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (network-p (omap::update p
+                   (proc-receive (omap::lookup p net)) net))
+      (omap::assoc pid
+        (omap::update p (proc-receive (omap::lookup p net)) net)))
+    (inv pid (omap::update p (proc-receive (omap::lookup p net)) net)))
+  :cases ((equal pid p))
+  :disable
+    (inv omap::assoc-of-update
+     equal-of-kont-function-return omap::lookup-of-update)
+  :use
+    ((:instance inv-of-receive-self)
+     (:instance inv-of-receive-run-others)
+     (:instance inv-of-inv-all (pid p))
+     (:instance inv-of-inv-all (pid pid))
+     (:instance inv-receive-node-facts)
+     (:instance wtree-p-of-inv (pid p))
+     (:instance wtree-nodes-are-leaf-or-root (pid p))
+     (:instance inv-of-inv-all
+        (pid (car (erl-val-cons->lst
+                    (omap::lookup 'CPids
+                      (erl-state->bind
+                        (proc->s (omap::lookup p net)))))))))))
+
+; Value of idle -> receive
+(local (defruled first-run-with-children-val
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net) (pid-p p)
+      (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :idle)
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))
+    (and
+      (equal
+        (erl-val-kind
+          (erl-state->in
+            (apply-k
+              (proc->s (omap::lookup p net))
+              (proc->klst (omap::lookup p net)))))
+        :receive)
+      (erl-klst-p
+        (erl-val-receive->klst
+          (erl-state->in
+            (apply-k
+              (proc->s (omap::lookup p net))
+              (proc->klst (omap::lookup p net))))))))
+  :cases ((leaf-p (omap::lookup p net)))
+  :disable (equal-of-kont-function-return wtree-bind)
+  :use
+    ((:instance inv-idle-node-facts)
+     (:instance apply-k-of-idle-with-children
+      (s (proc->s (omap::lookup p net)))
+      (klst (proc->klst (omap::lookup p net)))
+      (self p)
+      (parent (omap::lookup 'Parent (wtree-bind (omap::lookup p net))))
+      (children (erl-val-cons->lst
+                  (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))
+      (index (erl-val-integer->val
+              (omap::lookup 'Index (wtree-bind (omap::lookup p net))))))
+     (:instance wtree-nodes-are-leaf-or-root (pid p))
+     (:instance wtree-node-fields (p (omap::lookup p net))))))
+
+; Bindings of idle -> receive
+(local (defruled first-run-with-children-bind
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net)
+      (pid-p p) (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :idle)
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))
+    (and
+      (equal
+        (erl-state->self
+          (proc->s
+            (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net))))))))
+        p)
+      (equal
+        (omap::lookup 'Index
+          (wtree-bind
+            (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net))))))))
+        (omap::lookup 'Index (wtree-bind (omap::lookup p net))))
+      (equal
+        (omap::lookup 'Parent
+          (wtree-bind
+            (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net))))))))
+        (omap::lookup 'Parent (wtree-bind (omap::lookup p net))))
+      (equal
+        (omap::lookup 'ChildPids
+          (wtree-bind
+            (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net))))))))
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net))))
+      (iff
+        (omap::assoc 'Index
+          (wtree-bind
+            (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net))))))))
+          (omap::assoc 'Index (wtree-bind (omap::lookup p net))))
+      (iff
+        (omap::assoc 'Parent
+          (wtree-bind
+            (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net))))))))
+          (omap::assoc 'Parent (wtree-bind (omap::lookup p net))))
+      (iff
+        (omap::assoc 'ChildPids
+          (wtree-bind
+            (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net))))))))
+          (omap::assoc 'ChildPids (wtree-bind (omap::lookup p net))))
+      (equal
+        (proc->ps
+          (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net)))))))
+        :receive)
+      (equal
+        (proc->inbox-new
+          (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net)))))))
+        (proc->inbox-new (omap::lookup p net)))
+      (equal
+        (proc->inbox-tried
+          (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net)))))))
+        (proc->inbox-tried (omap::lookup p net)))
+      (omap::assoc 'CPids
+        (erl-state->bind
+          (proc->s
+             (change-proc
+              (omap::lookup p net)
+              :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net)))))))))
+      (equal
+        (erl-val-kind
+          (omap::lookup 'CPids
+            (erl-state->bind
+              (proc->s
+                (change-proc
+                  (omap::lookup p net)
+                  :s (update-erl-state->in
+                      (apply-k
+                        (proc->s (omap::lookup p net))
+                        (proc->klst (omap::lookup p net)))
+                      (make-erl-val-none))
+                  :ps :receive
+                  :klst (erl-val-receive->klst
+                          (erl-state->in
+                            (apply-k
+                              (proc->s (omap::lookup p net))
+                              (proc->klst (omap::lookup p net))))))))))
+                :cons)
+      (equal
+        (erl-val-cons->lst
+          (omap::lookup 'CPids
+            (erl-state->bind
+              (proc->s
+                (change-proc
+                  (omap::lookup p net)
+                  :s (update-erl-state->in
+                      (apply-k
+                        (proc->s (omap::lookup p net))
+                        (proc->klst (omap::lookup p net)))
+                      (make-erl-val-none))
+                  :ps :receive
+                  :klst (erl-val-receive->klst
+                          (erl-state->in
+                            (apply-k
+                              (proc->s (omap::lookup p net))
+                              (proc->klst (omap::lookup p net))))))))))
+        (erl-val-cons->lst
+          (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))))
+  :disable
+    (equal-of-kont-function-return wtree-bind  parent-of-root
+     wtree-bind-when-no-function-return index-of-root parent-of-leaf
+     wtree-bind0-when-no-function-return index-of-leaf)
+  :use
+    ((:instance inv-idle-node-facts)
+     (:instance apply-k-of-idle-with-children
+       (s (proc->s (omap::lookup p net)))
+       (klst (proc->klst (omap::lookup p net)))
+       (self p)
+       (parent (omap::lookup 'Parent (wtree-bind (omap::lookup p net))))
+       (children (erl-val-cons->lst
+                   (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))
+       (index (erl-val-integer->val
+                (omap::lookup 'Index (wtree-bind (omap::lookup p net))))))
+     (:instance wtree-nodes-are-leaf-or-root (pid p))
+     (:instance wtree-node-fields (p (omap::lookup p net))))))
+
+; Leaf or Root of idle -> receive
+(local (defruled first-run-with-children-leaf-or-root
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net)
+      (pid-p p) (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :idle)
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))
+    (and
+      (equal
+        (leaf-p
+          (change-proc
+            (omap::lookup p net)
+              :s (update-erl-state->in
+                    (apply-k
+                      (proc->s (omap::lookup p net))
+                      (proc->klst (omap::lookup p net)))
+                    (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net)))))))
+        (leaf-p (omap::lookup p net)))
+      (equal
+        (root-p
+          (change-proc
+            (omap::lookup p net)
+              :s (update-erl-state->in
+                    (apply-k
+                      (proc->s (omap::lookup p net))
+                      (proc->klst (omap::lookup p net)))
+                    (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net)))))))
+        (root-p (omap::lookup p net)))))
+  :use
+    ((:instance first-run-with-children-bind)
+     (:instance leaf-root-p-when-wtree-bindings-equal
+      (p1 (change-proc  (omap::lookup p net)
+            :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+            :ps :receive
+            :klst (erl-val-receive->klst
+                    (erl-state->in
+                      (apply-k
+                        (proc->s (omap::lookup p net))
+                        (proc->klst (omap::lookup p net)))))))
+      (p2 (omap::lookup p net))))))
+
+; idle -> terminated
+(local (defruled first-run-without-children-props
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv p net)
+      (pid-p p) (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :idle)
+      (not (erl-val-cons->lst
+            (omap::lookup 'ChildPids
+              (wtree-bind (omap::lookup p net))))))
+    (and
+      (not (equal
+              (erl-val-kind
+                (erl-state->in
+                  (apply-k (proc->s (omap::lookup p net))
+                            (proc->klst (omap::lookup p net)))))
+              :receive))
+      (equal
+        (erl-state->self
+          (proc->s
+            (change-proc (omap::lookup p net)
+              :s (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+              :ps :terminated
+              :klst nil)))
+        p)
+      (equal
+        (omap::lookup 'Index
+           (wtree-bind
+             (change-proc (omap::lookup p net)
+               :s (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+               :ps :terminated
+               :klst nil)))
+        (omap::lookup 'Index (wtree-bind (omap::lookup p net))))
+      (equal
+        (omap::lookup 'Parent
+           (wtree-bind
+             (change-proc (omap::lookup p net)
+               :s (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+               :ps :terminated
+               :klst nil)))
+        (omap::lookup 'Parent (wtree-bind (omap::lookup p net))))
+      (equal
+        (omap::lookup 'ChildPids
+           (wtree-bind
+             (change-proc (omap::lookup p net)
+               :s (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+               :ps :terminated
+               :klst nil)))
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net))))
+      (iff
+        (omap::assoc 'Index
+          (wtree-bind 
+            (change-proc (omap::lookup p net)
+              :s (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+              :ps :terminated
+              :klst nil)))
+        (omap::assoc 'Index (wtree-bind (omap::lookup p net))))
+      (iff
+        (omap::assoc 'Parent
+          (wtree-bind 
+            (change-proc (omap::lookup p net)
+              :s (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+              :ps :terminated
+              :klst nil)))
+        (omap::assoc 'Parent (wtree-bind (omap::lookup p net))))
+      (iff
+        (omap::assoc 'ChildPids
+          (wtree-bind 
+            (change-proc (omap::lookup p net)
+              :s (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+              :ps :terminated
+              :klst nil)))
+        (omap::assoc 'ChildPids (wtree-bind (omap::lookup p net))))
+      (equal
+        (leaf-p
+          (change-proc (omap::lookup p net)
+            :s (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+            :ps :terminated
+            :klst nil))
+        (leaf-p (omap::lookup p net)))
+      (equal
+        (root-p
+          (change-proc (omap::lookup p net)
+            :s (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+            :ps :terminated
+            :klst nil))
+        (root-p (omap::lookup p net)))
+      (equal
+        (proc->ps
+          (change-proc (omap::lookup p net)
+            :s (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+            :ps :terminated
+            :klst nil))
+        :terminated)))
+  :disable equal-of-kont-function-return
+  :use
+    ((:instance inv-idle-node-facts)
+     (:instance apply-k-of-idle-no-children
+        (s (proc->s (omap::lookup p net)))
+        (klst (proc->klst (omap::lookup p net)))
+        (self p)
+        (parent (omap::lookup 'Parent (wtree-bind (omap::lookup p net))))
+        (index (erl-val-integer->val
+                (omap::lookup 'Index (wtree-bind (omap::lookup p net))))))
+     (:instance wtree-nodes-are-leaf-or-root (pid p))
+     (:instance leaf-root-p-when-wtree-bindings-equal
+       (p1 (change-proc (omap::lookup p net)
+              :s (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+              :ps :terminated
+              :klst nil))
+       (p2 (omap::lookup p net))))))
+
+; idle -> receive, observed by another node
+(local (defrule inv-of-first-run-other-with-children
+  (implies
+    (and
+      (network-p net) (wtree-p net)
+      (inv pid net) (inv p net)
+      (pid-p p) (pid-p pid) (not (equal pid p))
+      (omap::assoc p net) (omap::assoc pid net)
+      (equal (proc->ps (omap::lookup p net)) :idle)
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net))))
+      (network-p
+        (omap::update p
+          (change-proc
+            (omap::lookup p net)
+            :s (update-erl-state->in
+                (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+                (make-erl-val-none))
+            :ps :receive
+            :klst (erl-val-receive->klst
+                    (erl-state->in
+                      (apply-k
+                        (proc->s (omap::lookup p net))
+                        (proc->klst (omap::lookup p net))))))
+          net)))
+    (inv pid
+         (omap::update p
+          (change-proc (omap::lookup p net)
+            :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+            :ps :receive
+            :klst (erl-val-receive->klst
+                    (erl-state->in
+                      (apply-k
+                        (proc->s (omap::lookup p net))
+                        (proc->klst (omap::lookup p net))))))
+          net)))
+  :enable (sent-message-wf-of-update-of-first-run-with-children)
+  :do-not '(preprocess)
+  :disable
+    (inv omap::assoc-of-update sent-message-wf
+     parent-still-waiting-p equal-of-kont-function-return
+     inv-of-update-of-running-node wtree-nodes-are-leaf-or-root
+     parent-of-root parent-of-leaf index-of-root index-of-leaf)
+  :use
+    ((:instance inv-of-update-of-running-node
+        (proc
+          (change-proc (omap::lookup p net)
+            :s (update-erl-state->in
+                  (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+                  (make-erl-val-none))
+            :ps :receive
+            :klst (erl-val-receive->klst
+                    (erl-state->in
+                      (apply-k
+                        (proc->s (omap::lookup p net))
+                                  (proc->klst (omap::lookup p net))))))))
+      (:instance first-run-with-children-bind)
+      (:instance first-run-with-children-leaf-or-root)
+      (:instance inv-node-parent-props)
+      (:instance childpids-of-parent-of-node)
+      (:instance wtree-nodes-are-leaf-or-root (pid p))
+      (:instance wtree-nodes-are-leaf-or-root (pid pid)))))
+
+; idle -> terminated, observed by another node.
+(local (defrule inv-of-first-run-other-without-children
+  (implies
+    (and
+      (network-p net) (wtree-p net)
+      (inv pid net) (inv p net)
+      (pid-p p) (pid-p pid) (not (equal pid p))
+      (omap::assoc p net) (omap::assoc pid net)
+      (equal (proc->ps (omap::lookup p net)) :idle)
+      (not
+        (erl-val-cons->lst
+          (omap::lookup 'ChildPids
+            (wtree-bind (omap::lookup p net)))))
+      (network-p
+        (omap::update p
+          (change-proc
+            (omap::lookup p net)
+            :s (apply-k
+                (proc->s (omap::lookup p net))
+                (proc->klst (omap::lookup p net)))
+            :ps :terminated
+            :klst nil)
+          net)))
+    (inv pid
+         (omap::update p
+            (change-proc (omap::lookup p net)
+              :s (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+              :ps :terminated
+              :klst nil)
+            net)))
+  :disable
+    (inv omap::assoc-of-update parent-of-root index-of-root
+    equal-of-kont-function-return parent-of-leaf index-of-leaf)
+  :use
+    ((:instance inv-of-update-of-running-node
+      (proc (change-proc (omap::lookup p net)
+              :s (apply-k
+                    (proc->s (omap::lookup p net))
+                    (proc->klst (omap::lookup p net)))
+              :ps :terminated
+              :klst nil)))
+      (:instance first-run-without-children-props)
+      (:instance inv-node-parent-props)
+      (:instance childpids-of-parent-of-node)
+      (:instance wtree-nodes-are-leaf-or-root (pid p))
+      (:instance wtree-nodes-are-leaf-or-root (pid pid)))))
+
+; Now idle -> receive for the node in question.
+(local (defrule inv-of-update-of-first-run-with-children
+  (implies
+    (and
+      (network-p net) (inv-all net)
+      (pid-p p) (pid-p pid) (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :idle)
+      (erl-val-cons->lst
+        (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net))))
+      (network-p
+        (omap::update p
+          (change-proc
+            (omap::lookup p net)
+            :s (update-erl-state->in
+                (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+                (make-erl-val-none))
+            :ps :receive
+            :klst (erl-val-receive->klst
+                    (erl-state->in
+                      (apply-k
+                        (proc->s (omap::lookup p net))
+                        (proc->klst (omap::lookup p net))))))
+          net))
+      (omap::assoc pid
+        (omap::update p
+          (change-proc
+            (omap::lookup p net)
+            :s (update-erl-state->in
+                (apply-k
+                  (proc->s (omap::lookup p net))
+                  (proc->klst (omap::lookup p net)))
+                (make-erl-val-none))
+            :ps :receive
+            :klst (erl-val-receive->klst
+                    (erl-state->in
+                      (apply-k
+                        (proc->s (omap::lookup p net))
+                        (proc->klst (omap::lookup p net))))))
+          net)))
+    (inv pid
+         (omap::update p
+            (change-proc (omap::lookup p net)
+              :s (update-erl-state->in
+                    (apply-k
+                      (proc->s (omap::lookup p net))
+                      (proc->klst (omap::lookup p net)))
+                    (make-erl-val-none))
+              :ps :receive
+              :klst (erl-val-receive->klst
+                      (erl-state->in
+                        (apply-k
+                          (proc->s (omap::lookup p net))
+                          (proc->klst (omap::lookup p net))))))
+            net)))
+  :use
+    ((:instance inv-of-first-run-with-children (p p))
+      (:instance inv-of-first-run-other-with-children)
+      (:instance first-run-with-children-val)
+      (:instance first-run-with-children-bind)
+      (:instance first-run-with-children-leaf-or-root)
+      (:instance inv-of-inv-all (pid p))
+      (:instance inv-of-inv-all (pid pid))
+      (:instance wtree-p-of-inv (pid p)))))
+
+; idle -> terminated, for the node in question
+(local (defrule inv-of-update-of-first-run-without-children
+  (implies
+    (and
+      (network-p net) (inv-all net)
+      (pid-p p) (pid-p pid) (omap::assoc p net)
+      (equal (proc->ps (omap::lookup p net)) :idle)
+      (not (erl-val-cons->lst
+             (omap::lookup 'ChildPids
+               (wtree-bind (omap::lookup p net)))))
+      (network-p
+        (omap::update p
+          (change-proc
+            (omap::lookup p net)
+            :s (apply-k
+                (proc->s (omap::lookup p net))
+                (proc->klst (omap::lookup p net)))
+            :ps :terminated
+            :klst nil)
+          net))
+      (omap::assoc pid
+        (omap::update p
+          (change-proc
+            (omap::lookup p net)
+            :s (apply-k
+                (proc->s (omap::lookup p net))
+                (proc->klst (omap::lookup p net)))
+            :ps :terminated
+            :klst nil)
+          net)))
+    (inv pid
+        (omap::update p
+          (change-proc (omap::lookup p net)
+                      :s (apply-k
+                            (proc->s (omap::lookup p net))
+                            (proc->klst (omap::lookup p net)))
+                      :ps :terminated
+                      :klst nil)
+          net)))
+  :use
+    ((:instance inv-of-first-run-without-children (p p))
+      (:instance inv-of-first-run-other-without-children)
+      (:instance inv-of-inv-all (pid p))
+      (:instance inv-of-inv-all (pid pid))
+      (:instance wtree-p-of-inv (pid p)))))
 
 
-; HERE ==================================================================================
+; Finally:
+(defrule inv-of-erl-step-of-run
+  (implies
+    (and
+      (network-p net) (inv-all net) (not (terminated? net))
+      (equal (scheduling-kind (schedule net)) :run)
+      (omap::assoc pid (erl-step net)))
+    (inv pid (erl-step net)))
+  :enable (erl-step runnable? proc-runnable? proc->pid)
+  :use
+    ((:instance scheduler-correct-when-run)
+      (:instance wtree-p-of-inv (pid (scheduling-run->p (schedule net))))
+      (:instance first-run-with-children-bind
+        (p (scheduling-run->p (schedule net))))
+      (:instance first-run-with-children-val
+        (p (scheduling-run->p (schedule net))))
+      (:instance first-run-with-children-leaf-or-root
+        (p (scheduling-run->p (schedule net))))
+      (:instance first-run-without-children-props
+        (p (scheduling-run->p (schedule net))))
+      (:instance inv-of-update-of-first-run-with-children
+        (p (scheduling-run->p (schedule net))))))
