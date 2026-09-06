@@ -324,7 +324,9 @@
         (:instance reduce-receive-klst-p-new-call-stack
           (klst (proc->klst p))
           (b (omap::update 'RightTotal
-               (inbox->value (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
+               (inbox->value
+                 (proc->inbox-new p)
+                 (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
                (erl-state->bind (proc->s p))))))
   :enable (wtree-bind proc->outbox omap::from-lists omap::lookup-of-update)
   :disable
@@ -398,7 +400,11 @@
                                     (proc->inbox-new p)
                                     (omap::lookup 'ChildHd
                                       (erl-state->bind (proc->s p))))))))
-                    (omap::update 'RightTotal (inbox->value (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p)))) (erl-state->bind (proc->s p))))
+                    (omap::update 'RightTotal
+                      (inbox->value (proc->inbox-new p)
+                        (omap::lookup 'ChildHd
+                          (erl-state->bind (proc->s p))))
+                      (erl-state->bind (proc->s p))))
                   (if (pid-p (omap::lookup 'ParentPid
                                (erl-state->bind (proc->s p))))
                       (omap::update (omap::lookup 'ParentPid
@@ -428,9 +434,15 @@
       :expand ((:free (x) (inbox-contains nil x))
                (:free (x) (inbox-without nil x))
                (:free (x) (inbox->value nil x))
-               (inbox->value (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
-               (inbox-contains (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
-               (inbox-without (proc->inbox-new p) (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))))
+               (inbox->value
+                 (proc->inbox-new p)
+                 (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
+               (inbox-contains
+                 (proc->inbox-new p)
+                 (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))
+               (inbox-without
+                 (proc->inbox-new p)
+                 (omap::lookup 'ChildHd (erl-state->bind (proc->s p))))))
      ("Subgoal *1/1"
       :use ((:instance apply-k-of-reduce-receive-klst-when-match-last
               (s (proc->s p))
