@@ -26,7 +26,7 @@
 ;       ChildHd ! {self(), reduce_down, GrandTotal},
 ;       GrandTotal
 ;   end.
-(define sum-reduce-w ()
+(local (define sum-reduce-w1 ()
   :returns (w world-p)
   '((local
       (attrs (module . local) (export) (import))
@@ -95,10 +95,10 @@
                                    (:cons (:atom reduce_down)
                                           (:cons (:var GrandTotal)
                                                  (:nil))))))
-                  (:var GrandTotal))))))))))))
+                  (:var GrandTotal)))))))))))))
 
 ; Create a process with given id, parent id, child ids, and value.
-(define make-reduce-proc ((self pid-p) (parent erl-val-p) (children erl-vlst-p) (value natp))
+(local (define make-reduce-proc ((self pid-p) (parent erl-val-p) (children erl-vlst-p) (value natp))
   :guard-hints (("Goal" :in-theory (enable omap::from-lists)))
   (b* ((self (pid-fix self))
        (parent (erl-val-fix parent))
@@ -112,7 +112,7 @@
               (list 'ChildPids 'Parent 'Value)
               (list (make-erl-val-cons :lst children) parent (make-erl-val-integer :val value)))
             :self self
-            :world (sum-reduce-w))
+            :world (sum-reduce-w1))
       :klst
         (list
           (make-erl-k
@@ -134,17 +134,17 @@
                                       :tl (make-node-nil))))
                         :tl (make-node-cons
                               :hd (make-node-var :id 'Value)
-                              :tl (make-node-nil))))))))))
+                              :tl (make-node-nil)))))))))))
 
 ; example with 4 processes
-(defconst *net1*
+(local (defconst *net1*
   (omap::from-lists
     '((:pid 1) (:pid 2) (:pid 3) (:pid 4))
      (list
       (make-reduce-proc '(:pid 1) '(:atom none) (list '(:pid 2) '(:pid 3)) 1)
       (make-reduce-proc '(:pid 2) '(:pid 1) nil 2)
       (make-reduce-proc '(:pid 3) '(:pid 1) (list '(:pid 4)) 3)
-      (make-reduce-proc '(:pid 4) '(:pid 3) nil 4))))
+      (make-reduce-proc '(:pid 4) '(:pid 3) nil 4)))))
 
 ; Execute the network and print the results.
 #| 
@@ -164,9 +164,9 @@
 ; and that a worker tree has been created in Erlang, corresponding to the
 ; result of the following lisp function.
 
-(include-book "arithmetic-3/top" :dir :system)
+(local (include-book "arithmetic-3/top" :dir :system))
 
-(define create-wtree ((n natp) (par erl-val-p) (children erl-vlst-p) (self natp) (vlst nat-listp))
+(local (define create-wtree ((n natp) (par erl-val-p) (children erl-vlst-p) (self natp) (vlst nat-listp))
   ;returns (net network-p)
   :verify-guards nil
   :measure (nfix n)
@@ -197,11 +197,11 @@
           self
           vlst))
        ((unless (omap::compatiblep parent-net child-net)) nil))
-      (omap::update* parent-net child-net)))
+      (omap::update* parent-net child-net))))
 
 ; Reduce network with 10 processes.
-(defconst *net2* (create-wtree 10 '(:atom none) nil 0 (list 7 16 2 19 11 6 16 8 3 12)))
-
+(local (defconst *net2* (create-wtree 10 '(:atom none) nil 0 (list 7 16 2 19 11 6 16 8 3 12)))
+)
 ; helper to print the leaf values
 (local (define print-omap-values ((n network-p))
   :measure (acl2-count (network-fix n))

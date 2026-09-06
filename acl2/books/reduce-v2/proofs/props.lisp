@@ -14,7 +14,7 @@
 
 ; Even now, some of these can easily be merged or deleted completely.  
 
-(defruled inv-idle-node-facts
+(local (defruled inv-idle-node-props
   (implies
     (and
       (network-p net) (pid-p p) (inv p net)
@@ -48,11 +48,11 @@
         (erl-val-cons->lst
           (omap::lookup 'ChildPids(wtree-bind (omap::lookup p net))))
         net)))
-  :enable inv)
+  :enable inv))
 
 ; facts about inv of a receive node.
 ; This way I don't need to expand all cases of inv
-(defruled inv-receive-node-facts
+(defruled inv-receive-node-props
   (implies
     (and
       (network-p net) (inv p net) (pid-p p)
@@ -194,7 +194,7 @@
 
 ; facts about inv of a terminated node.
 ; This way I don't need to expand all cases of inv
-(defruled inv-terminated-node-facts
+(local (defruled inv-terminated-node-props
   (implies
     (and
       (network-p net) (pid-p p) (inv p net)
@@ -231,11 +231,11 @@
                       (erl-val-integer->val
                         (omap::lookup 'Index
                           (wtree-bind (omap::lookup (rightmost-child p net) net))))))))))
-  :enable inv)
+  :enable inv))
 
 ; TODO: another huge lemma, but least it is fast.
 ; This is the part that reason about sum-range.
-(defruled consumed-message-facts
+(defruled consumed-message-props
   (implies
     (and
       (network-p net) (wtree-p net) (inv p net)
@@ -277,7 +277,6 @@
                          (omap::lookup 'CPids
                            (erl-state->bind (proc->s (omap::lookup p net))))))
                  net)))))
-
       ; the message from ChildHd is that child's total, and adding it to
       ; LeftTotal covers every index below the next child
       (equal (erl-val-kind
@@ -308,10 +307,10 @@
                                        (proc->s (omap::lookup p net))))))
                            net)))))))))
   :use
-    ((:instance inv-receive-node-facts)
+    ((:instance inv-receive-node-props)
      (:instance wtree-nodes-are-leaf-or-root (pid p))
      (:instance check-indices-of-wtree-node (pid p))
-     (:instance inv-terminated-node-facts
+     (:instance inv-terminated-node-props
       (p (car (erl-val-cons->lst
                 (omap::lookup 'CPids
                   (erl-state->bind (proc->s (omap::lookup p net))))))))
@@ -370,7 +369,7 @@
 ; What proc recieve does for receive->blocked node.
 ; Thanks to this, I get a preformance improvement later,
 ; because I do not have to expand inv.
-(defruled proc-receive-blocked-facts
+(defruled proc-receive-blocked-props
   (implies
     (and
       (network-p net) (wtree-p net) (inv p net)
@@ -573,7 +572,7 @@
     (:type-prescription omap::lookup-when-emptyp)
     consp-of-cdr-of-erl-vlst pid-p-when-member-equal-of-pid-lst-p)
   :use
-    ((:instance inv-receive-node-facts)
+    ((:instance inv-receive-node-props)
      (:instance proc-receive-when-no-match
        (p (omap::lookup p net))
        (rbind (wtree-bind (omap::lookup p net))))
@@ -592,7 +591,7 @@
       (p2 (omap::lookup p net)))))
 
 ; facts about proc-receive with a matching message
-(defruled proc-receive-match-facts
+(defruled proc-receive-match-props
   (implies
     (and
       (network-p net) (wtree-p net) (pid-p p) (omap::assoc p net)
@@ -765,14 +764,14 @@
   :enable (proc->outbox proc->pid)
   :disable (equal-of-kont-function-return len)
   :use
-    ((:instance consumed-message-facts)
+    ((:instance consumed-message-props)
      (:instance prefixp-of-rev-of-cdr
        (l (erl-val-cons->lst
             (omap::lookup 'CPids
               (erl-state->bind (proc->s (omap::lookup p net))))))
        (x (rev (erl-val-cons->lst
                  (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))))
-     (:instance inv-receive-node-facts)
+     (:instance inv-receive-node-props)
      (:instance wtree-nodes-are-leaf-or-root (pid p))
      (:instance received-messages-wf-of-inbox-without-car
        (inbox (proc->inbox-new (omap::lookup p net)))
@@ -797,7 +796,7 @@
 
 
 ; What a terminated node satisfies if inv holds
-(defruled termianted-node-facts
+(defruled terminated-node-props
   (implies
     (and
       (network-p net) (pid-p p) (inv p net) (omap::assoc p net)
@@ -822,7 +821,7 @@
                  (omap::lookup 'Index
                    (wtree-bind
                      (omap::lookup (rightmost-child p net) net))))))))
-  :use inv-terminated-node-facts)
+  :use inv-terminated-node-props)
 
 
 ; sum contained by a terminated node
@@ -871,8 +870,8 @@
                  (omap::lookup 'Index
                    (wtree-bind
                      (omap::lookup (rightmost-child p net) net))))))))
-  :use ((:instance inv-receive-node-facts)
-        (:instance termianted-node-facts
+  :use ((:instance inv-receive-node-props)
+        (:instance terminated-node-props
           (p (car (erl-val-cons->lst (omap::lookup 'CPids
                     (erl-state->bind (proc->s (omap::lookup p net))))))))
         (:instance received-messages-wf-fields
@@ -898,7 +897,7 @@
                (car (erl-val-cons->lst (omap::lookup 'CPids
                       (erl-state->bind (proc->s (omap::lookup p net)))))) net))
       (rightmost-child p net)))
-  :use ((:instance inv-receive-node-facts)
+  :use ((:instance inv-receive-node-props)
         (:instance wtree-nodes-are-leaf-or-root (pid p))
         (:instance rightmost-child-of-parent-is-rightmost-of-last-child (pid p))
         (:instance rightmost-child-of-wtree-node (pid p)))
@@ -961,7 +960,7 @@
   :use ((:instance wtree-nodes-are-leaf-or-root (pid p))
         (:instance rightmost-child-of-last-child)
         (:instance terminated-node-sum)
-        (:instance inv-receive-node-facts)
+        (:instance inv-receive-node-props)
         (:instance received-messages-wf-of-inbox-without-car
           (inbox (proc->inbox-new (omap::lookup p net)))
           (cpids (erl-val-cons->lst (omap::lookup 'CPids
@@ -1018,7 +1017,7 @@
   :use ((:instance proc-receive-of-match-without-more-children
           (p (omap::lookup p net))
           (rbind (wtree-bind (omap::lookup p net))))
-        (:instance inv-receive-node-facts)
+        (:instance inv-receive-node-props)
         (:instance wtree-nodes-are-leaf-or-root (pid p))
         (:instance leaf-root-p-when-wtree-bindings-equal
           (p1 (proc-receive (omap::lookup p net))) (p2 (omap::lookup p net)))))
@@ -1065,10 +1064,10 @@
       (equal (root-p (proc-receive (omap::lookup p net)))
              (root-p (omap::lookup p net)))))
   :use
-    ((:instance proc-receive-match-facts)
+    ((:instance proc-receive-match-props)
      (:instance proc-receive-of-match-with-more-children
        (p (omap::lookup p net)) (rbind (wtree-bind (omap::lookup p net))))
-     (:instance inv-receive-node-facts)
+     (:instance inv-receive-node-props)
      (:instance wtree-nodes-are-leaf-or-root (pid p))
      (:instance leaf-root-p-when-wtree-bindings-equal
                  (p1 (proc-receive (omap::lookup p net)))
@@ -1120,7 +1119,7 @@
      wtree0-nodes-are-leaf-or-root-rev wtree0-of-zero reduce-receive-klst-p
      len inv equal-of-kont-function-return)
   :use
-    ((:instance proc-receive-match-facts)
+    ((:instance proc-receive-match-props)
      (:instance normalize-reduce-receive-klst-p
       (p (omap::lookup p net))
       (rbind (omap::from-lists
@@ -1138,7 +1137,7 @@
       (:instance proc-receive-of-match-with-more-children
                  (p (omap::lookup p net))
                  (rbind (wtree-bind (omap::lookup p net))))
-      (:instance inv-receive-node-facts)
+      (:instance inv-receive-node-props)
       (:instance wtree-nodes-are-leaf-or-root (pid p))
       (:instance leaf-root-p-when-wtree-bindings-equal
                  (p1 (proc-receive (omap::lookup p net)))
@@ -1193,7 +1192,7 @@
      wtree0-nodes-are-leaf-or-root-rev wtree0-of-zero reduce-receive-klst-p
      len inv equal-of-kont-function-return)
   :use
-    ((:instance proc-receive-match-facts)
+    ((:instance proc-receive-match-props)
      (:instance normalize-reduce-receive-klst-p
       (p (omap::lookup p net))
       (rbind (omap::from-lists
@@ -1211,13 +1210,14 @@
       (:instance proc-receive-of-match-with-more-children
                  (p (omap::lookup p net))
                  (rbind (wtree-bind (omap::lookup p net))))
-      (:instance inv-receive-node-facts)
+      (:instance inv-receive-node-props)
       (:instance wtree-nodes-are-leaf-or-root (pid p))
       (:instance leaf-root-p-when-wtree-bindings-equal
                  (p1 (proc-receive (omap::lookup p net)))
                  (p2 (omap::lookup p net)))))
 
-; BOZO: I realize there is a lot of repetition. Many of these should be merged.
+; TODO: I thought of removing this after proving the three helpers aboove.
+; However, instances of those do not help with perfomance despite what I expect.
 (defruled proc-receive-match-more-props
   (implies
     (and
@@ -1289,13 +1289,13 @@
                         (erl-state->bind (proc->s (omap::lookup p net)))))))))
   :disable (inv equal-of-kont-function-return)
   :use
-    ((:instance proc-receive-match-facts)
+    ((:instance proc-receive-match-props)
      (:instance proc-receive-match-node-type)
      (:instance proc-receive-match-inbox)
      (:instance proc-receive-match-cpids)))
 
 ; Value of idle -> receive
-(defruled first-run-with-children-val
+(defruled idle-to-receive-val
   (implies
     (and
       (network-p net) (wtree-p net) (inv p net) (pid-p p)
@@ -1320,7 +1320,7 @@
   :cases ((leaf-p (omap::lookup p net)))
   :disable (equal-of-kont-function-return wtree-bind)
   :use
-    ((:instance inv-idle-node-facts)
+    ((:instance inv-idle-node-props)
      (:instance apply-k-of-idle-with-children
       (s (proc->s (omap::lookup p net)))
       (klst (proc->klst (omap::lookup p net)))
@@ -1349,7 +1349,7 @@
                 (omap::lookup 'CPids
                   (erl-state->bind (proc->s (omap::lookup p net)))))))))
   :disable (inv equal-of-kont-function-return)
-  :use ((:instance inv-receive-node-facts)
+  :use ((:instance inv-receive-node-props)
         (:instance wtree-nodes-are-leaf-or-root (pid p))
         (:instance check-children-of-wtree-node (pid p))
         (:instance no-duplicatesp-of-check-children
@@ -1376,7 +1376,7 @@
 
 
 ; Bindings of idle -> receive
-(defruled first-run-with-children-bind
+(defruled idle-to-receive-bind
   (implies
     (and
       (network-p net) (wtree-p net) (inv p net)
@@ -1612,7 +1612,7 @@
      wtree-bind-when-no-function-return index-of-root parent-of-leaf
      wtree-bind0-when-no-function-return index-of-leaf)
   :use
-    ((:instance inv-idle-node-facts)
+    ((:instance inv-idle-node-props)
      (:instance apply-k-of-idle-with-children
        (s (proc->s (omap::lookup p net)))
        (klst (proc->klst (omap::lookup p net)))
@@ -1626,7 +1626,7 @@
      (:instance wtree-node-fields (p (omap::lookup p net)))))
 
 ; Leaf or Root of idle -> receive
-(defruled first-run-with-children-leaf-or-root
+(defruled idle-to-receive-leaf-or-root
   (implies
     (and
       (network-p net) (wtree-p net) (inv p net)
@@ -1668,7 +1668,7 @@
                           (proc->klst (omap::lookup p net)))))))
         (root-p (omap::lookup p net)))))
   :use
-    ((:instance first-run-with-children-bind)
+    ((:instance idle-to-receive-bind)
      (:instance leaf-root-p-when-wtree-bindings-equal
       (p1 (change-proc  (omap::lookup p net)
             :s (update-erl-state->in
@@ -1685,7 +1685,7 @@
       (p2 (omap::lookup p net)))))
 
 ; idle -> terminated
-(defruled first-run-without-children-props
+(defruled idle-to-terminated-props
   (implies
     (and
       (network-p net) (wtree-p net) (inv p net)
@@ -1800,7 +1800,7 @@
         :terminated)))
   :disable equal-of-kont-function-return
   :use
-    ((:instance inv-idle-node-facts)
+    ((:instance inv-idle-node-props)
      (:instance apply-k-of-idle-no-children
         (s (proc->s (omap::lookup p net)))
         (klst (proc->klst (omap::lookup p net)))

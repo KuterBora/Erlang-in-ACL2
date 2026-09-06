@@ -1,10 +1,7 @@
 (in-package "ACL2")
 
-; I cheat here and load props first, 
-; so that it cerify in parallel.
-(include-book "props")
-(include-book "deliver")
 (include-book "run")
+(include-book "deliver")
 
 (defrule inv-of-erl-step-of-assoc
   (implies
