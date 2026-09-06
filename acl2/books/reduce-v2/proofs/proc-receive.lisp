@@ -162,7 +162,7 @@
               (s (proc->s p)) (m (car (proc->inbox-new p)))
               (klst (proc->klst p)))))))
 
-; BOZO: Here is another very bug lemma, that performs terribly.
+; BOZO: Here is another very big lemma, that performs terribly.
 ; If I had more time. I would definitely find a better solution.
 ; It was even worse earlier, until I tries quick-and-dirty-srs.
 ; The docs suggest not doing that, and I should probably listen,

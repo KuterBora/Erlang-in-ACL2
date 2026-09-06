@@ -150,6 +150,18 @@
      (prefixp (rev (cdr l)) (rev l))
      :expand ((rev l)))))
 
+(defruled no-duplicatesp-of-rev
+  (equal (no-duplicatesp-equal (rev l)) (no-duplicatesp-equal l))
+  :enable rev
+  :prep-lemmas
+    ((defrule member-of-rev
+       (iff (member-equal e (rev l)) (member-equal e l))
+       :enable rev)
+     (defrule no-duplicatesp-of-append-singleton
+       (equal (no-duplicatesp-equal (append x (list a)))
+              (and (no-duplicatesp-equal x) (not (member-equal a x)))))))
+
+
 ; Inbox Utility ---------------------------------------------------------------
 
 ; Check if the inbox contains a message {pid, _}
@@ -343,6 +355,74 @@
                   (erl-state->bind (proc->s proc))))))))
       (parent-still-waiting-p self parent net))
     (parent-still-waiting-p self parent (omap::update p proc net)))
+  :enable (parent-still-waiting-p omap::lookup-of-update))
+
+(defruled parent-still-waiting-p-of-update-of-receive->receive
+  (implies
+    (and
+      (network-p net) (network-p (omap::update p proc net))
+      (proc-p proc) (not (equal pid p))
+      (omap::assoc pid net) (omap::assoc p net)
+      (erl-val-p (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
+      (omap::assoc 'CPids (erl-state->bind (proc->s (omap::lookup p net))))
+      (equal (erl-val-kind
+               (omap::lookup 'CPids
+                 (erl-state->bind (proc->s (omap::lookup p net)))))
+             :cons)
+      (not (equal (proc->ps proc) :terminated))
+      (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+      (equal (erl-val-kind
+               (omap::lookup 'CPids (erl-state->bind (proc->s proc))))
+             :cons)
+      (equal (erl-val-cons->lst
+               (omap::lookup 'CPids (erl-state->bind (proc->s proc))))
+             (cdr (erl-val-cons->lst (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net)))))))
+      (not (equal (proc->ps (omap::lookup pid net)) :terminated))
+      (equal (proc->ps
+               (omap::lookup
+                 (car (erl-val-cons->lst (omap::lookup 'CPids
+                        (erl-state->bind (proc->s (omap::lookup p net))))))
+                 net))
+             :terminated)
+      (parent-still-waiting-p pid
+        (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+        net))
+    (parent-still-waiting-p pid
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+      (omap::update p proc net)))
+  :enable parent-still-waiting-p
+  :use ((:instance parent-still-waiting-p-of-update-of-run-with-self
+          (self pid)
+          (parent (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))))))
+
+(defruled parent-still-waiting-p-of-update-of-receive->terminate
+  (implies
+    (and
+      (network-p net) (network-p (omap::update p proc net))
+      (proc-p proc) (not (equal pid p))
+      (omap::assoc pid net) (omap::assoc p net)
+      (erl-val-p (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
+      (omap::assoc 'CPids (erl-state->bind (proc->s (omap::lookup p net))))
+      (equal (erl-val-kind
+               (omap::lookup 'CPids
+                 (erl-state->bind (proc->s (omap::lookup p net)))))
+             :cons)
+      (null (cdr (erl-val-cons->lst (omap::lookup 'CPids
+                   (erl-state->bind (proc->s (omap::lookup p net)))))))
+      (not (equal (proc->ps (omap::lookup pid net)) :terminated))
+      (equal (proc->ps
+               (omap::lookup
+                 (car (erl-val-cons->lst (omap::lookup 'CPids
+                        (erl-state->bind (proc->s (omap::lookup p net))))))
+                 net))
+             :terminated)
+      (parent-still-waiting-p pid
+        (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+        net))
+    (parent-still-waiting-p pid
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+      (omap::update p proc net)))
   :enable (parent-still-waiting-p omap::lookup-of-update))
 
 (defrule wtree-bindings-of-lookup-of-update-when-bindings-equal

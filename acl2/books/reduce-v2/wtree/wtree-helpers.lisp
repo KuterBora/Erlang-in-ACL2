@@ -482,7 +482,11 @@
             pid)
           (not (member-equal cpid chl))
           (check-children pid chl net))
-        (check-children pid (cons cpid chl) net))))
+        (check-children pid (cons cpid chl) net)))
+
+    (defruled no-duplicatesp-of-check-children
+      (implies (check-children pid children net)
+               (no-duplicatesp-equal (pid-lst-fix children)))))
 
 
 ; Check-Parent ---------------------------------------------------------------

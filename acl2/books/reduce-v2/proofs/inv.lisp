@@ -630,6 +630,146 @@
   :cases ((equal (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))) p))
   :enable (sent-message-wf proc->pid))
 
+; receive -> receive
+(defruled sent-message-wf-of-update-of-receive-match
+  (implies
+    (and
+      (network-p net)
+      (omap::assoc pid net) (omap::assoc p net)
+      (proc-p proc) (not (equal pid p))
+      (network-p (omap::update p proc net))
+      (erl-val-p (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (pid-p (car (erl-val-cons->lst (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net)))))))
+      (outbox-emptyp
+        (proc->outbox
+          (omap::lookup
+            (car (erl-val-cons->lst (omap::lookup 'CPids
+                   (erl-state->bind (proc->s (omap::lookup p net))))))
+            net)))
+      (omap::assoc 'CPids (erl-state->bind (proc->s (omap::lookup p net))))
+      (equal (erl-val-kind
+               (omap::lookup 'CPids
+                 (erl-state->bind (proc->s (omap::lookup p net)))))
+             :cons)
+      (equal (proc->ps proc) :receive)
+      (null (proc->inbox-tried proc))
+      (equal (proc->inbox-new proc)
+             (inbox-without (proc->inbox-new (omap::lookup p net))
+               (car (erl-val-cons->lst (omap::lookup 'CPids
+                      (erl-state->bind (proc->s (omap::lookup p net))))))))
+      (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+      (equal (erl-val-kind
+               (omap::lookup 'CPids (erl-state->bind (proc->s proc))))
+             :cons)
+      (equal (erl-val-cons->lst
+               (omap::lookup 'CPids (erl-state->bind (proc->s proc))))
+             (cdr (erl-val-cons->lst (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net)))))))
+      ; ChildHd is listed once, so dropping it really does consume it
+      (not (member-equal
+             (car (erl-val-cons->lst (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net))))))
+             (cdr (erl-val-cons->lst (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net))))))))
+      (sent-message-wf (omap::lookup pid net)
+        (proc->outbox (omap::lookup pid net))
+        (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+        net))
+    (sent-message-wf (omap::lookup pid net)
+      (proc->outbox (omap::lookup pid net))
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+      (omap::update p proc net)))
+  :cases ((equal (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))) p))
+  :enable (sent-message-wf proc->pid sent-message-wf-of-update-of-run)
+  :prep-lemmas
+    ((defrule car-not-member-implies-neq
+       (implies (and (member-equal x (cdr l))
+                     (not (member-equal (car l) (cdr l))))
+                (not (equal x (car l)))))))
+
+(defruled sent-message-wf-of-update-of-receive->terminated
+  (implies
+    (and
+      (network-p net) (network-p (omap::update p proc net))
+      (proc-p proc) (not (equal pid p))
+      (omap::assoc pid net) (omap::assoc p net)
+      (erl-val-p (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (omap::assoc 'CPids (erl-state->bind (proc->s (omap::lookup p net))))
+      (equal (erl-val-kind
+               (omap::lookup 'CPids
+                 (erl-state->bind (proc->s (omap::lookup p net)))))
+             :cons)
+      (null (cdr (erl-val-cons->lst (omap::lookup 'CPids
+                   (erl-state->bind (proc->s (omap::lookup p net)))))))
+      (pid-p (car (erl-val-cons->lst (omap::lookup 'CPids
+                    (erl-state->bind (proc->s (omap::lookup p net)))))))
+      (outbox-emptyp
+        (proc->outbox
+          (omap::lookup
+            (car (erl-val-cons->lst (omap::lookup 'CPids
+                   (erl-state->bind (proc->s (omap::lookup p net))))))
+            net)))
+      (equal (proc->ps proc) :terminated)
+      (sent-message-wf (omap::lookup pid net)
+        (proc->outbox (omap::lookup pid net))
+        (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+        net))
+    (sent-message-wf (omap::lookup pid net)
+      (proc->outbox (omap::lookup pid net))
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+      (omap::update p proc net)))
+
+  :cases ((equal (omap::lookup 'Parent
+                    (wtree-bind (omap::lookup pid net))) p))
+  :enable (sent-message-wf proc->pid)
+  :use ((:instance sent-message-wf-of-update-of-run
+          (self (omap::lookup pid net))
+          (outbox (proc->outbox (omap::lookup pid net)))
+          (parent (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))))))
+
+(defruled sent-message-wf-of-update-of-first-run-with-children
+  (implies
+    (and
+      (network-p net) (network-p (omap::update p proc net))
+      (proc-p proc) (not (equal pid p))
+      (omap::assoc pid net) (omap::assoc p net)
+      (erl-val-p (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
+      (equal
+        (proc->ps (omap::lookup p net)) :idle) (equal (proc->ps proc)
+        :receive)
+      (equal (proc->inbox-new proc) (proc->inbox-new (omap::lookup p net)))
+      (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+      (equal
+        (erl-val-kind
+          (omap::lookup 'CPids (erl-state->bind (proc->s proc))))
+        :cons)
+      (equal (erl-val-cons->lst
+               (omap::lookup 'CPids (erl-state->bind (proc->s proc))))
+             (erl-val-cons->lst
+               (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))
+      (or (not (equal (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))) p))
+          (member-equal pid
+            (erl-val-cons->lst
+              (omap::lookup
+                'ChildPids
+                (wtree-bind (omap::lookup p net))))))
+      (sent-message-wf (omap::lookup pid net)
+                       (proc->outbox (omap::lookup pid net))
+                       (omap::lookup 'Parent
+                          (wtree-bind (omap::lookup pid net)))
+                       net))
+    (sent-message-wf (omap::lookup pid net)
+                     (proc->outbox (omap::lookup pid net))
+                     (omap::lookup 'Parent
+                        (wtree-bind (omap::lookup pid net)))
+                     (omap::update p proc net)))
+  :cases ((equal (omap::lookup 'Parent
+                    (wtree-bind (omap::lookup pid net))) p))
+  :enable (sent-message-wf proc->pid))
+
 
 ; parent of inv node -------------------------------------------------------------
 

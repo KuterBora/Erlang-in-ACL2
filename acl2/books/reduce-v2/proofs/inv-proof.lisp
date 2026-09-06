@@ -1,6 +1,6 @@
 (in-package "ACL2")
-(include-book "run")
 (include-book "deliver")
+(include-book "run")
 
 ; the goal:
 
@@ -27,3 +27,29 @@
     (and (network-p net) (inv-all net))
     (inv-all (erl-step net)))
   :enable inv-all)
+
+
+
+(defrule terminated-of-inv
+  (implies
+    (and
+      (inv-all net) (terminated? net)
+      (pid-p pid) (omap::assoc pid net))
+    (equal (proc->ps (omap::lookup pid net)) :terminated)))
+
+
+(defrule root-of-terminated-when-inv
+  (and (network-p net)
+       (inv-all net) (termianted? net)
+       (pid-p pid) (omap::assoc pid net)
+       (root-p (omap::lookup pid net)))
+  (equal
+    (erl-state->in (proc->s (omap::lookup pid net)))
+    (sum (omap::size net))))
+
+
+; inv of erl-runner
+; later if time, show that erl-runner will terminate
+
+
+

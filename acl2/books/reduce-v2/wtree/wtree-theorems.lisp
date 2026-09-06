@@ -150,3 +150,21 @@
           (omap::lookup 'Index (wtree-bind (omap::lookup (car children) net))))
         (+ 1 index))))
   :enable (check-children check-indices))
+
+(defruled childpids-of-parent-of-node
+  (implies
+    (and
+      (network-p net) (wtree-p net)
+      (pid-p pid) (pid-p p) (omap::assoc pid net)
+      (equal (omap::lookup 'Parent
+               (wtree-bind (omap::lookup pid net))) p))
+    (and
+      (omap::assoc p net)
+      (member-equal
+        pid
+        (erl-val-cons->lst
+          (omap::lookup
+            'ChildPids
+            (wtree-bind (omap::lookup p net)))))))
+  :enable check-parent
+  :use ((:instance check-parent-of-wtree-p (pid pid))))
