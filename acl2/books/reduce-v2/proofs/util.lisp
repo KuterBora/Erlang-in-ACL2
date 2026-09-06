@@ -293,7 +293,7 @@
         (parent-still-waiting-p self parent (omap::update p proc net)))
       :enable omap::lookup-of-update))
 
-(defruled parent-still-waiting-p-of-update-of-run
+(defrule parent-still-waiting-p-of-update-of-run
   (implies
     (and
       (network-p net) (network-p (omap::update p proc net))
@@ -318,6 +318,31 @@
     (parent-still-waiting-p pid
       (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
       (omap::update p proc net)))
+  :enable (parent-still-waiting-p omap::lookup-of-update))
+
+; slighly different to make the rule fire.
+(defrule parent-still-waiting-p-of-update-of-run-with-self
+  (implies
+    (and
+      (network-p net) (network-p (omap::update p proc net))
+      (proc-p proc) (omap::assoc p net)
+      (pid-p self) (erl-val-p parent)
+      (or
+        (not (equal parent p))
+        (and
+          (not (equal (proc->ps proc) :terminated))
+          (or
+            (not (and (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+                      (equal (erl-val-kind
+                                (omap::lookup 'CPids
+                                  (erl-state->bind (proc->s proc))))
+                                :cons)))
+            (member-equal self
+              (erl-val-cons->lst
+                (omap::lookup 'CPids
+                  (erl-state->bind (proc->s proc))))))))
+      (parent-still-waiting-p self parent net))
+    (parent-still-waiting-p self parent (omap::update p proc net)))
   :enable (parent-still-waiting-p omap::lookup-of-update))
 
 (defrule wtree-bindings-of-lookup-of-update-when-bindings-equal

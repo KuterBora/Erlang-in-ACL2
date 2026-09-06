@@ -600,6 +600,36 @@
       net))
   :enable inv)
 
+; sent-message-wf after receive -> blocked
+(defruled sent-message-wf-of-update-of-receive-to-blocked
+  (implies
+    (and
+      (network-p net) (omap::assoc pid net) (omap::assoc p net)
+      (network-p (omap::update p proc net))
+      (proc-p proc) (not (equal pid p))      
+      (erl-val-p (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (equal (proc->ps proc) :blocked)
+      (null (proc->inbox-new proc))
+      (equal (proc->inbox-tried proc)
+             (proc->inbox-new (omap::lookup p net)))
+      (equal (omap::lookup 'CPids (erl-state->bind (proc->s proc)))
+             (omap::lookup 'CPids
+               (erl-state->bind (proc->s (omap::lookup p net)))))
+      (iff (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+           (omap::assoc 'CPids
+             (erl-state->bind (proc->s (omap::lookup p net)))))
+      (sent-message-wf (omap::lookup pid net)
+        (proc->outbox (omap::lookup pid net))
+        (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+        net))
+    (sent-message-wf (omap::lookup pid net)
+      (proc->outbox (omap::lookup pid net))
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+      (omap::update p proc net)))
+  :cases ((equal (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))) p))
+  :enable (sent-message-wf proc->pid))
+
 
 ; parent of inv node -------------------------------------------------------------
 
