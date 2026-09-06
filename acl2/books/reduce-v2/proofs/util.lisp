@@ -293,29 +293,31 @@
         (parent-still-waiting-p self parent (omap::update p proc net)))
       :enable omap::lookup-of-update))
 
-; TODO: comments (deliver.lisp has similar ones)
-(defrule parent-still-waiting-p-of-update-of-run
+(defruled parent-still-waiting-p-of-update-of-run
   (implies
     (and
       (network-p net) (network-p (omap::update p proc net))
-      (proc-p proc) (omap::assoc p net)
-      (pid-p self) (erl-val-p parent)
-      (or
-        (not (equal parent p))
-        (and
-          (not (equal (proc->ps proc) :terminated))
-          (or
-            (not (and (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
-                      (equal (erl-val-kind
-                                (omap::lookup 'CPids
-                                  (erl-state->bind (proc->s proc))))
-                                :cons)))
-            (member-equal self
-              (erl-val-cons->lst
-                (omap::lookup 'CPids
-                  (erl-state->bind (proc->s proc))))))))
-      (parent-still-waiting-p self parent net))
-    (parent-still-waiting-p self parent (omap::update p proc net)))
+      (omap::assoc pid net) (omap::assoc p net)
+      (not (equal pid p)) (proc-p proc)  
+      (erl-val-p
+        (omap::lookup 'Parent
+          (wtree-bind
+            (omap::lookup pid net))))
+      (not (equal (proc->ps proc) :terminated))
+      (equal
+        (omap::lookup 'CPids (erl-state->bind (proc->s proc)))
+        (omap::lookup 'CPids
+          (erl-state->bind
+            (proc->s (omap::lookup p net)))))
+      (iff (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
+           (omap::assoc 'CPids
+             (erl-state->bind (proc->s (omap::lookup p net)))))
+      (parent-still-waiting-p pid
+        (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+        net))
+    (parent-still-waiting-p pid
+      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+      (omap::update p proc net)))
   :enable (parent-still-waiting-p omap::lookup-of-update))
 
 (defrule wtree-bindings-of-lookup-of-update-when-bindings-equal

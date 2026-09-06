@@ -599,3 +599,26 @@
       (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
       net))
   :enable inv)
+
+
+; parent of inv node -------------------------------------------------------------
+
+(defruled inv-node-parent-props
+  (implies
+    (and
+      (network-p net) (wtree-p net) (inv pid net)
+      (omap::assoc pid net))
+    (and
+      (erl-val-p (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
+      (or
+        (not (equal (proc->ps (omap::lookup pid net)) :terminated))
+        (sent-message-wf (omap::lookup pid net)
+          (proc->outbox (omap::lookup pid net))
+          (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+          net))
+      (or (equal (proc->ps (omap::lookup pid net)) :terminated)
+          (parent-still-waiting-p pid
+            (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+            net))))
+  :use ((:instance wtree-nodes-are-leaf-or-root (pid pid))
+        (:instance sent-message-wf-when-inv-terminated)))
