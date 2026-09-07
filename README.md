@@ -15,7 +15,7 @@ where `ACL2_DIR` denotes your ACL2 sources directory and `ACL2` denotes a recent
 
 ## Important files:
 
-### The Translator 
+### The Translator
 erl-to-acl2/erl-to-acl2.lisp : translator for Erlang modules and expressions.
 
 ### The AST Evaluator:
@@ -25,8 +25,10 @@ erl-to-acl2/erl-to-acl2.lisp : translator for Erlang modules and expressions.
 - acl2/eval/erl-state : the program state
 
 ### The Scheduler:
--acl2/scheduler/abstract : the abstract scheduler
-acl2/scheduler/erl-in-acl2 : run the entire pipeline here.
+-acl2/scheduler/proc : process states
+- acl2/scheduler/network : map from pid to process
+- acl2/scheduler/abstract : the abstract scheduler
+- acl2/scheduler/erl-in-acl2 : run the entire pipeline here.
 
 ### Examples:
 - acl2/scheduler/examples : message passing examples
