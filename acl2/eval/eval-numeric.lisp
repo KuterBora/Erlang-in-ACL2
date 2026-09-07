@@ -64,10 +64,14 @@
       (:case-of (make-erl-val-reject :err "Numeric expressions cannot have case clauses."))
       (:remote-call (make-erl-val-reject :err "Numeric expressions cannot have remote calls."))
       (:call (make-erl-val-reject :err "Numeric expressions cannot have local calls."))
-      (:fun-call (make-erl-val-reject :err "Numeric expressions cannot have fun calls."))))
+      (:fun-call (make-erl-val-reject :err "Numeric expressions cannot have fun calls."))
+      (:receive (make-erl-val-reject :err "Numeric expressions cannot have receive expressions."))))
 
   ///
     (verify-guards eval-numeric)
+    
+    (defcong arithm-expr-equiv equal (eval-numeric x) 1)
+
     (more-returns
       (v (or (equal (erl-val-kind v) :integer)   
              (equal (erl-val-kind v) :reject))

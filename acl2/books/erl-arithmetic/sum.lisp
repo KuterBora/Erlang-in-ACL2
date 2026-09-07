@@ -174,21 +174,23 @@
       (wf-state-p (apply-k s (cons k nil))))
     (wf-state-p
        (apply-k
-        (update-erl-state->bind
-          (update-erl-state->in
-            s
-            (erl-val-cons
-              (list (erl-val-integer
-                          (+ -1
-                            (erl-val-integer->val
-                                  (car (erl-val-cons->lst (erl-state->in s)))))))))
-          (omap::update 'x
-                        (car (erl-val-cons->lst (erl-state->in s)))
-                        nil))
-        (list (erl-k (+ -5 (erl-k->fuel k))
-                    '(:local-call sum))))))
-  :use ((:instance apply-k-of-local-call-when-match-wf)))
+          (update-erl-state->bind
+           (update-erl-state->in
+             s
+             (erl-val-cons
+               (list (erl-val-integer
+                       (+ -1
+                          (erl-val-integer->val
+                            (car (erl-val-cons->lst (erl-state->in s)))))))))
+           (omap::update 'x
+                         (car (erl-val-cons->lst (erl-state->in s)))
+                         nil))
+         (list (erl-k (+ -5 (erl-k->fuel k))
+                     '(:local-call sum))))))
+  :use ((:instance apply-k-of-local-call-when-match))
+  :enable (apply-k-of-binop-expr1 apply-k-of-cons))
 
+; steps: 252227
 ; Evaluating the call until the next recursive call will produce the following term.
 ; Remark: the reason this theorem takes so many steps seems to be case splits caused by nfix.
 ; one way to solve this might be to disable nfix initially, and only expand it when needed.
@@ -238,10 +240,11 @@
                                '(:local-call sum))))))))
   
   :disable (inductive-step-is-wf apply-k-of-sum-base-case)
-  
-; this case split can be removed by proving a lemma regarding
-; how a function call does not introduce any new bindings once it returns.
-; -- If the bindings are equal, they are obviously compatible.
+  :enable (apply-k-of-binop-expr1 apply-k-of-cons)
+
+  ; this case split can be removed by proving a lemma regarding
+  ; how a function call does not introduce any new bindings once it returns.
+  ; -- If the bindings are equal, they are obviously compatible.
   :cases ((omap::compatiblep
             (erl-state->bind
               (apply-k
@@ -263,7 +266,27 @@
                 nil)))
 
   :hints (("Goal" :use ((:instance apply-k-of-local-call-when-match)
-                        (:instance inductive-step-is-wf)))))
+                        (:instance inductive-step-is-wf)))
+          ("Subgoal 1.1.1.1.1.1'"
+            :cases ((equal
+                      (erl-val-kind
+                        (ERL-STATE->IN
+                          (APPLY-K
+                            (UPDATE-ERL-STATE->BIND
+                            (UPDATE-ERL-STATE->IN
+                              S
+                              (ERL-VAL-CONS
+                              (LIST
+                                (ERL-VAL-INTEGER
+                                      (+ -1
+                                        (ERL-VAL-INTEGER->VAL
+                                              (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))))))))
+                            (OMAP::UPDATE 'X
+                                          (CAR (ERL-VAL-CONS->LST (ERL-STATE->IN S)))
+                                          NIL))
+                            (LIST (ERL-K (+ -5 (ERL-K->FUEL K))
+                                        '(:LOCAL-CALL SUM))))))
+                      :integer)))))
 
 ; Erlang sum is equivalent to the ACL2 sum, if evaluation succeeds.
 (defrule apply-k-of-sum
@@ -315,7 +338,6 @@
       (equal (kont-local-call->call (erl-k->kont k)) 'sum)
       
       ; the arguments are well-formed
-      (wf-state-p s)
       (equal (erl-val-kind (erl-state->in s)) :cons)
       (car (erl-val-cons->lst (erl-state->in s)))
       (not (cdr (erl-val-cons->lst (erl-state->in s))))
@@ -356,6 +378,7 @@
       (equal (kont-local-call->call (erl-k->kont k)) 'sum)
       
       ; the arguments are well-formed
+      (equal (erl-val-kind (erl-state->in s)) :cons)
       (car (erl-val-cons->lst (erl-state->in s)))
       (not (cdr (erl-val-cons->lst (erl-state->in s))))
       (equal (erl-val-kind (car (erl-val-cons->lst (erl-state->in s)))) :integer)
@@ -370,5 +393,5 @@
       (erl-state->in (apply-k s (cons k nil)))
       (make-erl-val-integer 
         :val  (/ (* x (+ x 1)) 2))))
-  :disable apply-k-of-sum-of-x
+  :disable (apply-k-of-sum-of-x apply-k-of-sum)
   :use (:instance apply-k-of-sum-of-x))

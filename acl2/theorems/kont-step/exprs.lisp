@@ -40,6 +40,7 @@
   (implies
     (and (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :exprs)
+         (not (equal (erl-val-kind (erl-state->in s)) :receive))
          (consp (kont-exprs->exprs (erl-k->kont k))))
     (equal (apply-k s (cons k nil))
            (apply-k
@@ -62,6 +63,7 @@
   (implies
     (and (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :exprs)
+         (not (equal (erl-val-kind (erl-state->in s)) :receive))
          (endp (kont-exprs->exprs (erl-k->kont k))))
     (equal (apply-k s (cons k nil)) (erl-state-fix s)))
   :enable apply-k-of-step

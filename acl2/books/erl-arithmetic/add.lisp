@@ -28,6 +28,7 @@
                   (:var X) 
                   (:var Y)))))))))
 
+; Steps: 93998
 (defrule apply-k-of-add
   (b* (; The starting state is well-formed
        ((unless (wf-state-p s)) t)
@@ -59,4 +60,4 @@
  :enable (apply-k-of-local-call-when-match eval-local-call eval-clauses
           eval-clauses-when-consp
           match-args eval-match eval-guard-seq eval-guard-seq-when-consp
-          eval-guard eval-guard-expr eval-bif))
+          eval-guard eval-guard-expr eval-bif apply-k-of-binop-expr1))

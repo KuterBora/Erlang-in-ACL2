@@ -15,25 +15,25 @@
 (define erl-plus ((val erl-val-p))
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
-       ((if (equal (erl-val-kind val) :flimit)) val)
-       ((if (equal (erl-val-kind val) :reject)) val)
        ((unless (equal (erl-val-kind val) :integer))
         (make-erl-val-excpt 
           :err (make-erl-err :class (make-err-class-error)
                              :reason (make-exit-reason-badarith)))))
-      val))
+      val)
+  ///
+    (defcong erl-val-equiv equal (erl-plus x) 1))
 
 ; Representation of Erlang unary - in ACL2.
 (define erl-minus ((val erl-val-p))
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
-       ((if (equal (erl-val-kind val) :flimit)) val)
-       ((if (equal (erl-val-kind val) :reject)) val)
        ((unless (equal (erl-val-kind val) :integer))
         (make-erl-val-excpt 
           :err (make-erl-err :class (make-err-class-error)
                              :reason (make-exit-reason-badarith)))))
-      (make-erl-val-integer :val (* -1 (erl-val-integer->val val)))))
+      (make-erl-val-integer :val (* -1 (erl-val-integer->val val))))
+  ///
+    (defcong erl-val-equiv equal (erl-minus x) 1))
 
 ; Representation of Erlang addition in ACL2.
 ; - Returns badarith if arguments are not integers.
@@ -41,10 +41,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (equal (erl-val-kind left) :integer)
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
@@ -53,6 +49,8 @@
       (make-erl-val-integer :val (+ (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
     ///
+      (defcong erl-val-equiv equal (erl-add x y) 1)
+      (defcong erl-val-equiv equal (erl-add x y) 2)
       (defrule commutativity-of-erl-add
         (erl-equiv (erl-add x y)
                    (erl-add y x))
@@ -67,17 +65,16 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
           :err (make-erl-err :class (make-err-class-error)
                              :reason (make-exit-reason-badarith)))))
       (make-erl-val-integer :val (- (erl-val-integer->val left)
-                                    (erl-val-integer->val right)))))
+                                    (erl-val-integer->val right))))
+  ///
+    (defcong erl-val-equiv equal (erl-sub x y) 1)
+    (defcong erl-val-equiv equal (erl-sub x y) 2))
 
 ; Representation of Erlang multiplication in ACL2.
 ; - Returns badarith if arguments are not integers.
@@ -85,10 +82,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
         (make-erl-val-excpt 
@@ -97,6 +90,9 @@
       (make-erl-val-integer :val (* (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
     ///
+      (defcong erl-val-equiv equal (erl-mul x y) 1)
+      (defcong erl-val-equiv equal (erl-mul x y) 2)
+
       (defrule commutativity-of-erl-mul
         (erl-equiv (erl-mul x y)
                    (erl-mul y x))
@@ -113,10 +109,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :integer) 
                (equal (erl-val-kind right) :integer)
@@ -126,7 +118,11 @@
                              :reason (make-exit-reason-badarith))))
        (left-val (erl-val-integer->val left))
        (right-val (erl-val-integer->val right)))
-      (make-erl-val-integer :val (floor left-val right-val))))
+      (make-erl-val-integer :val (floor left-val right-val)))
+  
+  ///
+    (defcong erl-val-equiv equal (erl-div x y) 1)
+    (defcong erl-val-equiv equal (erl-div x y) 2))
 
 ; Representation of Erlang integer remainder of X/Y (rem) in ACL2.
 ; - Returns badarith if arguments are not integers or if there is division by 0.
@@ -134,10 +130,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :integer) 
                (equal (erl-val-kind right) :integer)
@@ -147,7 +139,10 @@
                              :reason (make-exit-reason-badarith))))
        (left-val (erl-val-integer->val left))
        (right-val (erl-val-integer->val right)))
-      (make-erl-val-integer :val (rem left-val right-val))))
+      (make-erl-val-integer :val (rem left-val right-val)))
+  ///
+    (defcong erl-val-equiv equal (erl-rem x y) 1)
+    (defcong erl-val-equiv equal (erl-rem x y) 2))
 
 ; Given an arithmetic binop, apply the corresponding Erlang operation.
 (define apply-erl-arithm-binop ((op arithm-binop-p) (left erl-val-p) (right erl-val-p))
@@ -155,10 +150,6 @@
   (b* ((op (arithm-binop-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :integer) 
                (equal (erl-val-kind right) :integer)))
@@ -173,13 +164,9 @@
         (rem (erl-rem left right))
         (otherwise (make-erl-val-reject :err "bad op"))))
     ///
-      (defrule apply-erl-arithm-binop-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (arithm-binop-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-arithm-binop op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))
-        :enable (erl-add erl-sub erl-mul erl-div erl-rem)))
+      (defcong arithm-binop-equiv equal (apply-erl-arithm-binop op x y) 1)
+      (defcong erl-val-equiv equal (apply-erl-arithm-binop op x y) 2)
+      (defcong erl-val-equiv equal (apply-erl-arithm-binop op x y) 3))
 
 ; Erlang Boolean Operations ----------------------------------------------------
 
@@ -188,8 +175,6 @@
 (define erl-not ((val erl-val-p))
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
-       ((if (equal (erl-val-kind val) :flimit)) val)
-       ((if (equal (erl-val-kind val) :reject)) val)
        ((unless (erl-boolean-p val))
         (make-erl-val-excpt 
           :err (make-erl-err :class (make-err-class-error)
@@ -197,7 +182,10 @@
       (if (equal (erl-val-atom->val val) 'true)
           (make-erl-val-atom :val 'false)
           (make-erl-val-atom :val 'true)))
-  :guard-hints (("Goal" :in-theory (enable erl-boolean-p))))
+  :guard-hints (("Goal" :in-theory (enable erl-boolean-p)))
+  
+  ///
+    (defcong erl-val-equiv equal (erl-not x) 1))
 
 ; Representation of Erlang boolean operation 'and' in ACl2.
 ; - Returns badarg if arguments are not booleans.
@@ -205,10 +193,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (erl-boolean-p left) 
                      (erl-boolean-p right)))
         (make-erl-val-excpt 
@@ -218,7 +202,11 @@
               (equal (erl-val-atom->val right) 'true))
           (make-erl-val-atom :val 'false)
           (make-erl-val-atom :val 'true)))
-  :guard-hints (("Goal" :in-theory (enable erl-boolean-p))))
+  :guard-hints (("Goal" :in-theory (enable erl-boolean-p)))
+  
+  ///
+    (defcong erl-val-equiv equal (erl-and a b) 1)
+    (defcong erl-val-equiv equal (erl-and a b) 2))
 
 ; Representation of Erlang boolean operation 'or' in ACl2.
 ; - Returns badarg if arguments are not booleans.
@@ -226,10 +214,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (erl-boolean-p left) 
                      (erl-boolean-p right)))
         (make-erl-val-excpt 
@@ -239,7 +223,11 @@
               (equal (erl-val-atom->val right) 'true))
           (make-erl-val-atom :val 'false)
           (make-erl-val-atom :val 'true)))
-  :guard-hints (("Goal" :in-theory (enable erl-boolean-p))))
+  :guard-hints (("Goal" :in-theory (enable erl-boolean-p)))
+  
+  ///
+    (defcong erl-val-equiv equal (erl-or a b) 1)
+    (defcong erl-val-equiv equal (erl-or a b) 2))
 
 ; Representation of Erlang boolean operation 'xor' in ACl2.
 ; - Returns badarg if arguments are not booleans.
@@ -247,10 +235,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless (and (erl-boolean-p left) 
                      (erl-boolean-p right)))
         (make-erl-val-excpt 
@@ -260,7 +244,11 @@
                (equal (erl-val-atom->val right) 'true))
           (make-erl-val-atom :val 'false)
           (make-erl-val-atom :val 'true)))
-  :guard-hints (("Goal" :in-theory (enable erl-boolean-p))))
+  :guard-hints (("Goal" :in-theory (enable erl-boolean-p)))
+  
+  ///
+    (defcong erl-val-equiv equal (erl-xor a b) 1)
+    (defcong erl-val-equiv equal (erl-xor a b) 2))
 
 ; Given a boolean binop, apply the corresponding Erlang operation.
 (define apply-erl-bool-binop ((op bool-binop-p) (left erl-val-p) (right erl-val-p))
@@ -268,10 +256,6 @@
   (b* ((op (bool-binop-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (erl-boolean-p left) (erl-boolean-p right)))
         (make-erl-val-excpt 
@@ -283,13 +267,9 @@
         ('xor (erl-xor left right))
         (otherwise (make-erl-val-reject :err "bad op"))))
     ///
-      (defrule apply-erl-bool-binop-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (bool-binop-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-bool-binop op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))
-        :enable (erl-and erl-or erl-xor)))
+      (defcong bool-binop-equiv equal (apply-erl-bool-binop op x y) 1)
+      (defcong erl-val-equiv equal (apply-erl-bool-binop op x y) 2)
+      (defcong erl-val-equiv equal (apply-erl-bool-binop op x y) 3))
 
 
 ; Erlang Comparison Operators --------------------------------------------------
@@ -335,7 +315,10 @@
   (defthm erl-fun-compare-trichotomy
     (or (equal (erl-fun-compare f1 f2) 1)
         (equal (erl-fun-compare f1 f2) 0)
-        (equal (erl-fun-compare f1 f2) -1))))
+        (equal (erl-fun-compare f1 f2) -1)))
+  
+  (defcong erl-fun-equiv equal (erl-fun-compare f g) 1)
+  (defcong erl-fun-equiv equal (erl-fun-compare f g) 2))
 
 ; ACL2 total ordering is used for the execution of erl-fun-compare.
 ; This function has no bearing on theorems regarding the evaluator -- it simply
@@ -418,6 +401,10 @@
           ((& :none) 3)
           ((:excpt &) 3)
           ((& :excpt) 3)
+          ((:receive &) 3)
+          ((& :receive) 3)
+          ((:blocked &) 3)
+          ((& :blocked) 3)
           ((:integer :integer) 
            (let ((lv (erl-val-integer->val left))
                  (rv (erl-val-integer->val right)))
@@ -482,10 +469,6 @@
   (b* ((op (comp-binop-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        (comp (erl-compare left right))
        ((if (equal comp 3)) (make-erl-val-reject :err "erl-compare called with inavlid term.")))
       (case op
@@ -523,12 +506,9 @@
               (make-erl-val-atom :val 'false)))
         (otherwise (make-erl-val-reject :err "bad op"))))
     ///
-      (defrule apply-erl-comp-binop-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (comp-binop-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-comp-binop op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))))
+      (defcong comp-binop-equiv equal (apply-erl-comp-binop op x y) 1)
+      (defcong erl-val-equiv equal (apply-erl-comp-binop op x y) 2)
+      (defcong erl-val-equiv equal (apply-erl-comp-binop op x y) 3))
 
 ; Apply Erlang List Operations -------------------------------------------------
 
@@ -539,10 +519,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :cons) 
                (equal (erl-val-kind right) :cons)))
@@ -551,7 +527,11 @@
                              :reason (make-exit-reason-badarg))))
        (left-lst (erl-val-cons->lst left))
        (right-lst (erl-val-cons->lst right)))
-      (make-erl-val-cons :lst (append left-lst right-lst))))
+      (make-erl-val-cons :lst (append left-lst right-lst)))
+  
+  ///
+    (defcong erl-val-equiv equal (erl-concat l1 l2) 1)
+    (defcong erl-val-equiv equal (erl-concat l1 l2) 2))
 
 ; Representation of Erlang list substraction (--) in ACL2.
 ; Since pairs are not supported currently, the arguments must be lists.
@@ -560,10 +540,6 @@
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :cons) 
                (equal (erl-val-kind right) :cons)))
@@ -572,7 +548,10 @@
                              :reason (make-exit-reason-badarg))))
        (left-lst (erl-val-cons->lst left))
        (right-lst (erl-val-cons->lst right)))
-      (make-erl-val-cons :lst (remove-first-of-each right-lst left-lst))))
+      (make-erl-val-cons :lst (remove-first-of-each right-lst left-lst)))
+  ///
+    (defcong erl-val-equiv equal (erl-substract l1 l2) 1)
+    (defcong erl-val-equiv equal (erl-substract l1 l2) 2))
 
 ; Given a list-op, apply the corresponding Erlang operation.
 (define apply-erl-list-op ((op list-op-p) (left erl-val-p) (right erl-val-p))
@@ -580,10 +559,6 @@
   (b* ((op (list-op-fix op))
        (left (erl-val-fix left))
        (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
        ((unless 
           (and (equal (erl-val-kind left) :cons)
                (equal (erl-val-kind right) :cons)))
@@ -595,13 +570,9 @@
         (-- (erl-substract left right))
         (otherwise (make-erl-val-reject :err "bad op"))))
     ///
-      (defrule apply-erl-list-op-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (list-op-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-list-op op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))
-        :enable (erl-concat erl-substract)))
+      (defcong list-op-equiv equal (apply-erl-list-op op x y) 1)
+      (defcong erl-val-equiv equal (apply-erl-list-op op x y) 2)
+      (defcong erl-val-equiv equal (apply-erl-list-op op x y) 3))
 
 
 ; Apply Erlang Binary Operations -----------------------------------------------
@@ -611,13 +582,7 @@
   :returns (v erl-val-p)
   (b* ((op (erl-binop-fix op))
        (left (erl-val-fix left))
-       (right (erl-val-fix right))
-       ((if (equal (erl-val-kind left) :flimit)) left)
-       ((if (equal (erl-val-kind right) :flimit)) right)
-       ((if (equal (erl-val-kind left) :reject)) left)
-       ((if (equal (erl-val-kind right) :reject)) right)
-       ((if (equal (erl-val-kind left) :excpt)) left)
-       ((if (equal (erl-val-kind right) :excpt)) right) )
+       (right (erl-val-fix right)))
       (cond
         ((arithm-binop-p op) (apply-erl-arithm-binop op left right))
         ((bool-binop-p op) (apply-erl-bool-binop op left right))
@@ -625,26 +590,9 @@
         ((list-op-p op) (apply-erl-list-op op left right))
         (t (make-erl-val-reject :err "bad op"))))
     ///
-      (defrule apply-erl-binop-of-flimit
-        (implies
-          (and (erl-val-p left) (erl-val-p right) (erl-binop-p op)) 
-          (iff (not (equal (erl-val-kind (apply-erl-binop op left right)) :flimit))
-               (and (not (equal (erl-val-kind left) :flimit))
-                    (not (equal (erl-val-kind right) :flimit)))))
-        :use ((:instance apply-erl-arithm-binop-of-flimit)
-              (:instance apply-erl-bool-binop-of-flimit)
-              (:instance apply-erl-comp-binop-of-flimit)
-              (:instance apply-erl-list-op-of-flimit)))
-      (defrule apply-erl-binop-of-flimit-2
-        (implies (and (erl-val-p left) (equal (erl-val-kind left) :flimit))
-                (equal (apply-erl-binop op left right) (make-erl-val-flimit))))
-      (defrule apply-erl-binop-of-excpt
-        (implies (and (erl-val-p left) 
-                      (erl-val-p right)
-                      (not (equal (erl-val-kind right) :flimit))
-                      (not (equal (erl-val-kind right) :reject))
-                      (equal (erl-val-kind left) :excpt))
-                (equal (apply-erl-binop op left right) left))))
+      (defcong erl-binop-equiv equal (apply-erl-binop op x y) 1)
+      (defcong erl-val-equiv equal (apply-erl-binop op x y) 2)
+      (defcong erl-val-equiv equal (apply-erl-binop op x y) 3))
 
 
 ; Apply Erlang Unary Operations ------------------------------------------------
@@ -653,18 +601,12 @@
 (define apply-erl-unop ((op erl-unop-p) (val erl-val-p))
   :returns (v erl-val-p)
   (b* ((op (erl-unop-fix op))
-       (val (erl-val-fix val))
-       ((if (equal (erl-val-kind val) :flimit)) val)
-       ((if (equal (erl-val-kind val) :reject)) val))
+       (val (erl-val-fix val)))
       (case op
         (+ (erl-plus val))
         (- (erl-minus val))
         (not (erl-not val))
         (otherwise (make-erl-val-reject :err "bad op"))))
     ///
-      (defrule apply-erl-unop-of-flimit
-        (implies
-          (erl-val-p val) 
-          (iff (not (equal (erl-val-kind (apply-erl-unop op val)) :flimit))
-               (not (equal (erl-val-kind val) :flimit))))
-        :enable (erl-minus erl-plus erl-not)))
+      (defcong erl-unop-equiv equal (apply-erl-unop op x) 1)
+      (defcong erl-val-equiv equal (apply-erl-unop op x) 2))

@@ -13,3 +13,4 @@
 (include-book "remote-call")
 (include-book "tuple")
 (include-book "unop")
+(include-book "receive")

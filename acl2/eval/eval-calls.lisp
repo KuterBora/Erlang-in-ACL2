@@ -84,7 +84,7 @@
                 args 
                 (omap::lookup fn module.fn-defns)
                 (update-erl-state->bind s nil)))
-             ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
+             ((if (not (wf-state-p rs))) (mv rs nil))
              ((if (null body)) 
               (mv function-clause nil)))
             (mv rs body)))
@@ -128,7 +128,7 @@
                 args
                 (omap::lookup fn imod.fn-defns)
                 (update-erl-state->bind-mod s nil 'imod-name)))
-              ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
+              ((if (not (wf-state-p rs))) (mv rs nil))
               ((if (null body)) (mv function-clause nil)))
             (mv rs body)))
 
@@ -137,7 +137,9 @@
     (mv reject nil))
   
   ///
-    (defcong erl-state-equiv equal (eval-local-call s f args) 1))
+    (defcong erl-state-equiv equal (eval-local-call s f args) 1)
+    (defcong symbol-equiv equal (eval-local-call s f args) 2)
+    (defcong erl-vlst-equiv equal (eval-local-call s f args) 3))
 
 
 ; Evaluate Remote Function Calls -----------------------------------------------
@@ -211,10 +213,15 @@
                args
                (omap::lookup fn rmod.fn-defns)
                (update-erl-state->bind-mod s nil module)))
-             ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
+             ((if (not (wf-state-p rs))) (mv rs nil))
              ((if (null body)) (mv function-clause nil)))
             (mv rs body))))
-    (mv undef nil)))
+    (mv undef nil))
+  ///
+    (defcong erl-state-equiv equal (eval-remote-call s m f args) 1)
+    (defcong symbol-equiv equal (eval-remote-call s m f args) 2)
+    (defcong symbol-equiv equal (eval-remote-call s m f args) 3)
+    (defcong erl-vlst-equiv equal (eval-remote-call s m f args) 4))
 
 
 ; Evaluate Anonymous Function Calls --------------------------------------------
@@ -295,7 +302,7 @@
           s 
           (erl-val-fun->bind fun)
           (erl-val-fun->module fun))))
-      ((if (equal (erl-val-kind rs.in) :reject)) (mv rs nil))
+      ((if (not (wf-state-p rs))) (mv rs nil))
       ((if (null body)) (mv function-clause nil))
 
       ; Remark: Badmatch exceptions are supposed to return the value that failed to 
@@ -310,4 +317,8 @@
                  :class (make-err-class-error)
                  :reason (make-exit-reason-badmatch :val fun))))
         nil)))
-    (mv rs body)))
+    (mv rs body))
+  ///
+    (defcong erl-state-equiv equal (eval-fun-call s f args) 1)
+    (defcong erl-val-equiv equal (eval-fun-call s f args) 2)
+    (defcong erl-vlst-equiv equal (eval-fun-call s f args) 3))

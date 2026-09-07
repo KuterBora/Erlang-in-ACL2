@@ -40,14 +40,24 @@
            (bind bind-p)
            (module symbolp)))
     (:excpt ((err erl-err-p)))
+    ; For now, PIDs are represented as natural numbers
+    (:pid ((id natp)))
 
     ; Internal return values
     (:none ())
     (:reject ((err stringp)))
     (:flimit ())
 
+    ; Return when the process enters a receive
+    ; klst must always be an erl-klst. 
+    ; This property is imposed in the more-returns of the evaluator.
+    (:receive ((klst true-listp)))
+
+    ; Return when a process fails to exit a receive
+    (:blocked ())
+
     :measure (list (acl2-count x) 1))
-  
+
   ; List of Erlang Values
   (fty::deflist erl-vlst
     :elt-type erl-val-p
@@ -79,13 +89,50 @@
     (:nocatch ((val erl-val-p)))
     (:system-limit ())
     :measure (list (acl2-count x) 0))
-  
+
   ; Reprsentation of Erlang bindings. Maps each variable to a value.
   (fty::defomap bind
     :key-type symbol
     :val-type erl-val
     :measure (list (acl2-count x) 0)))
 
+; Erlang Message  --------------------------------------------------------------
+
+; Process Identifier: PIDs are unique among processors that are alive on
+; connected nodes. PID's of terminated processes can be reused.
+; - For simplicity, PID's are represented as natural numbers.
+(fty::defsubtype pid
+  :supertype erl-val-p
+  :restriction 
+    (lambda (x) (equal (erl-val-kind x) :pid))
+  :fix-value (make-erl-val-pid :id 0))
+
+(defrule erl-val-kind-of-pid-p
+  (implies (pid-p v) (equal (erl-val-kind v) :pid))
+  :enable pid-p)
+
+(fty::deflist pid-lst
+  :elt-type pid
+  :true-listp t)
+
+(defrule erl-vlst-p-of-pid-lst
+  (implies (pid-lst-p lst) (erl-vlst-p lst))
+  :enable (pid-lst-p erl-vlst-p))
+
+(fty::defset pid-set
+  :elt-type pid
+  :elementp-of-nil nil)
+
+; TODO: I though I would not have to prove this, but it would not match otherwise.
+(defrule nil-not-in-pid-set
+  (implies (pid-set-p pids) (not (set::in nil pids)))
+  :use ((:instance pid-p-when-in-pid-set-p-binds-free-x (a nil) (x pids)))
+  :disable pid-p-when-in-pid-set-p-binds-free-x)
+
+; Map from PID to messages sent
+(fty::defomap outbox
+  :key-type pid-p
+  :val-type erl-vlst-p)
 
 ; Utility Functions/Types ------------------------------------------------------
 
@@ -210,7 +257,7 @@
   :expand ((erl-val-p v) (erl-val-p (cons v x))))
 
 
-; Utility Theorems -------------------------------------------------------------
+; Utility Theorems/Functions ---------------------------------------------------
 
 ; These might be unnecessary after including the omap book.
 (defrule bind-update-lookup
@@ -234,3 +281,22 @@
     :enable (erl-val-kind erl-val-integer->val erl-val-p)
     :expand (true-listp (cdr x))
     :rule-classes :forward-chaining))
+
+; Predicate for a list of well-formed values.
+(define wf-vlst-p ((vlst erl-vlst-p))
+  :enabled t
+  :measure (len (erl-vlst-fix vlst))
+  (b* ((vlst (erl-vlst-fix vlst))
+       ((if (null vlst)) t))
+      (and (null (member (erl-val-kind (car vlst))
+                         '(:flimit :excpt :reject :blocked :receive)))
+           (wf-vlst-p (cdr vlst))))
+  
+  ///
+    (defcong erl-vlst-equiv equal (wf-vlst-p vlst) 1
+      :hints (("Goal" :expand (wf-vlst-p vlst-equiv))))
+    
+    (defrule non-receive-of-car-of-wf-vlst-p
+      (implies
+        (wf-vlst-p lst)
+        (not (equal (erl-val-kind (car lst)) :receive)))))

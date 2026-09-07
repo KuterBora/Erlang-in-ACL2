@@ -1,5 +1,5 @@
 (in-package "ACL2")
-(include-book "../eval/top")
+(include-book "../top")
 (include-book "std/testing/assert-equal" :dir :system)
 
 ; This file contains some basic tests for the evaluator and the Erlang AST.
@@ -8,9 +8,6 @@
 ; - Unop/Binops
 ; - Variables
 ; - Match Statements
-;
-; TODO: 
-; This file probably does not have enough tests. Especially for error conditions.
 
 ; Terms ------------------------------------------------------------------------
 
