@@ -11,7 +11,7 @@ There are a few naming differences in the paper, in this repo:
 ```bash
 ACL2_DIR/books/build/cert.pl --acl2 ACL2 *.lisp
 ```
-where ACL2_DIR denotes your ACL2 sources directory and ACL2 denotes a recent ACL2 executable.
+where `ACL2_DIR` denotes your ACL2 sources directory and `ACL2` denotes a recent ACL2 executable.
 
 ## Important files:
 
