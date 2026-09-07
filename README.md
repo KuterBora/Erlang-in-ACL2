@@ -1,28 +1,32 @@
 # Erlang in ACL2: A CPS Evaluator
 
-## Setup
-
-TODO
-
 ## Erlang in ACL2
 
-TODO: description
+There are a few naming differences in the paper, in this repo:
+- `estate` is `erl-state`
+- `eval-cont-list is `apply-k`
+- `cont-binop` and `cont-expr` are `kont-binop` and `kont-expr`
 
-Top-level repo guide:
-- `acl2`: TODO
-- `erl`: reference interpreter in Erlang.
+## Certify with:
+ACL2_DIR/books/build/cert.pl --acl2 ACL2 *.lisp where ACL2_DIR denotes your ACL2 sources directory and ACL2 denotes a recent ACL2 executable.
 
-Here are some key files and folders in `acl2`:
-- `theorems` Contains theorems regarding Erlang code.
-- `examples` Contains examples of evaluation and test cases.
+## Important files:
 
-- `erl-ast.lisp`: Defines an ACL2 representation of the Erlang AST.
-- `ast-theorems.lisp`: Contains theorems regarding the Erlang AST.
+### The Translator 
+erl-to-acl2/erl-to-acl2.lisp : translator for Erlang modules and expressions.
 
-- `erl-val.lisp`: ACL2 representations of Erlang values and exceptions.
-- `erl-kont.lisp`: Defines continuations that encode the next step of the evaluator.
-- `erl-state.lisp` Defines Erlang-state which represents the current value, bindings, world, and messages of the evaluator.
+### The AST Evaluator:
+- acl2/eval/erl-ast : the ACL2 representation of Erlang AST
+- acl2/eval/erl-kont : the continuations.
+- acl2/eval/erl-eval : the AST evaluator
+- acl2/eval/erl-state : the program state
 
-- `termination.lisp`: Contains the termination proof for the evaluator.
-- `erl-eval.lisp`: The Erlang evaluator.
-- `eval-theorems.lisp` Contains the core theorems regarding the evaluator.
+### The Scheduler:
+-acl2/scheduler/abstract : the abstract scheduler
+acl2/scheduler/erl-in-acl2 : run the entire pipeline here.
+
+### Examples:
+- acl2/scheduler/examples : message passing examples
+- acl2/books/erl-arithmetic/sum_of_nats : prove the closed form of summation for Erlang
+- acl2/books/reduce-v2 : the reduce implementation and proofs.
+- acl2/books/reduce-v2 : the top file describing what is done.
