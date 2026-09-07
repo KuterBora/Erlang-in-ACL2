@@ -1,3 +1,12 @@
+% Erlang in ACL2
+%
+% Copyright (C) Kuter Bora.
+%
+% License: A 3-clause BSD license. See the LICENSE file distributed with ACL2.
+%
+% Main Author: Kuter Bora
+% Contributing Author: Mark Greenstreet
+
 -module(erl_to_acl2).
 -export([exprs_to_acl2/1, module_to_acl2/1]).
 -export([test_expr/1, test_module/1]).

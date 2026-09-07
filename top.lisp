@@ -8,5 +8,4 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-
-(include-book "create-wtree")
+(include-book "acl2/top")

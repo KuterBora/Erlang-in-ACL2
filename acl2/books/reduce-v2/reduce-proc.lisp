@@ -9,13 +9,17 @@
 ; instead just state that there is a module in the world that contains the
 ; functions. However, this simplifies the proofs slightly for now.
 
+; TODO: ealier I thought there was bug with [Hd | Tl] pattern match,
+; but then realized that the bug was in the implementation instead.
+; However I have not reverted to [ChildHd | ChildTl] yet.
+; Instead, there are two match statements at the beginning of
+; the function.
+;
 #| 
   reduce(none, [], GrandTotal) -> GrandTotal;
   reduce(ParentPid, [], MyTotal) ->
     ParentPid ! {self(), MyTotal};
-  reduce(ParentPid, CPids, LeftTotal) ->
-    ChildHd = hd(CPids);
-    ChildTl = tl(Cpids);
+  reduce(ParentPid, [ChildHd | ChildTl], LeftTotal) ->
     receive
       {ChildHd, RightTotal} ->
         reduce(ParentPid, ChildTl, LeftTotal + RightTotal)
