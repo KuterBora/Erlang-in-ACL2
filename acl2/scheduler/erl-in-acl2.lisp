@@ -100,7 +100,6 @@
                         (b*
                           ((- (cw "Evaluated ~x0 till the next receive. ~%~%" pid))
                            (nklst (erl-val-receive->klst (erl-state->in ns)))
-                           (- (cw "So the new klst is: ~x0. ~%~%" nklst))
                            ((unless (erl-klst-p nklst))
                             (b* ((- (cw "erl-step: bad continuation list.~%"))) nil)))
                           (omap::update
