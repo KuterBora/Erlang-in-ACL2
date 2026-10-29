@@ -71,6 +71,7 @@
       (:match (make-erl-val-reject :err "Numeric expressions cannot have match."))
       (:if (make-erl-val-reject :err "Numeric expressions cannot have if clauses."))
       (:case-of (make-erl-val-reject :err "Numeric expressions cannot have case clauses."))
+      (:try (make-erl-val-reject :err "Numeric expressions cannot have try-catch."))
       (:remote-call (make-erl-val-reject :err "Numeric expressions cannot have remote calls."))
       (:call (make-erl-val-reject :err "Numeric expressions cannot have local calls."))
       (:fun-call (make-erl-val-reject :err "Numeric expressions cannot have fun calls."))

@@ -6,6 +6,7 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 (include-book "erl-value")
 (include-book "erl-kont")
@@ -13,14 +14,19 @@
 
 ; Erlang State ----------------------------------------------------------------
 
-; Representation of the current State of the Erlang program under evaluation
-; TODO: Outbox, self
+; Tthe state of the Erlang program under evaluation.
 (fty::defprod erl-state
-  ((in erl-val-p :default (make-erl-val-none))
+  (; Latest value produced/received during evaluation.
+   (in erl-val-p :default (make-erl-val-none))
+   ; Current bindings of variables to values.
    (bind bind-p :default nil)
+   ; The logical world.
    (world world-p :default (omap::from-lists '(local) (list (make-module))))
+   ; Current module.
    (module symbolp :default 'local)
+   ; Process ID of this process
    (self pid-p :default (make-erl-val-pid :id 0))
+   ; Messages sent, awaiting delivery.
    (outbox outbox-p :default nil)))
 
 ; Each step of the evaluator returns an erl-s-klst where
@@ -36,10 +42,10 @@
 
 ; Helpers for Setting Fields --------------------------------------------------
 
-; Remark: 
-; - fty::change might be good alternate, but defining these accessors 
-;   might provide more felixibility -- theorems can be proven and the functions
-;   can be disabled. 
+; Remark:
+; fty::change might be good alternate, but defining these accessors 
+; might provide more felixibility -- theorems can be proven and the functions
+; can be disabled.
 
 (define update-erl-state->in ((s erl-state-p) (in erl-val-p))
   :returns (rs erl-state-p)

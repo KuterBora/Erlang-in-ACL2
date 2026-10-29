@@ -6,6 +6,7 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 (include-book "erl-ast")
 (include-book "std/omaps/top" :dir :system)
@@ -30,10 +31,9 @@
 
 ; Representation of the Erlang values returned by the evaluator.
 ; Remarks:
-; - Strings are represented as lists of integer
+; - Strings are represented as list of integers
 ; - Pairs are not supported
 ; - Named funs are not supported
-; - TODO: pid
 (fty::deftypes erl-val
   
   ; Erlang Values
@@ -57,12 +57,15 @@
     (:flimit ())
 
     ; Return when the process enters a receive
-    ; klst must always be an erl-klst. 
-    ; This property is imposed in the more-returns of the evaluator.
+    ; klst must always be an erl-klst. This property
+    ; is proven later.
     (:receive ((klst true-listp)))
 
-    ; Return when a process fails to exit a receive
+    ; Return when a process fails to receive a message.
     (:blocked ())
+
+    ; Return when a process requests to spawn another.
+    (:spawn ((module symbolp) (fn symbolp) (args erl-vlst-p)))
 
     :measure (list (acl2-count x) 1))
 
@@ -108,7 +111,7 @@
 
 ; Process Identifier: PIDs are unique among processors that are alive on
 ; connected nodes. PID's of terminated processes can be reused.
-; - For simplicity, PID's are represented as natural numbers.
+; - For simplicity, PID's are represented as natural numbers for now.
 (fty::defsubtype pid
   :supertype erl-val-p
   :restriction 
@@ -131,7 +134,6 @@
   :elt-type pid
   :elementp-of-nil nil)
 
-; TODO: I though I would not have to prove this, but it would not match otherwise.
 (defrule nil-not-in-pid-set
   (implies (pid-set-p pids) (not (set::in nil pids)))
   :use ((:instance pid-p-when-in-pid-set-p-binds-free-x (a nil) (x pids)))
@@ -168,14 +170,12 @@
       :module 'local))
 
 (defrule erl-val-when-erl-fun
-  (iff (erl-fun-p fun)
-       (and (erl-val-p fun)
-            (equal (erl-val-kind fun) :fun)))
+  (implies
+    (and (erl-val-p fun) (equal (erl-val-kind fun) :fun))
+    (erl-fun-p fun))
   :enable erl-fun-p)
 
-; Helper for implementing list substraction
-; For each element in the first argument, the first occurrence of this element 
-; (if any) is removed from the second argument.
+; Helper for implementing list substraction.
 (define remove-first-of-each ((x erl-vlst-p) (lst erl-vlst-p))
   :returns (vlst erl-vlst-p)
   :measure (erl-vlst-count x)
@@ -194,7 +194,7 @@
       (cons (make-erl-val-integer :val (car x))
             (ints-to-erl-ints (cdr x)))))
 
-; Turns a string to its correponding Erlang list.
+; Turns a string into the correponding Erlang integer list.
 (define string=>erl-cons ((x stringp))
   :returns (v erl-val-p)
   (b* ((x (string x))
@@ -206,8 +206,9 @@
       (v (equal (erl-val-kind v) :cons)
       :name erl-val-kind-of-string=>erl-cons)))
 
-; Obtain the arity from a clause-list
-; Return nil if all clauses do not have the same arity, or if x is nil
+; Obtain the arity of a clause-list. Return nil if all clauses do not
+; have the same arity, or if x is nil. The intended use for this function
+; is to find the arity of a function, given its clauses.
 (define erl-clause-list->arity ((x erl-clause-list-p))
   :measure (len x)
   (b* ((x (erl-clause-list-fix x))
@@ -219,92 +220,75 @@
        ((unless (equal rest arity)) nil))
       arity))
 
-; Erlang Equivalence -----------------------------------------------------------
-
-; Checks if two Erlang values are equivalent. If one of the values is a rejection,
-; the other value is also checked to be a rejection, regardless of its type.
-; This is useful for simplifying theorems which have the hypothesis that the 
-; given Erlang AST's are well-formed, and thus will not be rejected.
-(define erl-equiv ((v1 erl-val-p) (v2 erl-val-p))
-  (or (and (equal (erl-val-kind v1) :reject)
-           (equal (erl-val-kind v2) :reject))
-      (equal v1 v2)))
-
-(defequiv erl-equiv
-  :hints (("Goal" :in-theory (enable erl-equiv))))
-
-(set-well-founded-relation o<)
-
-
 ; Theorems ---------------------------------------------------------------------
 
-; If a vlst has len > 2, its cdr is not nil.
-(defrule consp-of-cdr-of-erl-vlst
-  (implies (and (erl-vlst-p x) (> (len x) 1))
-           (consp (cdr x))))
+; ; If a vlst has len > 2, its cdr is not nil.
+; (defrule consp-of-cdr-of-erl-vlst
+;   (implies (and (erl-vlst-p x) (> (len x) 1))
+;            (consp (cdr x))))
 
-; Appending two vlst will produce a vlst
-(defrule append-of-erl-vlst
-  (implies (and (erl-vlst-p vlst1) (erl-vlst-p vlst2))
-           (erl-vlst-p (append vlst1 vlst2))))
+; ; Appending two vlst will produce a vlst
+; (defrule append-of-erl-vlst
+;   (implies (and (erl-vlst-p vlst1) (erl-vlst-p vlst2))
+;            (erl-vlst-p (append vlst1 vlst2))))
 
-; nth of an erl-vlst is an erl-val
-(defrule nth-of-erl-vlst
-  (implies 
-    (and (erl-vlst-p vlst) 
-         (integerp n)
-         (>= n 0)
-         (< n (len vlst)))
-    (erl-val-p (nth n vlst))))
+; ; nth of an erl-vlst is an erl-val
+; (defrule nth-of-erl-vlst
+;   (implies 
+;     (and (erl-vlst-p vlst) 
+;          (integerp n)
+;          (>= n 0)
+;          (< n (len vlst)))
+;     (erl-val-p (nth n vlst))))
 
-; A cons pair of two erl-vals is not an erl-val.
-; This can be useful in a few places.
-(defrule cons-of-erl-val-p
-  (implies (erl-val-p v)
-           (not (erl-val-p (cons v x))))
-  :expand ((erl-val-p v) (erl-val-p (cons v x))))
+; ; A cons pair of two erl-vals is not an erl-val.
+; ; This can be useful in a few places.
+; (defrule cons-of-erl-val-p
+;   (implies (erl-val-p v)
+;            (not (erl-val-p (cons v x))))
+;   :expand ((erl-val-p v) (erl-val-p (cons v x))))
 
 
 ; Utility Theorems/Functions ---------------------------------------------------
 
 ; These might be unnecessary after including the omap book.
-(defrule bind-update-lookup
-  (equal (omap::lookup s (omap::update s x m)) x)
-  :enable omap::lookup)
+; (defrule bind-update-lookup
+;   (equal (omap::lookup s (omap::update s x m)) x)
+;   :enable omap::lookup)
 
-(defrule bind-update-update-lookup
-  (implies
-    (not (equal s1 s2))
-    (equal (omap::lookup s2 (omap::update s1 x1 (omap::update s2 x2 m))) x2))
-  :enable omap::lookup)
+; (defrule bind-update-update-lookup
+;   (implies
+;     (not (equal s1 s2))
+;     (equal (omap::lookup s2 (omap::update s1 x1 (omap::update s2 x2 m))) x2))
+;   :enable omap::lookup)
 
-; This is useful for theorems that reason about the value of an erl-val-integer. 
-(encapsulate nil
-  (local (include-book "std/lists/len" :dir :system))
-  (defrule erl-val-integer-of-car-and-cdr
-    (implies (and (erl-val-p x)
-                  (equal (erl-val-kind x) :integer)
-                  (equal (erl-val-integer->val x) v))
-             (equal x `(:integer ,v)))
-    :enable (erl-val-kind erl-val-integer->val erl-val-p)
-    :expand (true-listp (cdr x))
-    :rule-classes :forward-chaining))
+; ; This is useful for theorems that reason about the value of an erl-val-integer. 
+; (encapsulate nil
+;   (local (include-book "std/lists/len" :dir :system))
+;   (defrule erl-val-integer-of-car-and-cdr
+;     (implies (and (erl-val-p x)
+;                   (equal (erl-val-kind x) :integer)
+;                   (equal (erl-val-integer->val x) v))
+;              (equal x `(:integer ,v)))
+;     :enable (erl-val-kind erl-val-integer->val erl-val-p)
+;     :expand (true-listp (cdr x))
+;     :rule-classes :forward-chaining))
 
-; Predicate for a list of well-formed values.
-(define wf-vlst-p ((vlst erl-vlst-p))
-  :enabled t
-  :measure (len (erl-vlst-fix vlst))
-  (b* ((vlst (erl-vlst-fix vlst))
-       ((if (null vlst)) t))
-      (and (null (member (erl-val-kind (car vlst))
-                         '(:flimit :excpt :reject :blocked :receive)))
-           (wf-vlst-p (cdr vlst))))
+; ; Predicate for a list of well-formed values.
+; (define wf-vlst-p ((vlst erl-vlst-p))
+;   :enabled t
+;   :measure (len (erl-vlst-fix vlst))
+;   (b* ((vlst (erl-vlst-fix vlst))
+;        ((if (null vlst)) t))
+;       (and (null (member (erl-val-kind (car vlst))
+;                          '(:flimit :excpt :reject :blocked :receive)))
+;            (wf-vlst-p (cdr vlst))))
   
-  ///
-    (defcong erl-vlst-equiv equal (wf-vlst-p vlst) 1
-      :hints (("Goal" :expand (wf-vlst-p vlst-equiv))))
+;   ///
+;     (defcong erl-vlst-equiv equal (wf-vlst-p vlst) 1
+;       :hints (("Goal" :expand (wf-vlst-p vlst-equiv))))
     
-    (defrule non-receive-of-car-of-wf-vlst-p
-      (implies
-        (wf-vlst-p lst)
-        (not (equal (erl-val-kind (car lst)) :receive)))))
+;     (defrule non-receive-of-car-of-wf-vlst-p
+;       (implies
+;         (wf-vlst-p lst)
+;         (not (equal (erl-val-kind (car lst)) :receive)))))

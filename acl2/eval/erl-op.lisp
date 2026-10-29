@@ -6,6 +6,7 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 (include-book "erl-ast")
 (include-book "erl-value")
@@ -17,9 +18,11 @@
 
 ; Remarks:
 ; - Floating point operations are not currently supported, so '/' is not implemented.
-; - bitwise operations are not supported.
+; - bitwise operations are not yet supported.
+; - The '!' (send) operation is handled by the evaluator.
 
-; Representation of Erlang unary + in ACL2.
+; Apply Erlang unary +.
+; - Returns the badarith exception if the argument is not an integer.
 (define erl-plus ((val erl-val-p))
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
@@ -31,7 +34,8 @@
   ///
     (defcong erl-val-equiv equal (erl-plus x) 1))
 
-; Representation of Erlang unary - in ACL2.
+; Apply Erlang unary -.
+; - Returns the badarith exception if the argument is not an integer.
 (define erl-minus ((val erl-val-p))
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
@@ -43,8 +47,8 @@
   ///
     (defcong erl-val-equiv equal (erl-minus x) 1))
 
-; Representation of Erlang addition in ACL2.
-; - Returns badarith if arguments are not integers.
+; Apply Erlang addition.
+; - Returns the badarith exception if arguments are not integers.
 (define erl-add ((left erl-val-p) (right erl-val-p))
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
@@ -58,17 +62,10 @@
                                     (erl-val-integer->val right))))
     ///
       (defcong erl-val-equiv equal (erl-add x y) 1)
-      (defcong erl-val-equiv equal (erl-add x y) 2)
-      (defrule commutativity-of-erl-add
-        (erl-equiv (erl-add x y)
-                   (erl-add y x))
-        :enable erl-equiv)
-      (defrule associativity-of-erl-add
-        (erl-equiv (erl-add (erl-add x y) z)
-                   (erl-add x (erl-add y z)))))
+      (defcong erl-val-equiv equal (erl-add x y) 2))
 
-; Representation of Erlang substraction in ACL2.
-; - Returns badarith if arguments are not integers.
+; Apply Erlang substraction.
+; - Returns the badarith exception if arguments are not integers.
 (define erl-sub ((left erl-val-p) (right erl-val-p))
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
@@ -84,8 +81,8 @@
     (defcong erl-val-equiv equal (erl-sub x y) 1)
     (defcong erl-val-equiv equal (erl-sub x y) 2))
 
-; Representation of Erlang multiplication in ACL2.
-; - Returns badarith if arguments are not integers.
+; Apply Erlang multiplication.
+; - Returns the badarith exception if arguments are not integers.
 (define erl-mul ((left erl-val-p) (right erl-val-p))
   :returns (v erl-val-p)
   (b* ((left (erl-val-fix left)) 
@@ -99,18 +96,9 @@
                                     (erl-val-integer->val right))))
     ///
       (defcong erl-val-equiv equal (erl-mul x y) 1)
-      (defcong erl-val-equiv equal (erl-mul x y) 2)
+      (defcong erl-val-equiv equal (erl-mul x y) 2))
 
-      (defrule commutativity-of-erl-mul
-        (erl-equiv (erl-mul x y)
-                   (erl-mul y x))
-          :enable erl-equiv)
-      (defrule associativity-of-erl-mul
-        (erl-equiv (erl-mul (erl-mul x y) z)
-                   (erl-mul z (erl-mul y x)))
-        :enable erl-equiv))
-
-; Representation of Erlang integer division (div) in ACL2.
+; Apply Erlang integer division (div).
 ; - The result is rounded down to the largest integer less than the result.
 ; - Returns badarith if arguments are not integers or if there is division by 0.
 (define erl-div ((left erl-val-p) (right erl-val-p))
@@ -132,7 +120,7 @@
     (defcong erl-val-equiv equal (erl-div x y) 1)
     (defcong erl-val-equiv equal (erl-div x y) 2))
 
-; Representation of Erlang integer remainder of X/Y (rem) in ACL2.
+; Apply Erlang integer remainder (rem).
 ; - Returns badarith if arguments are not integers or if there is division by 0.
 (define erl-rem ((left erl-val-p) (right erl-val-p))
   :returns (v erl-val-p)
@@ -178,7 +166,7 @@
 
 ; Erlang Boolean Operations ----------------------------------------------------
 
-; Representation of Erlang boolean operation 'not' in ACl2.
+; Apply Erlang 'not' on the given booelan.
 ; - Returns badarg if the argument is not a boolean.
 (define erl-not ((val erl-val-p))
   :returns (v erl-val-p)
@@ -195,7 +183,7 @@
   ///
     (defcong erl-val-equiv equal (erl-not x) 1))
 
-; Representation of Erlang boolean operation 'and' in ACl2.
+; Apply Erlang 'and' on the given booleans.
 ; - Returns badarg if arguments are not booleans.
 (define erl-and ((left erl-val-p) (right erl-val-p))
   :returns (v erl-val-p)
@@ -216,7 +204,7 @@
     (defcong erl-val-equiv equal (erl-and a b) 1)
     (defcong erl-val-equiv equal (erl-and a b) 2))
 
-; Representation of Erlang boolean operation 'or' in ACl2.
+; Apply Erlang 'or' on the given booleans.
 ; - Returns badarg if arguments are not booleans.
 (define erl-or ((left erl-val-p) (right erl-val-p))
   :returns (v erl-val-p)
@@ -237,7 +225,7 @@
     (defcong erl-val-equiv equal (erl-or a b) 1)
     (defcong erl-val-equiv equal (erl-or a b) 2))
 
-; Representation of Erlang boolean operation 'xor' in ACl2.
+; Apply Erlang 'xor' on the given booleans.
 ; - Returns badarg if arguments are not booleans.
 (define erl-xor ((left erl-val-p) (right erl-val-p))
   :returns (v erl-val-p)
@@ -279,25 +267,23 @@
       (defcong erl-val-equiv equal (apply-erl-bool-binop op x y) 2)
       (defcong erl-val-equiv equal (apply-erl-bool-binop op x y) 3))
 
-
 ; Erlang Comparison Operators --------------------------------------------------
 
 ; Remarks:
-; - Erl-val represents strings as lists of integers whixh does not change the 
-;   Erlang rules for equivalence as "A" =:= [65].
-; - 0 and -0 are not considered equivalent by =:= in Erlang. That is currently
+; - Strings are represented as lists of integers. This is compatible with the
+;   Erlang rules for equivalence. For example, "A" =:= [65] evaluates to true.
+; - 0 and -0 are not considered equivalent by =:= in Erlang. This is currently
 ;   not supported.
 
 ; Helper for anonymous function comparison.
 ; The Erlang refernce manual gives an order for how functions can be compared
-; with other terms, explained in the definition of erl-comparison below. However,
-; the manual does not specify how funs are compared within each other. While
-; experimentation shows that there is an ordering for funs -- for example,
-; funs in the same module are compared by mathcing their clauses, including line 
-; numbers -- this evaluator will leave fun comparison as undefined behavior in
-; accordance with the Erlang manual.  
+; with other terms. However, the manual does not specify how funs are compared
+; with other funs. Experimentation shows that there is an ordering for funs --
+; for example, funs in the same module are compared by mathcing their clauses,
+; including line numbers, but this evaluator will leave fun comparison as undefined
+; behavior in accordance with the Erlang manual.  
 (encapsulate
-  ; function that compares anonymous Erlang functions
+  ; compare anonymous Erlang functions
   (((erl-fun-compare * *) => * 
       :formals (f1 f2) :guard (and (erl-fun-p f1) (erl-fun-p f2))))
 
@@ -329,8 +315,6 @@
   (defcong erl-fun-equiv equal (erl-fun-compare f g) 2))
 
 ; ACL2 total ordering is used for the execution of erl-fun-compare.
-; This function has no bearing on theorems regarding the evaluator -- it simply
-; replaces the constrained function if it is tried to be executed.
 (define total-order-fun-compare ((f1 erl-fun-p) (f2 erl-fun-p))
   (b* ((f1 (erl-fun-fix f1))
        (f2 (erl-fun-fix f2))
@@ -340,7 +324,7 @@
   ///
   (defattach (erl-fun-compare total-order-fun-compare)))
 
-; Helper to compare Erlang atoms that have been converted to list of integers
+; Helper to compare Erlang atoms (which must first be converted to integer lists). 
 ; - Return 0 if they are equal
 ; - Return 1 if left is greater than right
 ; - Return -1 if left is smaller than right
@@ -363,35 +347,13 @@
 ; - Return -1 if left is smaller than right
 ; - If an arg is not a valid Erlang value, return 3.
 ;
-; TODO: I need to clean up the multicase. Maybe I should have a guard
-; that ensures a list or tuple does not contain error, as that should have been
-; checked by the caller already.
-;
 ; The arguments can be of different data types. The following order is defined
 ; in the Erlang reference manual:
 ; number < atom < reference < fun < port < pid < tuple < map < nil < list < bit string
 ;
-; Unsupported: 
-; - fun comparisons, though not documented in the Erlang manual, are allowed in Erlang.
-; '==' and '=:=' seem obvious to implement, but other operations required experiments
-;  to figure out. 
-; - When comparing funs, the AST's are compared, including the line numbers assigned to
-;   the nodes. 
-;   
-;   For example,
-;   
-;   A = fun() -> 1 end, B = fun() -> 1 end, A == B. 
-;   
-;   returns true, while 
-;   
-;   A = fun() -> 1 end,
-;   B = fun() -> 1 end,
-;   A == B.
-;   
-;   returns false.
-;   
-; Since this is not a very practical feature of Erlang, it will not be supported
-; in the ACL2 evaluator for now. 
+; Remark: 
+; fun comparisons, though not documented in the Erlang manual, are allowed in Erlang.
+; Since this is not a very practical feature of Erlang, it will not be supported for now. 
 ;
 (defines erl-comparison
   :flag-local nil
@@ -504,7 +466,7 @@
           (if (equal comp 1)
               (make-erl-val-atom :val 'true)
               (make-erl-val-atom :val 'false)))
-        (=-colon-=
+        (=.=
           (if (equal left right)
               (make-erl-val-atom :val 'true)
               (make-erl-val-atom :val 'false)))
@@ -520,7 +482,7 @@
 
 ; Apply Erlang List Operations -------------------------------------------------
 
-; Representation of Erlang list concatenation (++) in ACL2.
+; Apply Erlang list concatenation (++).
 ; Since pairs are not supported currently, the arguments must be lists.
 ; - Returns badarg if the arguments are not lists.
 (define erl-concat ((left erl-val-p) (right erl-val-p))
@@ -541,7 +503,7 @@
     (defcong erl-val-equiv equal (erl-concat l1 l2) 1)
     (defcong erl-val-equiv equal (erl-concat l1 l2) 2))
 
-; Representation of Erlang list substraction (--) in ACL2.
+; Apply Erlang list substraction (--).
 ; Since pairs are not supported currently, the arguments must be lists.
 ; - Returns badarg if the arguments are not lists.
 (define erl-substract ((left erl-val-p) (right erl-val-p))
@@ -582,7 +544,6 @@
       (defcong erl-val-equiv equal (apply-erl-list-op op x y) 2)
       (defcong erl-val-equiv equal (apply-erl-list-op op x y) 3))
 
-
 ; Apply Erlang Binary Operations -----------------------------------------------
 
 ; Given a binop, apply the corresponding Erlang operation.
@@ -601,7 +562,6 @@
       (defcong erl-binop-equiv equal (apply-erl-binop op x y) 1)
       (defcong erl-val-equiv equal (apply-erl-binop op x y) 2)
       (defcong erl-val-equiv equal (apply-erl-binop op x y) 3))
-
 
 ; Apply Erlang Unary Operations ------------------------------------------------
 
