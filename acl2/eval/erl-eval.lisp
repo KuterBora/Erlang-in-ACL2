@@ -6,6 +6,7 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 (include-book "termination")
 (include-book "eval-calls")
@@ -19,11 +20,13 @@
 ;
 ; Unsupported:
 ; - Badmatch exception are supposed to return the value that failed to 
-;   match. However, for certain instances of this, there is no easy way to 
-;   find that value.
-; - The Erlang compiler can find out of different clauses of the same expression
+;   match. However, in the current implementation there is no easy way to 
+;   acquire that value sometimes.
+; - The Erlang compiler can find out if different clauses of the same expression
 ;   set the same variable to different values. These variables are called
-;   'unsafe' and should not allowed.
+;   'unsafe' and should not allowed. (TODO: add link). To enforce this, I could
+;   define a well-formed-ast-p, which would also enforce that variables are
+;   always bound.
 ;
 (define eval-k ((k erl-k-p) (s erl-state-p))
   :returns (ks erl-s-klst-p)
@@ -101,6 +104,7 @@
               :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.rhs))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs)))))
+          (:try (make-erl-s-klst :s s))
           ; if x is an if clause, invoke the clause evaluator
           (:if
             (b* (((mv (erl-state rs) body)

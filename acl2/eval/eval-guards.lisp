@@ -56,8 +56,7 @@
               (node-count x)))
   :enable guard-expr-fix))
 
-
-; Evaluate Erlang Guard Expressions --------------------------------------------
+; Guard Expression Evaluation --------------------------------------------------
 
 ; Erlang reference manual explains: The set of valid guard expressions is a 
 ; subset of the set of valid Erlang expressions. The reason for restricting the 
@@ -66,29 +65,27 @@
 ;
 ; Supported guard expressions:
 ; - (Bound) Variables
-; - Consntants (atoms, integers, lists, tuples)
+; - Connstants (atoms, integers, lists, tuples)
 ; - Expressions that construct atoms, integer, lists and tuples
 ; - Calls to certain BIFs (defined in world.lisp)
-; - Term Comparisons
+; - Term Comparison
 ; - Arithmetic expressions
 ; - Boolean expressions
 ; - Short-circuit operations
 ;
 ; Remarks:
-; - Currently, all operations included in erl-binop and erl-unop are allowed in
-;   guard-expressions, except for send, '!'.
-; - Unlike in patterns, arithmetic expressions in guards do not seem to be
-;   evaluated at compile time. Thus, they can cause exceptions, and they will
-;   not be rejected by the interpreter if they do.
+; - Currently, all operations included in erl-binop and erl-unop are
+;   allowed in guard-expressions, except for send, '!'.
+; - Unlike in patterns, arithmetic expressions in guards can cause
+;   runtime exceptions.
 ;
-; Guards allowed by Erlang that are not supported:
+; Guards allowed by Erlang that are not supported currently:
 ; - Floats, records, maps and binaries
 ; - Expressions that construct floats, records, maps and binaries
 ; - Expressions that update a map
 ; - The record expressions Expr#Name.Field and #Name.Field
 
-; Evaluate the guard expressions 'x' within the given state. Return the
-; erl-value produced.  
+; Evaluate the given guard expression.
 (define eval-guard-expr ((x guard-expr-p) (s erl-state-p))
   :returns (v erl-val-p)
   :measure (node-count x)
@@ -146,6 +143,7 @@
       (:match (make-erl-val-reject :err "Guard expressions cannot have match."))
       (:if (make-erl-val-reject :err "Guard expressions cannot have if clauses."))
       (:case-of (make-erl-val-reject :err "Guard expressions cannot have case clauses."))
+      (:try (make-erl-val-reject :err "Guard expressions cannot have try."))
       (:remote-call (make-erl-val-reject :err "Guard expressions can only have calls to BIFs."))
       (:call
         (b* (; Evaluate the argument guard expresions.
@@ -167,8 +165,7 @@
     (defcong guard-expr-equiv equal (eval-guard-expr x s) 1)
     (defcong erl-state-equiv equal (eval-guard-expr x s) 2))
 
-
-; Evaluate Guard Sequences -----------------------------------------------------
+; Guard Sequence Evaluation ----------------------------------------------------
 
 ; Erlang reference manual explains:
 ; - A guard sequence is true if at least one of the guards is true. 
@@ -178,15 +175,6 @@
 ;
 ; Remark: Exceptions raised by guards are equivalent to the guard evaluating to
 ; false, and will not alter the control flow.
-;
-; These function does not directly follow the Erlang control flow. In Erlang, 
-; once a guard from the sequence evaluates to true, the remaining guards, 
-; if any, are not evaluated. However, to be able to reject invalid guards that
-; would have been discovered during compilation in Erlang, the ACL2 interpreter 
-; still needs to go through the rest of the guards and look for rejections.
-; This ensures the output is equivalent to that in Erlang. In the future,
-; ASTz could be checked for well-formedness before interpretetion to account for
-; cases like these. 
 
 ; Return '(:atom true) if every guard expression in the sequence evaluates 
 ; to '(:atom true). If there are rejections, return the first rejection 
@@ -198,7 +186,7 @@
   (b* ((x (guard-expr-list-fix x))
        (s (erl-state-fix s))
 
-       ; If there are no guard expressions, the guard succeeds. 
+       ; If there are no guard expressions left, the guard succeeds. 
        ((if (null x)) (make-erl-val-atom :val 'true))
 
        ; Evaluate the car and cdr of the guard expressions.
@@ -248,10 +236,6 @@
     (defcong erl-state-equiv equal (eval-guard-seq-when-consp x s) 2))
 
 ; If x is nil, return '(:atom true), otherwise evaluate the guard sequence.
-; This distinction is needed because an empty guard sequence should be evaluted 
-; to true. This is not reflected by the base case of eval-guard-seq-when-consp
-; which checks if at least one of the guards in a sequence evaluates 
-; to true.
 (define eval-guard-seq ((x guard-expr-lists-p) (s erl-state-p))
   :returns (result erl-val-p)
   (b* ((x (guard-expr-lists-fix x))

@@ -6,6 +6,7 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 (include-book "erl-world")
 (include-book "erl-state")
@@ -13,42 +14,39 @@
 
 (set-induction-depth-limit 1)
 
-; Evaluate Local Function Calls ------------------------------------------------
+; Local Function Calls ---------------------------------------------------------
 
 ; Evaluate a 'local' function call. This means the call was made to a function
 ; declared within or imported to the current module. Find the corresponding 
-; function, its macthing clause, and return the function body. Otherwise, return
-; function_clause exception.
+; function, its macthing clause, and return the function body. Otherwise, throw
+; the function_clause exception.
 ;
 ; - rs: is used to return exceptions, rejections, and BIF results, in which case 
-;   body is set to nil.
-; - body: will be set to the body of the matching function clause if there is one,
-;   and if there is no rejection.
+;   the body is set to nil.
+; - body: will be set to the body of the matching function clause if there is one.
 ;
 ; Order of function lookup:
-; - First, the local definitions are checked. It is assumed that there should
-;   not be duplicate function definitions.
-; - If not found locally, then the imported functions are checked for a 
-;   match. If there is one, then the module of the imported function is 
-;   checked -- wheter it has the said function and also exports it. It is
-;   assumed that there are no duplicate imports or defintions.
-; - If there is still no match, it is checked whether the function is a BIF.
-;   It is also assumed that no definitions or imports conflict with BIFs.
-; - Else, function_clause exception is returned.
+; - First, check the local definitions. Assumed that there are no duplicate
+;   function definitions.
+; - If not found locally, then check the imported functions. If there is a match,
+;   then check if the remote module has the said function and also exports it.
+;   (TODO: This should be property of world-p) If there is still no match, check
+;   if the function is a BIF.
+; - Else, throw the function_clause exception.
 ;
-; Remark: 
+; Remarks: 
 ;  - The Erlang reference manual states that the exception stack is
 ;    only for debugging purposes and has no guarantees. The only exception 
-;    to this rule is the class 'error' with the reason 'undef' which is 
-;    guaranteed to include the Module, Function and Arity of the attempted
+;    to this rule is the class 'error' with the reason 'undef' is 
+;    guaranteed to include the Module, Function, and Arity of the attempted
 ;    function as the first stacktrace entry.
 ;
-;    However, experiments show that local calls to undefined calls are discovered
-;    during compilation. This means, for undefined function x,
-;    - When x is defined locally, call to x() will return a rejection.
-;    - If x is imported, call to x() will return an undef exception. This is 
+;  - Local calls to undefined functions are discovered during compilation.
+;    This means that for an undefined function x:
+;    + If x is defined locally, x() will return a rejection.
+;    + If x is imported, x() will return an undef exception. This is 
 ;      also true if the module x was imported from is undefined.  
-;  
+;
 (define eval-local-call ((s erl-state-p) (call symbolp) (args erl-vlst-p))
   :returns (mv (rs erl-state-p) (body expr-list-p))
   (b* (((erl-state s) (erl-state-fix s))
@@ -79,8 +77,7 @@
 
        ; The module must exist.
        ((unless (omap::assoc s.module s.world)) (mv reject nil))
-       
-       ; Obtain the module
+
        ((module module) (omap::lookup s.module s.world))
        (imports (attrs->import module.attrs))
       
@@ -149,29 +146,19 @@
     (defcong symbol-equiv equal (eval-local-call s f args) 2)
     (defcong erl-vlst-equiv equal (eval-local-call s f args) 3))
 
-
-; Evaluate Remote Function Calls -----------------------------------------------
+; Remote Function Calls --------------------------------------------------------
 
 ; Evaluate a 'remote' function call. This means the call was made to a function
 ; declared outisde current module. Find the corresponding function, its macthing 
-; clause, and return the function body. Otherwise, return function_clause exception.
+; clause, and return the function body. Otherwise, throw the function_clause exception.
 ;
-; - rs: is used to return exceptions and rejections, in which case body is set 
-;   to nil.
-; - body: will be set to the body of the matching function clause if there is one,
-;   and if there is no rejection.
+; - rs: is used to return exceptions and rejections, in which case body is set to nil.
+; - body: will be set to the body of the matching function clause if there is one.
 ;
 ; Implementation:
-; - First, check that the module exists and has the function in its definitions
-;   and also exports it.
-; - Evaluate the function clauses with the args. 
-;
-; Remark: 
-;  - The Erlang reference manual states that the exception stack is
-;    only for debugging purposes and has no guarantees. The only exception 
-;    to this rule is the class 'error' with the reason 'undef' which is 
-;    guaranteed to include the Module, Function and Arity of the attempted
-;    function as the first stacktrace entry.
+; - Check that the module exists, has the function in its definitions,
+;   and exports it.
+; - Evaluate the function clauses with the given args. 
 ;
 (define eval-remote-call ((s erl-state-p) (module symbolp) (call symbolp) (args erl-vlst-p))
   :returns (mv (rs erl-state-p) (body expr-list-p))
@@ -231,10 +218,9 @@
     (defcong symbol-equiv equal (eval-remote-call s m f args) 3)
     (defcong erl-vlst-equiv equal (eval-remote-call s m f args) 4))
 
+; Anonymous Function Calls -----------------------------------------------------
 
-; Evaluate Anonymous Function Calls --------------------------------------------
-
-; Erlang reference manual defines anonymous functions, 'fun expressions', as:
+; The Erlang reference manual defines anonymous functions (fun expressions) as:
 ; 
 ; - A fun expression begins with the keyword fun and ends with the keyword end. 
 ;   Between them is to be a function declaration, similar to a regular function 
@@ -248,16 +234,15 @@
 ; - The return value of the expression is the resulting fun.
 ;
 ; Implementation:
-; - Any call that is not a local or remote call must be a function call. So, as a 
+; - Any call that is not a local or remote call must be a fun call. So, as a 
 ;   precondition, it assumed that any function that has an expression to be called
-;   that is not an Atom or {remote, Atom} where Atom is a symbol, has been parsed as
-;   a (:fun-call Expr Args) when converted to ACL2. This makes the control flow a
-;   bit easier to follow.
+;   that is not an Atom or {remote, Atom}, has been parsed as a (:fun-call Expr Args)
+;   when converted to ACL2.
 ; - If the Expr to be called does not evaluate to a fun expression, then the badfun 
 ;   exception is thrown.
-; - Otherwise, this is treated as a local call. If the fun was defined in a module, 
-;   it will be treated as local call within that module, i.e. it will have access to 
-;   the functions in that module.
+; - Otherwise, the fun call is treated as a local call. If the fun was defined in a
+;   module, it will be treated as local call within that module, i.e. it will have
+;   access to the functions in that module.
 ;
 ; Not Supported:
 ; - Named funs are currently not supported. However, adding them should be trivial
@@ -265,6 +250,7 @@
 
 (define eval-fun-call ((s erl-state-p) (fun erl-val-p) (args erl-vlst-p))
   :returns (mv (rs erl-state-p) (body expr-list-p))
+  :guard-hints (("Goal" :in-theory (enable erl-fun-p)))
   (b* ((s (erl-state-fix s))
        (fun (erl-val-fix fun))
        (args (erl-vlst-fix args))

@@ -8,8 +8,7 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "../top")
-(include-book "std/testing/assert-equal" :dir :system)
+(include-book "util")
 
 ; This file contains some test for Erlang comparison operations
 ;

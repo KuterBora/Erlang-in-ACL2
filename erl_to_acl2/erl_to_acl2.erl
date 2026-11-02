@@ -16,7 +16,7 @@
 test_expr(Str) ->
     io:format(
         "Erlang:\n ~p~nACL2:~n~s",
-        [get_AST(Str), exprs_to_lisp(get_AST(Str))]).
+        [get_AST(Str), exprs_to_acl2(Str)]).
 
 test_module(Module) ->
     io:format(

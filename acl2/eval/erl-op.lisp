@@ -432,6 +432,10 @@
                     ((equal curr 0) (erl-compare-by-elements (cdr left) (cdr right)))
                     (t curr))))))))
 
+(defcong erl-val-equiv equal (erl-compare a b) 1
+  :hints (("Goal" :expand ((erl-compare a b) (erl-compare a-equiv b)))))
+(defcong erl-val-equiv equal (erl-compare a b) 2
+  :hints (("Goal" :expand ((erl-compare a b) (erl-compare a b-equiv)))))
 
 ; Given a comparison binop, apply the corresponding Erlang operation.
 (define apply-erl-comp-binop ((op comp-binop-p) (left erl-val-p) (right erl-val-p))
