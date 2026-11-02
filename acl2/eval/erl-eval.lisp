@@ -37,7 +37,16 @@
 
        ; Return flimit if fuel has ran out.
        ((if (zp fuel)) 
-        (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit)))))
+        (make-erl-s-klst :s (update-erl-state->in s (make-erl-val-flimit))))
+      
+       ; If k is not a catch, and s has an exception, skip this continuation.
+       ((if (and (equal (erl-val-kind s.in) :excpt) (not (equal (kont-kind k) :catch))))
+        (if (equal (kont-kind k) :function-return)
+            ; return to the right context if needed. TODO: also grow the exception stack here.
+            (make-erl-s-klst :s
+              (update-erl-state->bind-mod s
+                (kont-function-return->bind k) (kont-function-return->module k)))
+            (make-erl-s-klst :s s))))
     (kont-case k
       ; Evaluate an expression.
       (:expr (let ((x k.expr))
@@ -51,18 +60,13 @@
           (:fun
             (b* ((arity (erl-clause-list->arity x.cls))
                  ((if (null arity))
-                  (make-erl-s-klst
-                    :s (update-erl-state->in
-                        s 
-                        (make-erl-val-reject :err "erl-eval: ill-formed fun clauses")))))
-                (make-erl-s-klst
-                  :s (update-erl-state->in 
-                        s
-                        (make-erl-val-fun
-                          :arity arity
-                          :cls x.cls
-                          :bind s.bind
-                          :module s.module)))))
+                  (make-erl-s-klst :s
+                    (update-erl-state->in s 
+                      (make-erl-val-reject :err "erl-eval: ill-formed fun clauses")))))
+                (make-erl-s-klst :s
+                  (update-erl-state->in s
+                    (make-erl-val-fun
+                      :arity arity :cls x.cls :bind s.bind :module s.module)))))
           ; if x is a list, evaluate its car and save its cdr in a continuation.
           (:cons
             (make-erl-s-klst
@@ -80,10 +84,9 @@
           (:var
             (if (omap::assoc x.id s.bind)
                 (make-erl-s-klst :s (update-erl-state->in s (omap::lookup x.id s.bind)))
-                (make-erl-s-klst 
-                  :s (update-erl-state->in 
-                       s
-                       (make-erl-val-reject :err "unbound variable")))))
+                (make-erl-s-klst :s
+                  (update-erl-state->in s
+                    (make-erl-val-reject :err "unbound variable")))))
           (:unop
             (make-erl-s-klst
               :s (update-erl-state->in s (make-erl-val-none))
@@ -104,19 +107,22 @@
               :s (update-erl-state->in s (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr x.rhs))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-match :lhs x.lhs)))))
-          (:try (make-erl-s-klst :s s))
+          (:try
+            (make-erl-s-klst
+              :s (update-erl-state->in s (make-erl-val-none))
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs x.exprs))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-catch :clauses x.err-clauses)))))
           ; if x is an if clause, invoke the clause evaluator
           (:if
             (b* (((mv (erl-state rs) body)
                   (eval-clauses nil x.clauses (update-erl-state->in s (make-erl-val-none))))
                  ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))
                  ((if (null body))
-                  (make-erl-s-klst
-                    :s (update-erl-state->in
-                        s
-                        (make-erl-val-excpt 
-                          :err (make-erl-err :class (make-err-class-error)
-                                             :reason (make-exit-reason-if-clause)))))))
+                  (make-erl-s-klst :s
+                    (update-erl-state->in s
+                      (make-erl-val-excpt
+                        :err-class (make-erl-val-atom :val 'error)
+                        :err-reason (make-erl-val-atom :val 'if_clause))))))
                 (make-erl-s-klst
                   :s (update-erl-state->in s (make-erl-val-none))
                   :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
@@ -165,15 +171,14 @@
 
           ; when a receive is encountered, climb backwards in the continuation tree
           (:receive
-            (make-erl-s-klst
-              :s (update-erl-state->in
-                   s
-                   (make-erl-val-receive
-                     :klst
-                      (list
-                        (make-erl-k
-                          :fuel fuel
-                          :kont (make-kont-receive :clauses x.cls))))))))))
+            (make-erl-s-klst :s
+              (update-erl-state->in s
+                (make-erl-val-receive
+                  :klst
+                  (list
+                    (make-erl-k
+                      :fuel fuel
+                      :kont (make-kont-receive :clauses x.cls))))))))))
 
       ; Evaluate the cdr of the list, save the result of the car in a contunation
       (:cons
@@ -187,33 +192,28 @@
       (:cons-merge
         (if (equal (erl-val-kind s.in) :cons)
             (if (omap::compatiblep s.bind k.car-bind)
-                (make-erl-s-klst 
-                  :s (update-erl-state->in-bind 
-                        s 
-                        (make-erl-val-cons :lst (cons k.car-val (erl-val-cons->lst s.in)))
-                        (omap::update* s.bind k.car-bind)))
-                (make-erl-s-klst
-                  :s (update-erl-state->in
-                       s
-                       (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error) 
-                                           :reason (make-exit-reason-badmatch :val s.in))))))
-            (make-erl-s-klst 
-              :s (update-erl-state->in 
-                   s 
-                   (make-erl-val-reject :err "cons-merge expects list, pairs are not supported")))))
+                (make-erl-s-klst :s
+                  (update-erl-state->in-bind s 
+                    (make-erl-val-cons :lst (cons k.car-val (erl-val-cons->lst s.in)))
+                    (omap::update* s.bind k.car-bind)))
+                (make-erl-s-klst :s
+                  (update-erl-state->in s
+                    (make-erl-val-excpt
+                      :err-class (make-erl-val-atom :val 'error)
+                      :err-reason (make-erl-val-tuple :lst (list (make-erl-val-atom :val 'badmatch) s.in))))))
+            (make-erl-s-klst :s
+              (update-erl-state->in s 
+                (make-erl-val-reject :err "cons-merge expects list, pairs are not supported")))))
 
       ; Once all of its elements are evaluated, return the tuple.
       (:tuple
         (if (equal (erl-val-kind s.in) :cons)
-            (make-erl-s-klst 
-              :s (update-erl-state->in
-                    s
-                    (make-erl-val-tuple :lst (erl-val-cons->lst (erl-state->in s)))))
-            (make-erl-s-klst 
-              :s (update-erl-state->in 
-                   s 
-                   (make-erl-val-reject :err "tuple expects a list of elements.")))))
+            (make-erl-s-klst :s
+              (update-erl-state->in s
+                (make-erl-val-tuple :lst (erl-val-cons->lst (erl-state->in s)))))
+            (make-erl-s-klst :s
+              (update-erl-state->in s 
+                (make-erl-val-reject :err "tuple expects a list of elements.")))))
 
       ; Apply unop to the evalutaed operand.
       (:unop (make-erl-s-klst :s (update-erl-state->in s (apply-erl-unop k.op s.in))))
@@ -232,58 +232,65 @@
         (if (omap::compatiblep s.bind k.left-bind)   
             (if (equal k.op '!)
                 (if (pid-p k.val)
-                    (make-erl-s-klst
-                      :s (erl-state-send
-                           s
-                           k.val
-                           s.in
-                           (omap::update* s.bind k.left-bind)))
-                    (make-erl-s-klst
-                      :s
-                        (update-erl-state->in 
-                          s
-                          (make-erl-val-excpt
-                            :err (make-erl-err 
-                                   :class (make-err-class-error) 
-                                   :reason (make-exit-reason-badarg))))))
-                (make-erl-s-klst 
-                  :s (update-erl-state->in-bind
-                      s
-                      (apply-erl-binop k.op k.val s.in)
-                      (omap::update* s.bind k.left-bind))))
-            (make-erl-s-klst
-              :s (update-erl-state->in
-                  s 
-                  (make-erl-val-excpt 
-                    :err (make-erl-err :class (make-err-class-error) 
-                                        :reason (make-exit-reason-badmatch :val s.in)))))))
+                    (make-erl-s-klst :s
+                      (erl-state-send s
+                        k.val s.in (omap::update* s.bind k.left-bind)))
+                    (make-erl-s-klst :s
+                      (update-erl-state->in s
+                        (make-erl-val-excpt
+                          :err-class (make-erl-val-atom :val 'error)
+                          :err-reason (make-erl-val-atom :val 'badarg)))))
+                (make-erl-s-klst :s
+                  (update-erl-state->in-bind s
+                    (apply-erl-binop k.op k.val s.in)
+                    (omap::update* s.bind k.left-bind))))
+            (make-erl-s-klst :s
+              (update-erl-state->in s 
+                (make-erl-val-excpt
+                  :err-class (make-erl-val-atom :val 'error)
+                  :err-reason (make-erl-val-tuple :lst
+                                (list (make-erl-val-atom :val 'badmatch) s.in)))))))
 
       ; Once rhs is evaluated, match it to lhs
       (:match
         (b* (((erl-state ms) (eval-match k.lhs s))
-             
              ((if (and (equal (erl-val-kind ms.in) :excpt)
-                       (equal (exit-reason-kind (erl-err->reason (erl-val-excpt->err ms.in))) 
-                              :badmatch)))
-              (make-erl-s-klst
-                :s (update-erl-state->in
-                    s
-                    (make-erl-val-excpt 
-                      :err (make-erl-err :class (make-err-class-error) 
-                                         :reason (make-exit-reason-badmatch :val s.in)))))))
+                       (equal (erl-val-kind (erl-val-excpt->err-reason ms.in)) :atom)
+                       (equal (erl-val-atom->val (erl-val-excpt->err-reason ms.in)) 'badmatch)))
+              (make-erl-s-klst :s
+                (update-erl-state->in s
+                  (make-erl-val-excpt
+                    :err-class (make-erl-val-atom :val 'error)
+                    :err-reason (make-erl-val-tuple :lst
+                                  (list (make-erl-val-atom :val 'badmatch) s.in)))))))
             (make-erl-s-klst :s ms)))
+
+      ; Try to catch an exception. If none can be caught, propagate the value.
+      (:catch
+        (b* (((if (not (equal (erl-val-kind s.in) :excpt))) (make-erl-s-klst :s s))
+             (cls (erl-val-excpt->err-class s.in))
+             (rsn (erl-val-excpt->err-class s.in))
+             (stk (erl-val-excpt->err-class s.in))
+             (err-triple (make-erl-val-tuple :lst (list cls rsn stk)))
+             ((mv (erl-state rs) body) (eval-clauses (list err-triple) k.clauses s))
+             ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))
+             ((if (null body)) (make-erl-s-klst :s s)))
+            (make-erl-s-klst
+              :s (update-erl-state->in rs (make-erl-val-none))
+              :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
+                          (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr body)))))))
 
       ; Once the expression is evaluated, invoke the clause-evaluator.
       (:case-of
         (b* (((mv (erl-state rs) body) (eval-clauses (list s.in) k.clauses s))
              ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))
              ((if (null body))
-              (make-erl-s-klst
-                :s (update-erl-state->in
-                    s
-                    (make-erl-val-excpt 
-                      :err (make-erl-err :class (make-err-class-error)
-                                         :reason (make-exit-reason-case-clause :val s.in)))))))
+              (make-erl-s-klst :s
+                (update-erl-state->in s
+                  (make-erl-val-excpt
+                    :err-class (make-erl-val-atom :val 'error)
+                    :err-reason (make-erl-val-tuple :lst
+                                  (list (make-erl-val-atom :val 'case_clause) s.in)))))))
             (make-erl-s-klst
               :s (update-erl-state->in rs (make-erl-val-none))
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car body)))
@@ -294,17 +301,16 @@
         (if (null k.exprs)
             (make-erl-s-klst :s s)
             (make-erl-s-klst 
-              :s s 
+              :s s
               :klst (list (make-erl-k :fuel (1- fuel) :kont (make-kont-expr :expr (car k.exprs)))
                           (make-erl-k :fuel (1- fuel) :kont (make-kont-exprs :exprs (cdr k.exprs)))))))
 
       ; Call a local function after the arguments have been evaluated
       (:local-call
         (b* (((if (not (equal (erl-val-kind s.in) :cons)))
-              (make-erl-s-klst 
-                :s (update-erl-state->in 
-                     s
-                     (make-erl-val-reject :err "Local call: invalid arg list."))))
+              (make-erl-s-klst :s
+                (update-erl-state->in s
+                  (make-erl-val-reject :err "Local call: invalid arg list."))))
              ; Obtain the args from the state.
              (args (erl-val-cons->lst s.in))
              ((mv rs body) 
@@ -317,66 +323,62 @@
             ; Otherwise, continue with the function body
             (make-erl-s-klst
               :s rs
-              :klst (list (make-erl-k 
-                            :fuel (1- fuel)
-                            :kont (make-kont-exprs :exprs body))
-                          (make-erl-k
-                            :fuel (1- fuel) 
-                            :kont (make-kont-function-return :bind s.bind :module s.module))))))
+              :klst
+                (list
+                  (make-erl-k
+                    :fuel (1- fuel) :kont (make-kont-exprs :exprs body))
+                  (make-erl-k
+                    :fuel (1- fuel)
+                    :kont (make-kont-function-return :bind s.bind :module s.module))))))
 
       ; Call a remote function after the arguments have been evaluated
       (:remote-call
         (b* (((if (not (equal (erl-val-kind s.in) :cons)))
-              (make-erl-s-klst 
-                :s (update-erl-state->in 
-                     s
-                     (make-erl-val-reject :err "Remote call: invalid arg list."))))
+              (make-erl-s-klst :s
+                (update-erl-state->in s
+                  (make-erl-val-reject :err "Remote call: invalid arg list."))))
              ; Obtain the args from the state.
              (args (erl-val-cons->lst s.in))
              ((mv rs body)
-              (eval-remote-call
-                s
-                k.module
-                k.call
-                args))
+              (eval-remote-call s k.module k.call args))
              ; if the body is nil, return the value produced by call evaluation.
              ((if (null body)) (make-erl-s-klst :s rs)))
             ; Otherwise, continue with the function body
             (make-erl-s-klst
               :s rs
-              :klst (list (make-erl-k 
-                            :fuel (1- fuel)
-                            :kont (make-kont-exprs :exprs body))
-                          (make-erl-k
-                            :fuel (1- fuel) 
-                            :kont (make-kont-function-return :bind s.bind :module s.module))))))
+              :klst
+                (list
+                  (make-erl-k 
+                    :fuel (1- fuel)
+                    :kont (make-kont-exprs :exprs body))
+                  (make-erl-k
+                    :fuel (1- fuel) 
+                    :kont (make-kont-function-return :bind s.bind :module s.module))))))
 
       ; Evalute the arguments to an anonymous call after the fun expression has been evaluated.
       (:fun-call-args
         (b* (((if (not (erl-fun-p s.in)))
-              (make-erl-s-klst
-                :s (update-erl-state->in
-                  s
-                  (make-erl-val-excpt 
-                      :err (make-erl-err :class (make-err-class-error)
-                                         :reason (make-exit-reason-badfun :fun s.in)))))))
+              (make-erl-s-klst :s
+                (update-erl-state->in s
+                  (make-erl-val-excpt
+                    :err-class (make-erl-val-atom :val 'error)
+                    :err-reason (make-erl-val-tuple :lst
+                                  (list (make-erl-val-atom :val 'badfun) s.in)))))))
             (make-erl-s-klst 
               :s (update-erl-state->in s (make-erl-val-none))
               :klst
-                (list (make-erl-k 
-                        :fuel (1- fuel) 
-                        :kont (make-kont-expr :expr k.args))
-                      (make-erl-k
-                        :fuel (1- fuel)
-                        :kont (make-kont-fun-call :fun s.in))))))
+                (list
+                  (make-erl-k 
+                    :fuel (1- fuel) :kont (make-kont-expr :expr k.args))
+                  (make-erl-k
+                    :fuel (1- fuel) :kont (make-kont-fun-call :fun s.in))))))
 
       ; Call an anonymous function after the arguments have been evaluated
       (:fun-call
         (b* (((if (not (equal (erl-val-kind s.in) :cons)))
-              (make-erl-s-klst 
-                :s (update-erl-state->in
-                     s
-                     (make-erl-val-reject :err "Fun call: invalid arg list."))))
+              (make-erl-s-klst :s
+                (update-erl-state->in s
+                  (make-erl-val-reject :err "Fun call: invalid arg list."))))
              ; Obtain the args from the state.
              (args (erl-val-cons->lst s.in))
              ((mv rs body) 
@@ -386,13 +388,13 @@
             ; Otherwise, continue with the function body
             (make-erl-s-klst
               :s rs
-              :klst (list (make-erl-k 
-                            :fuel (1- fuel)
-                            :kont (make-kont-exprs :exprs body))
-                          (make-erl-k
-                            :fuel (1- fuel) 
-                            :kont (make-kont-function-return :bind s.bind :module s.module))))))
-
+              :klst
+                (list
+                  (make-erl-k 
+                    :fuel (1- fuel) :kont (make-kont-exprs :exprs body))
+                  (make-erl-k
+                    :fuel (1- fuel) 
+                    :kont (make-kont-function-return :bind s.bind :module s.module))))))
 
       ; Once a call returns, return to the correct module and scope
       (:function-return (make-erl-s-klst :s (update-erl-state->bind-mod s k.bind k.module)))
@@ -461,13 +463,11 @@
 
        ; Propagate calls to receive
        ((if (equal (erl-val-kind (erl-state->in s)) :receive))
-        (update-erl-state->in
-          s
-          (make-erl-val-receive
-            :klst
-              (append (erl-val-receive->klst (erl-state->in s)) klst))))
+        (update-erl-state->in s
+          (make-erl-val-receive :klst
+            (append (erl-val-receive->klst (erl-state->in s)) klst))))
 
-       ; Propagate errors
+       ; Propagate 
        ((unless (wf-state-p s)) (apply-k s ktl))
 
        ((erl-s-klst ks) (eval-k khd s)))

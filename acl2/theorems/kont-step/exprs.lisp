@@ -24,7 +24,7 @@
 
 (defrule eval-k-exprs->klst
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :exprs))
     (equal 
       (erl-s-klst->klst (eval-k k s))
@@ -42,12 +42,11 @@
           nil)))
   :enable eval-k)
 
-
 ; apply-k ----------------------------------------------------------------------
 
 (defrule apply-k-of-exprs
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :exprs)
          (not (equal (erl-val-kind (erl-state->in s)) :receive))
          (consp (kont-exprs->exprs (erl-k->kont k))))
@@ -70,7 +69,7 @@
 
 (defrule apply-k-of-exprs-nil
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :exprs)
          (not (equal (erl-val-kind (erl-state->in s)) :receive))
          (endp (kont-exprs->exprs (erl-k->kont k))))
@@ -78,6 +77,10 @@
   :enable apply-k-of-step
   :cases ((wf-state-p s)))
 
-; apply-k when wf --------------------------------------------------------------
-
-; no need for this one, it seems
+(defrule apply-k-of-exprs-excpt
+  (implies
+    (and (> (erl-k->fuel k) 0)
+         (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (equal (kont-kind (erl-k->kont k)) :exprs))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))

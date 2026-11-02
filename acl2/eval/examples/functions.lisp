@@ -137,24 +137,24 @@
 (assert-equal
   (eval-expr-world-val
     '(:call sum (:cons (:integer -5) (:nil))) 'arithm1 (test-world))
-  '(:excpt ((class :error) (reason :function-clause) (stack))))
+  '(:excpt (:atom error) (:atom function_clause) nil))
 
 ; function_clause (remote)
 (assert-equal
   (eval-expr-world-val
     '(:remote-call arithm1 sum (:cons (:integer -5) (:nil))) 'local (test-world))
-  '(:excpt ((class :error) (reason :function-clause) (stack))))
+  '(:excpt (:atom error) (:atom function_clause) nil))
 
 
 ; undef (remote call to undefined module)
 (assert-equal
   (eval-expr-world-val
     '(:remote-call crock sum (:cons (:integer -5) (:nil))) 'arithm1 (test-world))
-  '(:excpt ((class :error) (reason :undef) (stack crock sum 1))))
+  '(:excpt (:atom error) (:atom undef) (crock sum 1)))
 
 
 ; undef (remote call to undefined function)
 (assert-equal
   (eval-expr-world-val
     '(:remote-call arithm2 sum (:cons (:integer -5) (:nil))) 'arithm1 (test-world))
-  '(:excpt ((class :error) (reason :undef) (stack arithm2 sum 1))))
+  '(:excpt (:atom error) (:atom undef) (arithm2 sum 1)))

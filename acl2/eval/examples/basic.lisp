@@ -82,7 +82,7 @@
 ; unop '-' on non-integer
 (assert-equal
   (eval-expr-val '(:unop - (:atom a)))
-  '(:excpt ((class :error) (reason :badarith) (stack))))
+  '(:excpt (:atom error) (:atom badarith) nil))
 
 ; Binop ------------------------------------------------------------------------
 
@@ -99,7 +99,7 @@
 ; binop '+ with bad arguments
 (assert-equal
   (eval-expr-val '(:binop + (:integer 2) (:atom a)))
-  '(:excpt ((class :error) (reason :badarith) (stack))))
+  '(:excpt (:atom error) (:atom badarith) nil))
 
 ; Variables --------------------------------------------------------------------
 

@@ -45,6 +45,9 @@
   ; Continue after the rhs of the match has been evaluated.
   (:match ((lhs pattern-p)))
 
+  ; Continue after the expressions of a try-catch have been evaluated.
+  (:catch ((clauses erl-clause-list-p)))
+
   ; Continue after the argument to the case expression has been evaluated.
   (:case-of ((clauses erl-clause-list-p)))
 

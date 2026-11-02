@@ -337,7 +337,7 @@
 (define wf-state-p ((x erl-state-p))
   :returns (ok booleanp)
   (null (member (erl-val-kind (erl-state->in (erl-state-fix x)))
-                '(:flimit :reject :excpt :blocked :receive)))
+                '(:flimit :reject :blocked :receive)))
   ///
   (defcong erl-state-equiv equal (wf-state-p x) 1)
 
@@ -349,9 +349,9 @@
     (implies (equal (erl-val-kind (erl-state->in s)) :reject)
              (not (wf-state-p s))))
 
-  (defrule wf-state-p-of-excpt
-    (implies (equal (erl-val-kind (erl-state->in s)) :excpt)
-             (not (wf-state-p s))))
+;   (defrule wf-state-p-of-excpt
+;     (implies (equal (erl-val-kind (erl-state->in s)) :excpt)
+;              (not (wf-state-p s))))
   
   (defrule wf-state-p-of-receive
     (implies (equal (erl-val-kind (erl-state->in s)) :receive)
@@ -364,5 +364,5 @@
   (defrule wf-state-p-of-wf-val
     (implies 
       (null (member (erl-val-kind (erl-state->in s))
-                    '(:flimit :reject :excpt :blocked :receive)))
+                    '(:flimit :reject :blocked :receive)))
       (wf-state-p s))))

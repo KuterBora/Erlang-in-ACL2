@@ -25,7 +25,7 @@
 ; expr-local-call
 (defrule eval-k-of-expr-local-call->klst
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
     (equal 
@@ -45,7 +45,7 @@
 
 (defrule eval-k-of-expr-local-call->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
     (equal 
@@ -56,7 +56,7 @@
 ; kont-local-call
 (defrule eval-k-of-local-call->klst
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :local-call))
     (equal
       (erl-s-klst->klst (eval-k k s))
@@ -87,7 +87,7 @@
 
 (defrule eval-k-of-local-call->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :local-call))
     (equal
       (erl-s-klst->s (eval-k k s))
@@ -109,7 +109,7 @@
 
 (defrule apply-k-of-expr-local-call
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
@@ -139,9 +139,18 @@
                     :expr (node-call->args
                             (kont-expr->expr (erl-k->kont k))))))))
 
+(defrule apply-k-of-expr-local-call-excpt
+  (implies
+    (and (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))
+
 (defruled apply-k-of-local-call-no-match
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (erl-val-kind (erl-state->in s)) :cons)
          (not (mv-nth 
                 1 
@@ -162,7 +171,7 @@
 
 (defruled apply-k-of-local-call-when-match
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (erl-val-kind (erl-state->in s)) :cons)
          (mv-nth 
            1 
@@ -196,6 +205,10 @@
                               :module (erl-state->module s)))))))
   :enable apply-k-of-step)
 
-; apply-k when wf --------------------------------------------------------------
-
-; TODO?
+(defrule apply-k-of-local-call-excpt
+  (implies
+    (and (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :local-call))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))

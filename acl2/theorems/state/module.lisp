@@ -111,7 +111,6 @@
                   (erl-state->module s)))
   :enable (eval-k eval-remote-call eval-local-call eval-fun-call)))
 
-
 ; Helpers ----------------------------------------------------------------------
 
 ; Helper function that states the klst has no function-return continuations.
@@ -135,7 +134,6 @@
          (no-function-return klst))
     (no-function-return (erl-s-klst->klst (eval-k (car klst) s))))
   :enable eval-k))
-
 
 ; Induction Schema -------------------------------------------------------------
 
@@ -163,6 +161,7 @@
             (:binop-expr1 (module-induct r (append rklst (cdr klst))))
             (:binop-expr2 (module-induct r (append rklst (cdr klst))))
             (:match (module-induct r (append rklst (cdr klst))))
+            (:catch (module-induct r (append rklst (cdr klst))))
             (:case-of (module-induct r (append rklst (cdr klst))))
             (:fun-call-args (module-induct r (append rklst (cdr klst))))
 
@@ -178,7 +177,6 @@
                   :use ((:instance eval-k-decreases-klst-measure
                           (k (car klst)) (kl (cdr klst))))))))
 
-
 ; apply-k-of-module ------------------------------------------------------------
 
 ; module remains the same after apply-k if there is no function return.
@@ -191,11 +189,11 @@
   :expand ((apply-k s klst))
   ; TODO: replace with computed hint
   :hints
-    (("Subgoal *1/17"
+    (("Subgoal *1/18"
+       :in-theory (enable apply-k-of-append))
+     ("Subgoal *1/17"
        :in-theory (enable apply-k-of-append))
      ("Subgoal *1/16"
-       :in-theory (enable apply-k-of-append))
-     ("Subgoal *1/15"
        :in-theory (enable apply-k-of-append)))))
 
 ; module does not change after evaluating any continuation that is not :function-return

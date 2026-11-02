@@ -20,7 +20,7 @@
 ; expr-match
 (defrule eval-k-of-expr-match->klst
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :match))
     (equal
@@ -39,7 +39,7 @@
 
 (defrule eval-k-of-expr-match->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :match))
     (equal (erl-s-klst->s (eval-k k s))
@@ -56,39 +56,32 @@
 
 (defrule eval-k-of-match->s
   (implies 
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :match))
     (equal 
       (erl-s-klst->s (eval-k k s)) 
       (cond
-        ((and 
-           (equal
-             (erl-val-kind 
-               (erl-state->in 
-                 (eval-match (kont-match->lhs (erl-k->kont k)) s)))
-             :excpt)
-           (equal
-             (exit-reason-kind 
-               (erl-err->reason
-                 (erl-val-excpt->err
-                   (erl-state->in
-                     (eval-match (kont-match->lhs (erl-k->kont k)) s))))) 
-             :badmatch))
-         (update-erl-state->in
-             s
-             (make-erl-val-excpt 
-               :err (make-erl-err :class (make-err-class-error) 
-                                  :reason (make-exit-reason-badmatch
-                                            :val (erl-state->in s))))))
+        ((and (equal (erl-val-kind
+                       (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s))) :excpt)
+              (equal (erl-val-kind
+                       (erl-val-excpt->err-reason
+                         (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s)))) :atom)
+              (equal (erl-val-atom->val
+                       (erl-val-excpt->err-reason
+                         (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s)))) 'badmatch))
+         (update-erl-state->in s
+            (make-erl-val-excpt
+              :err-class (make-erl-val-atom :val 'error)
+              :err-reason (make-erl-val-tuple :lst
+                            (list (make-erl-val-atom :val 'badmatch) (erl-state->in s))))))
         (t (eval-match (kont-match->lhs (erl-k->kont k)) s)))))
   :enable eval-k)
-
 
 ; apply-k  ---------------------------------------------------------------------
 
 (defrule apply-k-of-expr-match
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :match))
@@ -119,25 +112,29 @@
               :expr
                 (node-match->rhs (kont-expr->expr (erl-k->kont k))))))))
 
+(defrule apply-k-of-expr-match-excpt
+  (implies
+    (and (> (erl-k->fuel k) 0) (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :match))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))
+
 (defrule apply-k-of-match-succeed
   (implies
     (and
       (wf-state-p s) (> (erl-k->fuel k) 0)
+      (not (equal (erl-val-kind (erl-state->in s)) :excpt))
       (equal (kont-kind (erl-k->kont k)) :match)
       (not 
-        (and
-          (equal
-            (erl-val-kind 
-              (erl-state->in 
-                (eval-match (kont-match->lhs (erl-k->kont k)) s)))
-            :excpt)
-          (equal
-            (exit-reason-kind 
-              (erl-err->reason
-                (erl-val-excpt->err
-                  (erl-state->in
-                    (eval-match (kont-match->lhs (erl-k->kont k)) s))))) 
-            :badmatch))))
+        (and (equal (erl-val-kind
+                       (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s))) :excpt)
+              (equal (erl-val-kind
+                       (erl-val-excpt->err-reason
+                         (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s)))) :atom)
+              (equal (erl-val-atom->val
+                       (erl-val-excpt->err-reason
+                         (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s)))) 'badmatch))))
     (equal (apply-k s (cons k nil))
            (eval-match (kont-match->lhs (erl-k->kont k)) s)))
   :enable apply-k-of-step)
@@ -146,24 +143,28 @@
   (implies
     (and
       (wf-state-p s) (> (erl-k->fuel k) 0)
+      (not (equal (erl-val-kind (erl-state->in s)) :excpt))
       (equal (kont-kind (erl-k->kont k)) :match)
-      (equal
-        (erl-val-kind 
-          (erl-state->in 
-            (eval-match (kont-match->lhs (erl-k->kont k)) s)))
-        :excpt)
-      (equal
-        (exit-reason-kind 
-          (erl-err->reason
-            (erl-val-excpt->err
-              (erl-state->in
-                (eval-match (kont-match->lhs (erl-k->kont k)) s))))) 
-        :badmatch))
+      (equal (erl-val-kind
+                (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s))) :excpt)
+      (equal (erl-val-kind
+                (erl-val-excpt->err-reason
+                  (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s)))) :atom)
+      (equal (erl-val-atom->val
+                (erl-val-excpt->err-reason
+                  (erl-state->in (eval-match (kont-match->lhs (erl-k->kont k)) s)))) 'badmatch))
     (equal (apply-k s (cons k nil))
-           (update-erl-state->in
-            s
-            (make-erl-val-excpt 
-              :err (make-erl-err :class (make-err-class-error) 
-                                 :reason (make-exit-reason-badmatch
-                                           :val (erl-state->in s)))))))
+           (update-erl-state->in s
+            (make-erl-val-excpt
+              :err-class (make-erl-val-atom :val 'error)
+              :err-reason (make-erl-val-tuple :lst
+                            (list (make-erl-val-atom :val 'badmatch) (erl-state->in s)))))))
   :enable apply-k-of-step)
+
+(defrule apply-k-of-match-excpt
+  (implies
+    (and
+      (> (erl-k->fuel k) 0) (equal (erl-val-kind (erl-state->in s)) :excpt)
+      (equal (kont-kind (erl-k->kont k)) :match))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))

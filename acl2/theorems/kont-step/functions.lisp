@@ -33,7 +33,6 @@
         (kont-function-return->module (erl-k->kont k)))))
   :enable eval-k)
 
-
 ; apply-k ----------------------------------------------------------------------
 
 (defrule apply-k-of-function-return
@@ -47,8 +46,3 @@
              (kont-function-return->bind (erl-k->kont k))
              (kont-function-return->module (erl-k->kont k)))))
   :enable apply-k-of-step)
-
-
-; apply-k when wf --------------------------------------------------------------
-
-; no need

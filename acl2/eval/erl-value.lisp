@@ -19,16 +19,6 @@
 
 (set-well-founded-relation l<)
 
-; Exceptions are run-time errors or generated errors and are of three different 
-; classes, with different origins.
-; - error:	Run-time error, for example, 1+a, or the process called error/1
-; - exit:   The process called exit/1
-; - throw:	The process called throw/1
-(fty::deftagsum err-class
-  (:error ())
-  (:exit ())
-  (:throw ()))
-
 ; Representation of the Erlang values returned by the evaluator.
 ; Remarks:
 ; - Strings are represented as list of integers
@@ -47,7 +37,7 @@
            (cls erl-clause-list-p)
            (bind bind-p)
            (module symbolp)))
-    (:excpt ((err erl-err-p)))
+    (:excpt ((err-class erl-val-p) (err-reason erl-val-p) (err-stack true-listp)))
     ; For now, PIDs are represented as natural numbers
     (:pid ((id natp)))
 
@@ -73,32 +63,6 @@
   (fty::deflist erl-vlst
     :elt-type erl-val-p
     :true-listp t
-    :measure (list (acl2-count x) 0))
-
-  ; Erlang Errors
-  (fty::defprod erl-err
-    ((class err-class-p :default 'error)
-     (reason exit-reason-p)
-     (stack true-listp :default nil))
-    :measure (list (acl2-count x) 1))
-
-  ; Erlang Exit Reasons
-  (fty::deftagsum exit-reason
-    (:badarg ())
-    (:badarith ())
-    (:badmatch ((val erl-val-p)))
-    (:function-clause ())
-    (:case-clause ((val erl-val-p)))
-    (:if-clause ())
-    (:try-clause ((val erl-val-p)))
-    (:undef ())
-    (:badfun ((fun erl-val-p)))
-    (:badarity ((fun erl-val-p) (args erl-vlst-p)))
-    (:timeout-value ())
-    (:noproc ())
-    (:noconnection ())
-    (:nocatch ((val erl-val-p)))
-    (:system-limit ())
     :measure (list (acl2-count x) 0))
 
   ; Reprsentation of Erlang bindings. Maps each variable to a value.

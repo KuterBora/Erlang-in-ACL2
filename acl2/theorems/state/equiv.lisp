@@ -28,8 +28,8 @@
 
 (defruled apply-k-of-expr-when-diff-val
   (implies
-    (and (wf-state-p s1)
-         (wf-state-p s2)
+    (and (wf-state-p s1) (not (equal (erl-val-kind (erl-state->in s1)) :excpt))
+         (wf-state-p s2) (not (equal (erl-val-kind (erl-state->in s2)) :excpt))
          (equal (erl-state->module s1) (erl-state->module s2))
          (equal (erl-state->bind s1) (erl-state->bind s2))
          (equal (erl-state->world s1) (erl-state->world s2))
@@ -39,8 +39,8 @@
     (equal (apply-k s1 (cons k nil))
            (apply-k s2 (cons k nil))))
   :expand
-    ((apply-k s1 (cons k nil))
-     (apply-k s2 (cons k nil))
+    ((apply-k s1 (list k))
+     (apply-k s2 (list k))
      (eval-k k s1)
      (eval-k k s2))
   :enable update-erl-state->in)
@@ -58,8 +58,8 @@
 
 (defruled apply-k-of-expr-when-diff-val-and-outbox
   (implies
-    (and (wf-state-p s1)
-         (wf-state-p s2)
+    (and (wf-state-p s1) (not (equal (erl-val-kind (erl-state->in s1)) :excpt))
+         (wf-state-p s2) (not (equal (erl-val-kind (erl-state->in s2)) :excpt))
          (equal (erl-state->module s1) (erl-state->module s2))
          (equal (erl-state->bind s1) (erl-state->bind s2))
          (equal (erl-state->world s1) (erl-state->world s2))

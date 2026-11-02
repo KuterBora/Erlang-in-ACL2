@@ -28,11 +28,11 @@
 (defrule eval-k-of-expr-integer->s
   (implies
     (and (> (erl-k->fuel k) 0)
+         (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :integer))
     (equal (erl-s-klst->s (eval-k k s))
-           (update-erl-state->in
-             s
+           (update-erl-state->in s
              (make-erl-val-integer
                :val (node-integer->val
                       (kont-expr->expr (erl-k->kont k)))))))
@@ -40,13 +40,12 @@
 
 (defrule apply-k-of-expr-integer
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :integer))
     (equal (apply-k s (cons k nil))
-           (update-erl-state->in
-             s
+           (update-erl-state->in s
              (make-erl-val-integer
                :val (node-integer->val
                       (kont-expr->expr (erl-k->kont k)))))))
@@ -62,26 +61,24 @@
 
 (defrule eval-k-of-expr-atom->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :atom))
     (equal (erl-s-klst->s (eval-k k s))
-           (update-erl-state->in
-                   s
-                   (make-erl-val-atom
-                     :val (node-atom->val
-                       (kont-expr->expr (erl-k->kont k)))))))
+           (update-erl-state->in s
+            (make-erl-val-atom
+              :val (node-atom->val
+                      (kont-expr->expr (erl-k->kont k)))))))
   :enable eval-k)
 
 (defrule apply-k-of-expr-atom
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :atom))
     (equal (apply-k s (cons k nil))
-           (update-erl-state->in
-             s
+           (update-erl-state->in s
              (make-erl-val-atom
                :val (node-atom->val
                       (kont-expr->expr (erl-k->kont k)))))))
@@ -97,12 +94,11 @@
 
 (defrule eval-k-of-expr-string->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :string))
     (equal (erl-s-klst->s (eval-k k s))
-           (update-erl-state->in
-              s
+           (update-erl-state->in s
               (string=>erl-cons
                 (node-string->val
                   (kont-expr->expr (erl-k->kont k)))))))
@@ -110,13 +106,12 @@
 
 (defrule apply-k-of-string
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :string))
     (equal (apply-k s (cons k nil))
-           (update-erl-state->in
-             s
+           (update-erl-state->in s
              (string=>erl-cons
                (node-string->val
                  (kont-expr->expr (erl-k->kont k)))))))
@@ -132,28 +127,25 @@
 
 (defrule eval-k-of-expr-nil->s
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :nil))
     (equal (erl-s-klst->s (eval-k k s))
-           (update-erl-state->in
-             s
+           (update-erl-state->in s
              (make-erl-val-cons :lst nil))))
   :enable eval-k)
 
 (defrule apply-k-of-expr-nil
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :nil))
     (equal (apply-k s (cons k nil))
-           (update-erl-state->in
-             s
+           (update-erl-state->in s
              (make-erl-val-cons :lst nil))))
   :enable apply-k-of-step)
-
 
 ; Anonymous Function
 (defrule eval-k-of-expr-fun->klst
@@ -165,18 +157,16 @@
 
 (defrule eval-k-of-expr-fun->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :fun))
     (equal (erl-s-klst->s (eval-k k s))
            (cond
             ((not (erl-clause-list->arity
                     (node-fun->cls (kont-expr->expr (erl-k->kont k)))))
-             (update-erl-state->in
-               s 
+             (update-erl-state->in s 
                (make-erl-val-reject :err "erl-eval: ill-formed fun clauses")))
-            (t (update-erl-state->in
-                 s
+            (t (update-erl-state->in s
                  (make-erl-val-fun
                    :arity (erl-clause-list->arity
                             (node-fun->cls (kont-expr->expr (erl-k->kont k))))
@@ -187,7 +177,7 @@
 
 (defrule apply-k-of-expr-fun
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :fun))
@@ -195,11 +185,9 @@
            (cond
              ((not (erl-clause-list->arity
                      (node-fun->cls (kont-expr->expr (erl-k->kont k)))))
-              (update-erl-state->in
-                s 
+              (update-erl-state->in s 
                 (make-erl-val-reject :err "erl-eval: ill-formed fun clauses")))
-             (t (update-erl-state->in
-                  s
+             (t (update-erl-state->in s
                   (make-erl-val-fun
                     :arity (erl-clause-list->arity
                              (node-fun->cls (kont-expr->expr (erl-k->kont k))))
@@ -218,7 +206,7 @@
 
 (defrule eval-k-of-expr-var->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :var))
     (equal
@@ -226,31 +214,27 @@
       (cond
         ((not (omap::assoc (node-var->id (kont-expr->expr (erl-k->kont k)))
                            (erl-state->bind s)))
-         (update-erl-state->in 
-           s
+         (update-erl-state->in s
            (make-erl-val-reject :err "unbound variable")))
-        (t (update-erl-state->in
-             s
+        (t (update-erl-state->in s
              (omap::lookup
                (node-var->id (kont-expr->expr (erl-k->kont k)))
                (erl-state->bind s)))))))
-:enable eval-k)
+  :enable eval-k)
 
 (defrule apply-k-of-expr-var
   (implies
     (and (wf-state-p s)
-         (> (erl-k->fuel k) 0)
+         (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :var))
     (equal (apply-k s (cons k nil))
            (cond
              ((not (omap::assoc (node-var->id (kont-expr->expr (erl-k->kont k)))
                                 (erl-state->bind s)))
-              (update-erl-state->in 
-                s
+              (update-erl-state->in s
                 (make-erl-val-reject :err "unbound variable")))
-             (t (update-erl-state->in
-                  s
+             (t (update-erl-state->in s
                   (omap::lookup
                     (node-var->id (kont-expr->expr (erl-k->kont k)))
                     (erl-state->bind s)))))))

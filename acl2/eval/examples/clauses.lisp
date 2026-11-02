@@ -241,4 +241,4 @@
         (guards)
         (body (:match (:var A) (:integer 1)) (:var B)))))
     '((X :atom cow)))
-  '(:excpt ((class :error) (reason :case-clause (:atom cow)) (stack))))
+  '(:excpt (:atom error) (:tuple ((:atom case_clause) (:atom cow))) nil))

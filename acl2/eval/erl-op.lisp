@@ -27,9 +27,9 @@
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
        ((unless (equal (erl-val-kind val) :integer))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarith)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarith))))
       val)
   ///
     (defcong erl-val-equiv equal (erl-plus x) 1))
@@ -40,9 +40,9 @@
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
        ((unless (equal (erl-val-kind val) :integer))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarith)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarith))))
       (make-erl-val-integer :val (* -1 (erl-val-integer->val val))))
   ///
     (defcong erl-val-equiv equal (erl-minus x) 1))
@@ -55,9 +55,9 @@
        (right (erl-val-fix right))
        ((unless (and (equal (erl-val-kind left) :integer)
                      (equal (erl-val-kind right) :integer)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarith)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarith))))
       (make-erl-val-integer :val (+ (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
     ///
@@ -72,9 +72,9 @@
        (right (erl-val-fix right))
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarith)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarith))))
       (make-erl-val-integer :val (- (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
   ///
@@ -89,9 +89,9 @@
        (right (erl-val-fix right))
        ((unless (and (equal (erl-val-kind left) :integer) 
                      (equal (erl-val-kind right) :integer)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarith)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarith))))
       (make-erl-val-integer :val (* (erl-val-integer->val left)
                                     (erl-val-integer->val right))))
     ///
@@ -109,9 +109,9 @@
           (and (equal (erl-val-kind left) :integer) 
                (equal (erl-val-kind right) :integer)
                (not (equal (erl-val-integer->val right) 0))))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarith))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarith)))
        (left-val (erl-val-integer->val left))
        (right-val (erl-val-integer->val right)))
       (make-erl-val-integer :val (floor left-val right-val)))
@@ -130,9 +130,9 @@
           (and (equal (erl-val-kind left) :integer) 
                (equal (erl-val-kind right) :integer)
                (not (equal (erl-val-integer->val right) 0))))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarith))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarith)))
        (left-val (erl-val-integer->val left))
        (right-val (erl-val-integer->val right)))
       (make-erl-val-integer :val (rem left-val right-val)))
@@ -149,9 +149,9 @@
        ((unless 
           (and (equal (erl-val-kind left) :integer) 
                (equal (erl-val-kind right) :integer)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarith)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarith))))
       (case op
         (+ (erl-add left right))
         (- (erl-sub left right))
@@ -172,9 +172,9 @@
   :returns (v erl-val-p)
   (b* ((val (erl-val-fix val))
        ((unless (erl-boolean-p val))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarg)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarg))))
       (if (equal (erl-val-atom->val val) 'true)
           (make-erl-val-atom :val 'false)
           (make-erl-val-atom :val 'true)))
@@ -191,9 +191,9 @@
        (right (erl-val-fix right))
        ((unless (and (erl-boolean-p left) 
                      (erl-boolean-p right)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarg)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarg))))
       (if (and (equal (erl-val-atom->val left) 'true)
               (equal (erl-val-atom->val right) 'true))
           (make-erl-val-atom :val 'false)
@@ -212,9 +212,9 @@
        (right (erl-val-fix right))
        ((unless (and (erl-boolean-p left) 
                      (erl-boolean-p right)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarg)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarg))))
       (if (or (equal (erl-val-atom->val left) 'true)
               (equal (erl-val-atom->val right) 'true))
           (make-erl-val-atom :val 'false)
@@ -233,9 +233,9 @@
        (right (erl-val-fix right))
        ((unless (and (erl-boolean-p left) 
                      (erl-boolean-p right)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarg)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarg))))
       (if (xor (equal (erl-val-atom->val left) 'true)
                (equal (erl-val-atom->val right) 'true))
           (make-erl-val-atom :val 'false)
@@ -254,9 +254,9 @@
        (right (erl-val-fix right))
        ((unless 
           (and (erl-boolean-p left) (erl-boolean-p right)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarg)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarg))))
       (case op
         ('and (erl-and left right))
         ('or (erl-or left right))
@@ -496,9 +496,9 @@
        ((unless 
           (and (equal (erl-val-kind left) :cons) 
                (equal (erl-val-kind right) :cons)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarg))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarg)))
        (left-lst (erl-val-cons->lst left))
        (right-lst (erl-val-cons->lst right)))
       (make-erl-val-cons :lst (append left-lst right-lst)))
@@ -517,9 +517,9 @@
        ((unless 
           (and (equal (erl-val-kind left) :cons) 
                (equal (erl-val-kind right) :cons)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarg))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarg)))
        (left-lst (erl-val-cons->lst left))
        (right-lst (erl-val-cons->lst right)))
       (make-erl-val-cons :lst (remove-first-of-each right-lst left-lst)))
@@ -536,9 +536,9 @@
        ((unless 
           (and (equal (erl-val-kind left) :cons)
                (equal (erl-val-kind right) :cons)))
-        (make-erl-val-excpt 
-          :err (make-erl-err :class (make-err-class-error)
-                             :reason (make-exit-reason-badarg)))))
+        (make-erl-val-excpt
+          :err-class (make-erl-val-atom :val 'error)
+          :err-reason (make-erl-val-atom :val 'badarg))))
       (case op
         (++ (erl-concat left right))
         (-- (erl-substract left right))

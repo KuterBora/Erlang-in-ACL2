@@ -93,7 +93,8 @@
   (implies
     (and (network-p net) (not (omap::emptyp net)))
     (equal (omap::lookup (mv-nth 0 (omap::head net)) net)
-           (mv-nth 1 (omap::head net)))))
+           (mv-nth 1 (omap::head net))))
+  :enable omap::lookup)
 
 (defrule pid-p-of-head-key-of-network
   (implies (and (network-p net) (not (omap::emptyp net)))

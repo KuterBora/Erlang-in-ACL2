@@ -93,11 +93,11 @@
        ((erl-state s) (erl-state-fix s))
        
        ; Exception to throw if there is a badmatch.
-       (badmatch (update-erl-state->in 
-                    s 
-                    (make-erl-val-excpt 
-                      :err (make-erl-err :class (make-err-class-error) 
-                                         :reason (make-exit-reason-badmatch :val s.in)))))
+       (badmatch
+         (update-erl-state->in s
+          (make-erl-val-excpt
+            :err-class (make-erl-val-atom :val 'error)
+            :err-reason (make-erl-val-tuple :lst (list (make-erl-val-atom :val 'badmatch) s.in)))))
       
        ; Rejection to throw if there is an illegal pattern.
        (badpattern (update-erl-state->in s (make-erl-val-reject :err "Illegal pattern."))))

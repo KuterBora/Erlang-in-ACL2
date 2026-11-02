@@ -192,3 +192,12 @@
   (implies (and (expr-p x) (equal (node-kind x) :receive))
            (erl-clause-list-p (node-receive->cls x)))
   :enable expr-p)
+
+; Clauses of a try expression are erl-clauses,
+(defrule expr-try-ensures
+  (implies
+    (and (expr-p x) (equal (node-kind x) :try))
+    (and 
+      (expr-list-p (node-try->exprs x))
+      (erl-clause-list-p (node-try->err-clauses x))))
+  :enable expr-p)

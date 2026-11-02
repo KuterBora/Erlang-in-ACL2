@@ -66,14 +66,11 @@
 
        ; Exception to throw when a function is defined but there 
        ; are no matching clauses 
-       (function-clause 
-         (update-erl-state->in 
-           s 
-           (make-erl-val-excpt 
-             :err
-               (make-erl-err
-                 :class (make-err-class-error)
-                 :reason (make-exit-reason-function-clause)))))
+       (function-clause
+         (update-erl-state->in s
+            (make-erl-val-excpt
+              :err-class (make-erl-val-atom :val 'error)
+              :err-reason (make-erl-val-atom :val 'function_clause))))
 
        ; The module must exist.
        ((unless (omap::assoc s.module s.world)) (mv reject nil))
@@ -101,14 +98,11 @@
              ; Exception to throw when the function is not defined and would not ahve
              ; caused a compile error.
              (undef
-               (update-erl-state->in 
-                 s 
-                 (make-erl-val-excpt 
-                   :err
-                     (make-erl-err
-                       :class (make-err-class-error)
-                       :reason (make-exit-reason-undef)
-                       :stack (list imod-name call arity)))))
+               (update-erl-state->in s
+                 (make-erl-val-excpt
+                   :err-class (make-erl-val-atom :val 'error)
+                   :err-reason (make-erl-val-atom :val 'undef)
+                   :err-stack (list imod-name call arity))))
 
              ((unless (omap::assoc imod-name s.world)) (mv undef nil))
              ((module imod) (omap::lookup imod-name s.world))
@@ -172,25 +166,19 @@
        ; Exception to throw when the function is not defined and would not ahve
        ; caused a compile error.
        (undef
-         (update-erl-state->in 
-           s 
-           (make-erl-val-excpt 
-             :err
-               (make-erl-err
-                 :class (make-err-class-error)
-                 :reason (make-exit-reason-undef)
-                 :stack (list module call arity)))))
+         (update-erl-state->in s
+          (make-erl-val-excpt
+            :err-class (make-erl-val-atom :val 'error)
+            :err-reason (make-erl-val-atom :val 'undef)
+            :err-stack (list module call arity))))
        
        ; Exception to throw when a function is defined but there 
        ; are no matching clauses 
        (function-clause 
-         (update-erl-state->in 
-           s 
-           (make-erl-val-excpt 
-             :err
-               (make-erl-err
-                 :class (make-err-class-error)
-                 :reason (make-exit-reason-function-clause)))))
+         (update-erl-state->in s 
+           (make-erl-val-excpt
+                   :err-class (make-erl-val-atom :val 'error)
+                   :err-reason (make-erl-val-atom :val 'function_clause))))
 
        ; The module must exist.
        ((unless (omap::assoc module s.world)) (mv undef nil))
@@ -259,57 +247,48 @@
        ; Throw the badfun exception if the called expression is not a fun.
        ((if (not (erl-fun-p fun)))
         (mv 
-          (update-erl-state->in 
-            s 
-            (make-erl-val-excpt 
-                      :err (make-erl-err :class (make-err-class-error)
-                                         :reason (make-exit-reason-badfun :fun fun))))
+          (update-erl-state->in s
+            (make-erl-val-excpt
+              :err-class (make-erl-val-atom :val 'error)
+              :err-reason (make-erl-val-tuple :lst (list (make-erl-val-atom :val 'bafun) fun))))
           nil))
         
-        ; Throw the badarity exception if the arities of the fun and the
-        ; arguments do not match.
-        ((if (not (equal (erl-val-fun->arity fun) arity)))
-          (mv 
-            (update-erl-state->in 
-              s 
-              (make-erl-val-excpt 
-                        :err (make-erl-err :class (make-err-class-error)
-                                          :reason (make-exit-reason-badarity :fun fun))))
-            nil))
+       ; Throw the badarity exception if the arities of the fun and the
+       ; arguments do not match.
+       ((if (not (equal (erl-val-fun->arity fun) arity)))
+        (mv 
+          (update-erl-state->in s
+            (make-erl-val-excpt
+              :err-class (make-erl-val-atom :val 'error)
+              :err-reason (make-erl-val-tuple :lst (list (make-erl-val-atom :val 'badarity) fun))))
+          nil))
 
        ; Exception to throw when the fun is well-formed but there 
        ; are no matching clauses 
        (function-clause 
-         (update-erl-state->in 
-           s 
-           (make-erl-val-excpt 
-             :err
-               (make-erl-err
-                 :class (make-err-class-error)
-                 :reason (make-exit-reason-function-clause)))))
+         (update-erl-state->in s 
+           (make-erl-val-excpt
+                   :err-class (make-erl-val-atom :val 'error)
+                   :err-reason (make-erl-val-atom :val 'function_clause))))
 
-      ((mv (erl-state rs) body)
-       (eval-clauses
-        args
-        (erl-val-fun->cls fun)
-        (update-erl-state->bind-mod 
-          s 
-          (erl-val-fun->bind fun)
-          (erl-val-fun->module fun))))
-      ((if (not (wf-state-p rs))) (mv rs nil))
-      ((if (null body)) (mv function-clause nil))
+       ((mv (erl-state rs) body)
+        (eval-clauses
+          args
+          (erl-val-fun->cls fun)
+          (update-erl-state->bind-mod s 
+            (erl-val-fun->bind fun)
+            (erl-val-fun->module fun))))
+       ((if (not (wf-state-p rs))) (mv rs nil))
+       ((if (null body)) (mv function-clause nil))
 
-      ; Remark: Badmatch exceptions are supposed to return the value that failed to 
-      ; match. This is currently not supported. Instead, return the whole fun.
-      ((unless (omap::compatiblep rs.bind (erl-val-fun->bind fun))) 
-       (mv
-        (update-erl-state->in 
-           s 
-           (make-erl-val-excpt 
-             :err
-               (make-erl-err
-                 :class (make-err-class-error)
-                 :reason (make-exit-reason-badmatch :val fun))))
+       ; Remark: Badmatch exceptions are supposed to return the value that failed to 
+       ; match. This is currently not supported. Instead, return the whole fun.
+       ((unless (omap::compatiblep rs.bind (erl-val-fun->bind fun))) 
+        (mv
+         (update-erl-state->in s 
+           (make-erl-val-excpt
+                   :err-class (make-erl-val-atom :val 'error)
+                   :err-reason (make-erl-val-tuple :lst (list (make-erl-val-atom :val 'badmatch) fun))))
         nil)))
     (mv rs body))
   ///

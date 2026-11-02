@@ -37,10 +37,22 @@
                   (:var X) 
                   (:var Y)))))))))
 
-; Steps: 93998
+; check what causes so many steps????
+; (defrule bind-update-lookup
+;   (equal (omap::lookup s (omap::update s x m)) x)
+;   :enable omap::lookup)
+
+; (defrule bind-update-update-lookup
+;   (implies
+;     (not (equal s1 s2))
+;     (equal (omap::lookup s2 (omap::update s1 x1 (omap::update s2 x2 m))) x2))
+;   :enable omap::lookup)
+
+; Steps: 107969
 (defrule apply-k-of-add
   (b* (; The starting state is well-formed
        ((unless (wf-state-p s)) t)
+       ((if (equal (erl-val-kind (erl-state->in s)) :excpt)) t)
        ((erl-state s) s)
 
        ; The state has the world defined above.

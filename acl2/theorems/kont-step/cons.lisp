@@ -22,7 +22,8 @@
 ; expr-cons
 (defrule eval-k-of-expr-cons->klst
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (> (erl-k->fuel k) 0)
+         (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
     (equal 
@@ -46,18 +47,17 @@
 
 (defrule eval-k-of-expr-cons->s
   (implies 
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
     (equal (erl-s-klst->s (eval-k k s)) 
            (update-erl-state->in s (make-erl-val-none))))
   :enable eval-k)
 
-
 ; kont-cons
 (defrule eval-k-of-cons->klst
   (implies 
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :cons))
     (equal (erl-s-klst->klst (eval-k k s))
            (list (make-erl-k 
@@ -74,11 +74,10 @@
 
 (defrule eval-k-of-cons->s
   (implies 
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :cons))
     (equal (erl-s-klst->s (eval-k k s)) 
-           (update-erl-state->in-bind 
-             s 
+           (update-erl-state->in-bind s 
              (make-erl-val-none)
              (kont-cons->bind-0 (erl-k->kont k)))))
   :enable eval-k)
@@ -93,7 +92,7 @@
 
 (defrule eval-k-of-cons-merge->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :cons-merge))
     (equal
       (erl-s-klst->s (eval-k k s))
@@ -107,15 +106,12 @@
           (omap::compatiblep
             (erl-state->bind s)
             (kont-cons-merge->car-bind (erl-k->kont k))))
-         (update-erl-state->in
-           s
+         (update-erl-state->in s
            (make-erl-val-excpt
-             :err (make-erl-err
-                    :class (make-err-class-error)
-                    :reason (make-exit-reason-badmatch
-                              :val (erl-state->in s))))))
-        (t (update-erl-state->in-bind
-             s
+            :err-class (make-erl-val-atom :val 'error)
+            :err-reason (make-erl-val-tuple :lst
+                          (list (make-erl-val-atom :val 'badmatch) (erl-state->in s))))))
+        (t (update-erl-state->in-bind s
              (make-erl-val-cons
                :lst (cons (kont-cons-merge->car-val (erl-k->kont k))
                           (erl-val-cons->lst (erl-state->in s))))
@@ -124,13 +120,12 @@
                (kont-cons-merge->car-bind (erl-k->kont k))))))))
   :enable eval-k)
 
-
 ; apply-k  ---------------------------------------------------------------------
 
 (defrule apply-k-of-expr-cons
   (implies
     (and (wf-state-p s)
-         (> (erl-k->fuel k) 0)
+         (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
     (equal (apply-k s (cons k nil))
@@ -164,9 +159,18 @@
               :expr
                 (node-cons->hd (kont-expr->expr (erl-k->kont k))))))))
 
+(defrule apply-k-of-expr-cons-excpt
+  (implies
+    (and (> (erl-k->fuel k) 0) (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (equal (kont-kind (erl-k->kont k)) :expr)
+         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
+    (equal (apply-k s (cons k nil))
+           (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))
+
 (defruled apply-k-of-cons
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :cons))
     (equal (apply-k s (cons k nil))
@@ -194,9 +198,17 @@
               :expr
                 (kont-cons->cdr-expr (erl-k->kont k)))))))
 
+(defrule apply-k-of-cons-excpt
+  (implies
+    (and (> (erl-k->fuel k) 0) (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (equal (kont-kind (erl-k->kont k)) :cons))
+    (equal (apply-k s (cons k nil))
+           (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))
+
 (defrule apply-k-of-cons-merge-when-not-cons
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (not (equal (erl-val-kind (erl-state->in s)) :cons))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :cons-merge))
@@ -209,7 +221,7 @@
 
 (defrule apply-k-of-cons-merge-incompatible
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (erl-val-kind (erl-state->in s)) :cons)
          (not 
            (omap::compatiblep
@@ -218,18 +230,16 @@
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :cons-merge))
     (equal (apply-k s (cons k nil))
-           (update-erl-state->in
-             s
+           (update-erl-state->in s
              (make-erl-val-excpt
-               :err (make-erl-err
-                       :class (make-err-class-error)
-                       :reason (make-exit-reason-badmatch
-                                 :val (erl-state->in s)))))))
+               :err-class (make-erl-val-atom :val 'error)
+               :err-reason (make-erl-val-tuple :lst
+                             (list (make-erl-val-atom :val 'badmatch) (erl-state->in s)))))))
   :enable apply-k-of-step)
 
 (defrule apply-k-of-cons-merge-compatible
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (erl-val-kind (erl-state->in s)) :cons)
          (omap::compatiblep
            (erl-state->bind s)
@@ -247,12 +257,21 @@
                (kont-cons-merge->car-bind (erl-k->kont k))))))
   :enable apply-k-of-step)
 
+(defrule apply-k-of-cons-merge-excpt
+  (implies
+    (and (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :cons-merge))
+    (equal (apply-k s (cons k nil))
+           (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))
+
 
 ; apply-k when wf --------------------------------------------------------------
 
 (defrule cons-hd-well-formed
   (implies
-    (and (> (erl-k->fuel k) 3)
+    (and (> (erl-k->fuel k) 3) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (wf-state-p (apply-k s (cons k nil)))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
