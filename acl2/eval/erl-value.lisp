@@ -37,7 +37,7 @@
            (cls erl-clause-list-p)
            (bind bind-p)
            (module symbolp)))
-    (:excpt ((err-class erl-val-p) (err-reason erl-val-p) (err-stack true-listp)))
+    (:excpt ((err-class erl-val-p) (err-reason erl-val-p) (err-stack erl-vlst-p)))
     ; For now, PIDs are represented as natural numbers
     (:pid ((id natp)))
 

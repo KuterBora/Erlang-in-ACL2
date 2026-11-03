@@ -15,3 +15,4 @@
 (include-book "clauses")
 (include-book "anon-functions")
 (include-book "functions")
+(include-book "try-catch")

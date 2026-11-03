@@ -112,14 +112,6 @@
               :expr
                 (node-match->rhs (kont-expr->expr (erl-k->kont k))))))))
 
-(defrule apply-k-of-expr-match-excpt
-  (implies
-    (and (> (erl-k->fuel k) 0) (equal (erl-val-kind (erl-state->in s)) :excpt)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :match))
-    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
-  :enable (apply-k-of-step eval-k))
-
 (defrule apply-k-of-match-succeed
   (implies
     (and

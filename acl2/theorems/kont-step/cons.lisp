@@ -159,15 +159,6 @@
               :expr
                 (node-cons->hd (kont-expr->expr (erl-k->kont k))))))))
 
-(defrule apply-k-of-expr-cons-excpt
-  (implies
-    (and (> (erl-k->fuel k) 0) (equal (erl-val-kind (erl-state->in s)) :excpt)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :cons))
-    (equal (apply-k s (cons k nil))
-           (erl-state-fix s)))
-  :enable (apply-k-of-step eval-k))
-
 (defruled apply-k-of-cons
   (implies
     (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))

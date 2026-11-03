@@ -139,15 +139,6 @@
                     :expr (node-call->args
                             (kont-expr->expr (erl-k->kont k))))))))
 
-(defrule apply-k-of-expr-local-call-excpt
-  (implies
-    (and (equal (erl-val-kind (erl-state->in s)) :excpt)
-         (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :call))
-    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
-  :enable (apply-k-of-step eval-k))
-
 (defruled apply-k-of-local-call-no-match
   (implies
     (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
@@ -212,3 +203,19 @@
          (equal (kont-kind (erl-k->kont k)) :local-call))
     (equal (apply-k s (cons k nil)) (erl-state-fix s)))
   :enable (apply-k-of-step eval-k))
+
+
+; more theorems ----------------------------------------------------------------
+
+; A local call that returns a well-formed result, restores the bindings.
+(defrule bindings-of-apply-k-of-local-call
+  (implies
+    (and (equal (kont-kind (erl-k->kont k)) :local-call)
+         (> (erl-k->fuel k) 1)
+         (equal (erl-val-kind (erl-state->in s)) :cons)
+         (mv-nth 1 (eval-local-call s
+                     (kont-local-call->call (erl-k->kont k))
+                     (erl-val-cons->lst (erl-state->in s))))
+         (wf-state-p (apply-k s (list k))))
+    (equal (erl-state->bind (apply-k s (list k))) (erl-state->bind s)))
+  :enable apply-k-of-local-call-when-match)

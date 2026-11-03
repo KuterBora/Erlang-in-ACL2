@@ -269,8 +269,8 @@
       (:catch
         (b* (((if (not (equal (erl-val-kind s.in) :excpt))) (make-erl-s-klst :s s))
              (cls (erl-val-excpt->err-class s.in))
-             (rsn (erl-val-excpt->err-class s.in))
-             (stk (erl-val-excpt->err-class s.in))
+             (rsn (erl-val-excpt->err-reason s.in))
+             (stk (make-erl-val-cons :lst (erl-val-excpt->err-stack s.in)))
              (err-triple (make-erl-val-tuple :lst (list cls rsn stk)))
              ((mv (erl-state rs) body) (eval-clauses (list err-triple) k.clauses s))
              ((if (equal (erl-val-kind rs.in) :reject)) (make-erl-s-klst :s rs))

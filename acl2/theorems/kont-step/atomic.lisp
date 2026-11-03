@@ -239,3 +239,10 @@
                     (node-var->id (kont-expr->expr (erl-k->kont k)))
                     (erl-state->bind s)))))))
   :enable apply-k-of-step)
+
+(defrule apply-k-of-expr-excpt
+  (implies
+    (and (> (erl-k->fuel k) 0) (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (equal (kont-kind (erl-k->kont k)) :expr))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))

@@ -27,7 +27,7 @@
 
 (defrule eval-k-of-expr-receive->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :receive))
     (equal (erl-s-klst->s (eval-k k s))
@@ -47,7 +47,7 @@
 ; kont receive
 (defrule eval-k-of-receive->klst
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :receive))
     (equal
       (erl-s-klst->klst (eval-k k s))
@@ -80,7 +80,7 @@
 
 (defrule eval-k-of-receive->s
   (implies
-    (and (> (erl-k->fuel k) 0)
+    (and (> (erl-k->fuel k) 0) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :receive))
     (equal
       (erl-s-klst->s (eval-k k s))
@@ -102,7 +102,7 @@
 
 (defrule apply-k-of-expr-receive
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :receive))
@@ -118,7 +118,7 @@
 
 (defrule apply-k-of-receive-no-match
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :receive)
          (not (mv-nth 1 (eval-receive s (kont-receive->clauses (erl-k->kont k))))))
@@ -128,7 +128,7 @@
 
 (defrule apply-k-of-receive-when-match
   (implies
-    (and (wf-state-p s)
+    (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (> (erl-k->fuel k) 0)
          (equal (kont-kind (erl-k->kont k)) :receive)
          (mv-nth 1 (eval-receive s (kont-receive->clauses (erl-k->kont k)))))
@@ -158,8 +158,16 @@
                             (kont-receive->clauses (erl-k->kont k)))))))))))
   :enable apply-k-of-step)
 
-; Bonus: I think this was already covered elsewhere
-(defrule apply-k-receive-val
+(defrule apply-k-of-receive-excpt
+  (implies
+    (and (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (> (erl-k->fuel k) 0)
+         (equal (kont-kind (erl-k->kont k)) :receive))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
+  :enable (apply-k-of-step eval-k))
+
+; TODO: I think this was already covered elsewhere
+(defrule apply-k-of-receive-val
   (implies
     (and (equal (erl-val-kind (erl-state->in s)) :receive)
          (erl-klst-p klst)

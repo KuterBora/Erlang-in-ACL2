@@ -165,16 +165,6 @@
               :expr
                 (node-binop->left (kont-expr->expr (erl-k->kont k))))))))
 
-(defrule apply-k-of-expr-binop-excpt
-  (implies
-    (and (equal (erl-val-kind (erl-state->in s)) :excpt)
-         (> (erl-k->fuel k) 0)
-         (equal (kont-kind (erl-k->kont k)) :expr)
-         (equal (node-kind (kont-expr->expr (erl-k->kont k))) :binop))
-    (equal (apply-k s (cons k nil))
-           (erl-state-fix s)))
-  :enable (eval-k apply-k-of-step))
-
 (defruled apply-k-of-binop-expr1
   (implies
     (and (wf-state-p s) (not (equal (erl-val-kind (erl-state->in s)) :excpt))

@@ -102,7 +102,10 @@
                  (make-erl-val-excpt
                    :err-class (make-erl-val-atom :val 'error)
                    :err-reason (make-erl-val-atom :val 'undef)
-                   :err-stack (list imod-name call arity))))
+                   :err-stack
+                      (list (make-erl-val-atom :val imod-name)
+                            (make-erl-val-atom :val call)
+                            (make-erl-val-integer :val arity)))))
 
              ((unless (omap::assoc imod-name s.world)) (mv undef nil))
              ((module imod) (omap::lookup imod-name s.world))
@@ -170,7 +173,10 @@
           (make-erl-val-excpt
             :err-class (make-erl-val-atom :val 'error)
             :err-reason (make-erl-val-atom :val 'undef)
-            :err-stack (list module call arity))))
+            :err-stack
+              (list (make-erl-val-atom :val module)
+                    (make-erl-val-atom :val call)
+                    (make-erl-val-integer :val arity)))))
        
        ; Exception to throw when a function is defined but there 
        ; are no matching clauses 

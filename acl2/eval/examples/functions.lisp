@@ -150,11 +150,11 @@
 (assert-equal
   (eval-expr-world-val
     '(:remote-call crock sum (:cons (:integer -5) (:nil))) 'arithm1 (test-world))
-  '(:excpt (:atom error) (:atom undef) (crock sum 1)))
+  '(:excpt (:atom error) (:atom undef) ((:atom crock) (:atom sum) (:integer 1))))
 
 
 ; undef (remote call to undefined function)
 (assert-equal
   (eval-expr-world-val
     '(:remote-call arithm2 sum (:cons (:integer -5) (:nil))) 'arithm1 (test-world))
-  '(:excpt (:atom error) (:atom undef) (arithm2 sum 1)))
+  '(:excpt (:atom error) (:atom undef) ((:atom arithm2) (:atom sum) (:integer 1))))

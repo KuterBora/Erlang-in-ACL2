@@ -17,11 +17,10 @@
 ; expression is equivalent to evaluating every element of the tuple from
 ; left to right, and then merging the results.
 
-; TODO: eval-k counterpart
-
 (defrule apply-k-of-expr-tuple
   (implies
     (and (wf-state-p s) (> (erl-k->fuel k) 0)
+         (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :expr)
          (equal (node-kind (kont-expr->expr (erl-k->kont k))) :tuple))
     (equal (apply-k s (cons k nil))
@@ -48,9 +47,17 @@
 (defrule apply-k-of-tuple
   (implies
     (and (wf-state-p s) (> (erl-k->fuel k) 0)
+         (not (equal (erl-val-kind (erl-state->in s)) :excpt))
          (equal (kont-kind (erl-k->kont k)) :tuple)
          (equal (erl-val-kind (erl-state->in s)) :cons))
     (equal (apply-k s (cons k nil))
            (update-erl-state->in (erl-state-fix s)
              (make-erl-val-tuple :lst (erl-val-cons->lst (erl-state->in s))))))
+  :enable (apply-k-of-step eval-k))
+
+(defrule apply-k-of-tuple-excpt
+  (implies
+    (and (> (erl-k->fuel k) 0) (equal (erl-val-kind (erl-state->in s)) :excpt)
+         (equal (kont-kind (erl-k->kont k)) :tuple))
+    (equal (apply-k s (cons k nil)) (erl-state-fix s)))
   :enable (apply-k-of-step eval-k))
