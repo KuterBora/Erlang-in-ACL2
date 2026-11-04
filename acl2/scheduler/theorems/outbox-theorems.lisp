@@ -9,10 +9,10 @@
 
 (in-package "ACL2")
 
-(include-book "network")
+(include-book "../network")
 (set-induction-depth-limit 1)
 
-; Some utility functions and rules about the outbox of a process.
+; Some  functions and rules about outboxes.
 ; TODO: Some of these should be better organized and renamed.
 
 (defrule head-of-outbox

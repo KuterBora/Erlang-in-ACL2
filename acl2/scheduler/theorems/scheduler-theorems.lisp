@@ -8,10 +8,9 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "../../scheduler/top")
+(include-book "../erl-in-acl2")
 
-; For now, I am writing theorems related to networks and
-; the scheduler in this file.
+; Some rules about the scheduler
 
 (defrule erl-step-when-terminated
   (implies
