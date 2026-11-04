@@ -8,20 +8,23 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "../../reduce-proc")
+(include-book "network")
 
-; TODO: doc
-; TODO defsection
+; To spawn a process, we need a new unique PID. Since multiple processes can invoke
+; it at the same, spawn must be a blocking operation like receive, where the scheduler
+; can decide to add the new process to the network and pass its PID to a process that has
+; requested the spawn.
 
-; Show that the order of the spawned pid decreases.
+; Some Helpers ----------------------------------------------------------------
+
+; Show that the order of the spawned PIDs decrease.
 ; TODO: This lemma will have to change if the natp representation of pids changes.
 (local (defrule order-of-make-pid
-  (implies
-    (pid-p p)
-    (<< p (erl-val-pid (+ 1 (erl-val-pid->id p)))))
-  :in-theory (e/d*
-    (pid-p erl-val-kind erl-val-pid erl-val-pid->id set::order-rules)
-    (list-order))
+  (implies (pid-p p) (<< p (erl-val-pid (+ 1 (erl-val-pid->id p)))))
+  :in-theory
+    (e/d*
+      (pid-p erl-val-kind erl-val-pid erl-val-pid->id set::order-rules)
+      (list-order))
   :expand ((erl-val-p p))
   :use (:instance list-order (a p) (b (list :pid (+ 1 (cadr p)))))
   :prep-books ((include-book "arithmetic/top" :dir :system)
@@ -37,14 +40,14 @@
      (defrule natp-order
        (implies (natp x) (<< x (+ 1 x))) :enable (<< lexorder alphorder)))))
 
-; helper for the following theorems
 (local (defrule set-order
   (implies (and (not (set::emptyp s)) (not (set::emptyp (set::tail s))))
            (<< (set::head s) (set::head (set::tail s))))
   :in-theory (enable* set::order-rules)))
 
+; Spawn -----------------------------------------------------------------------
 
-; spawn takes a set of existing pids, and returns a new unique pid.
+; It does not matter how a PID is chosen as long as it is unique.
 (encapsulate
   (((spawn *) => * :formals (pids) :guard (pid-set-p pids)))
 
@@ -61,15 +64,15 @@
           (make-erl-val-pid :id (+ 1 (erl-val-pid->id (set::head pids))))))
         (spawn (set::tail pids)))))
   
-  ; spawn returns a pid-p
+  ; spawn returns a PID
   (more-returns spawn
     (pid :name pid-p-of-spawn :rule-classes :type-prescription
       pid-p :hints (("Goal" :in-theory (enable spawn pid-p)))))
   
   (defcong pid-set-equiv equal (spawn pids) 1
     :hints (("Goal" :in-theory (enable spawn))))
-  
-  ; This theorem only holds for this specific witness.
+
+  ; TODO: This will have to change if the natp representation of pids changes.
   (local (defruled order-of-spawn
     (implies (pid-set-p pids) (<< (set::head pids) (spawn pids)))
     :in-theory (e/d (spawn) (set-order))
@@ -77,13 +80,13 @@
             ("Subgoal *1/2" :in-theory (enable set::head pid-set-p)
                             :expand (spawn pids)))))
 
-  ; the new pid is unique
+  ; the new PID is unique
   (defrule unique-pid-of-spawn
     (implies (pid-set-p pids) (not (set::in (spawn pids) pids)))
     :in-theory (enable* spawn set::order-rules)
     :hints (("Subgoal *1/4" :use (:instance order-of-spawn)))))
 
-; executable counterpart for spawn
+; an executable counterpart for spawn
 (define simple-spawn ((pids pid-set-p))
   :returns pid
   :measure (set::cardinality (pid-set-fix pids))

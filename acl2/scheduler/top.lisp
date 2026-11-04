@@ -9,5 +9,6 @@
 
 (in-package "ACL2")
 
+(include-book "spawn")
 (include-book "erl-in-acl2")
 (include-book "theorems/top")
