@@ -12,12 +12,14 @@
 
 ; Erlang Network --------------------------------------------------------------
 
-; todo: doc and defsection
-
+; A network of Erlang processes, without any well-formedness guarantees.
 (fty::defomap network-gen
-    :key-type pid-p
-    :val-type proc-p)
+  :key-type pid-p
+  :val-type proc-p)
 
+; While a network is a map from PIDs to processes, each process also
+; has knowledge of their own PID so that they can call [self()]. In that case,
+; if a PID maps to a process, then that process's PID should be the same.
 (define wf-network-p ((n network-gen-p))
   :enabled t
   :returns (b booleanp)
@@ -72,23 +74,30 @@
                   (net (omap::delete p (omap::tail net)))
                   (p (mv-nth 1 (omap::head net))))))))
 
-; TODO: create a rule-set called network-map-rules
-; that contains the theory about map operations on networks.
+; An Erlang network is a set of processes that satisfy [wf-network-p].
 (fty::defsubtype network
   :supertype network-gen
   :restriction (lambda (x) (wf-network-p x))
   :fix-value nil)
 
+; The domain of network is a set of PIDs.
 (defrule domain-of-network-p
   (implies (network-p n) (pid-set-p (omap::keys n)))
   :enable (network-p pid-set-p omap::keys))
 
+; The head-key of a network is a PID.
 (defrule head-of-network-p
   (implies
     (and (network-p net) (not (omap::emptyp net)))
     (pid-p (mv-nth 0 (omap::head net))))
   :enable (network-p))
 
+(defrule pid-p-of-head-key-of-network
+  (implies
+    (and (network-p net) (not (omap::emptyp net)))
+    (pid-p (omap::head-key net))))
+
+; Looking up the head-key of a network returns the head-value of the network.
 (defrule lookup-of-head-key-of-network
   (implies
     (and (network-p net) (not (omap::emptyp net)))
@@ -96,10 +105,7 @@
            (mv-nth 1 (omap::head net))))
   :enable omap::lookup)
 
-(defrule pid-p-of-head-key-of-network
-  (implies (and (network-p net) (not (omap::emptyp net)))
-           (pid-p (omap::head-key net))))
-
+; The values of a network are proc-p
 (defrule proc-p-of-lookup-of-network
   (implies
     (and (network-p net) (omap::assoc pid net))
@@ -112,6 +118,7 @@
     (equal (proc->pid (omap::lookup pid net)) pid))
   :enable (omap::lookup network-fix network-p))
 
+; Processes' PID agree with their keys.
 (defrule erl-state->self-of-lookup-of-network
   (implies
     (and (network-p net) (omap::assoc pid net))
@@ -120,6 +127,7 @@
   :disable proc->pid-of-lookup-of-network
   :use proc->pid-of-lookup-of-network)
 
+; A valid update of a network yields a new network.
 (defrule network-p-of-update
   (implies
     (and (network-p net) (pid-p pid)
@@ -138,16 +146,19 @@
            (network-p (omap::update* n1 n2)))
   :enable network-p)
 
+; Deleting an element from the network preserves network-p
 (defrule network-p-of-delete
   (implies
     (and (network-p net) (pid-p pid))
     (network-p (omap::delete pid net)))
   :enable (network-gen-p network-p wf-network-p))
 
+; The tail of a network is still a network.
 (defrule network-p-of-tail
   (implies (network-p net) (network-p (omap::tail net)))
   :enable network-p)
 
+; Lookup when the key is in the tail.
 (defruled lookup-of-tail-when-assoc-tail-of-network
   (implies
     (and (network-p net) (pid-p pid) (omap::assoc pid (omap::tail net)))
@@ -156,6 +167,7 @@
   :enable (network-p network-gen-p)
   :use (:instance omap::lookup-of-tail-when-assoc-tail (key pid) (map net)))
 
+; Updating an existing process does not change the size.
 (defrule size-of-update-network
   (implies
     (and (network-p net) (omap::assoc pid net))
@@ -166,6 +178,7 @@
 
 ; Predicates for Networks -----------------------------------------------------
 
+; Check if the process of the given PID is runnable.
 (define runnable? ((n network-p) (p pid-p))
   :returns (b booleanp)
   (b* ((n (network-fix n))
@@ -188,6 +201,7 @@
         (and (network-p net) (pid-p p) (runnable? net p))
         (omap::assoc p net))))
 
+; Check the process of source PID has a message for the process of the destination PID.
 (define has-message-for-dst? ((net network-p) (src pid-p) (dst pid-p))
   (b* ((net (network-fix net))
        (src (pid-fix src))
@@ -243,6 +257,8 @@
       :enable (proc-has-message-for-dst? network-fix
                lookup-of-tail-when-assoc-tail-of-network)))
 
+; Check if every process in the network has terminated,
+; i.e. none of them are runnable or has pending messages.
 (define terminated? ((net network-p))
   (b* ((net (network-fix net))
        ((if (omap::emptyp net)) t))

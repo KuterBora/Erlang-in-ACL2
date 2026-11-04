@@ -12,8 +12,8 @@
 (include-book "network")
 (set-induction-depth-limit 1)
 
-; Some utility functions and rules.
-; TODO: I might move these elsewhere.
+; Some utility functions and rules about the outbox of a process.
+; TODO: Some of these should be better organized and renamed.
 
 (defrule head-of-outbox
   (implies
@@ -66,7 +66,7 @@
            (erl-state->bind (proc->s (omap::lookup x net)))))
   :enable omap::lookup-of-update)
 
-; Empty Outbox Predicate
+; check if an outbox is empty
 (define outbox-emptyp ((outbox outbox-p))
   :returns (r booleanp)
   :measure (acl2-count (outbox-fix outbox))
