@@ -8,7 +8,7 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "../../theorems/top")
+(include-book "../../eval/top")
 
 (set-induction-depth-limit 1)
 

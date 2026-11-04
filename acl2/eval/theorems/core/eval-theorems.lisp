@@ -8,7 +8,7 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "../../eval/top")
+(include-book "../../erl-eval")
 
 (set-induction-depth-limit 1)
 

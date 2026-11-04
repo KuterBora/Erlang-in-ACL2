@@ -10,3 +10,4 @@
 (in-package "ACL2")
 
 (include-book "erl-eval")
+(include-book "theorems/top")
