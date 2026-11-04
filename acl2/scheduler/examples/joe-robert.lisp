@@ -1,5 +1,6 @@
 (in-package "ACL2")
-(include-book "../top")
+(include-book "util")
+
 ; Erlang in ACL2
 ;
 ; Copyright (C) Kuter Bora.
@@ -9,7 +10,7 @@
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
 
-; Test 1 ----------------------------------------------------------------------
+; Example 1: Joe & Robert -----------------------------------------------------
 
 ; Let Robert and Joe be two processes that want to communicate. 
 ; - Robert sends greetings to Joe.
@@ -25,39 +26,26 @@
         Joe ! goodbye_joe
         robert_ok
       end
-  end
+  end.
 
-  His pid is 0, and he knows that Joe's pid is 1.
+  Where Robert's Pid is 0 and Joe's Pid is 1.
 |#
 (defconst *robert*
-  (make-proc
-    :s (make-erl-state :bind '((Joe :pid 1)) :self '(:pid 0))
-    :klst
-      (list
-        (make-erl-k 
-          :fuel 10000 
-          :kont
-            (make-kont-exprs
-              :exprs
-                '((:binop
-                    !
+  (make-exprs-proc
+    '(:pid 0) '((Joe :pid 1))
+    '((:binop ! (:var Joe) (:tuple (:cons (:call self (:nil)) (:cons (:atom hello_joe) (:nil)))))
+      (:receive
+        (((cases (:tuple (:cons (:var Joe) (:cons (:atom hello_robert) (:nil)))))
+          (guards)
+          (body
+            (:receive
+              (((cases (:tuple (:cons (:var Joe) (:cons (:atom goodbye_robert) (:nil)))))
+                (guards)
+                (body 
+                  (:binop !
                     (:var Joe)
-                    (:tuple (:cons (:call self (:nil))
-                                   (:cons (:atom hello_joe) (:nil)))))
-                  (:receive
-                    (((cases (:tuple (:cons (:var Joe) (:cons (:atom hello_robert) (:nil)))))
-                      (guards)
-                      (body
-                        (:receive
-                          (((cases (:tuple (:cons (:var Joe) (:cons (:atom goodbye_robert) (:nil)))))
-                            (guards)
-                            (body 
-                              (:binop
-                                !
-                                (:var Joe)
-                                  (:tuple (:cons (:call self (:nil))
-                                                 (:cons (:atom goodbye_joe) (:nil)))))
-                              (:atom robert_ok)))))))))))))))
+                    (:tuple (:cons (:call self (:nil)) (:cons (:atom goodbye_joe) (:nil)))))
+                  (:atom robert_ok))))))))))))
 
 #| Joe exectues:
   receive
@@ -67,39 +55,38 @@
       receive {Robert, goodbye_joe} ->
         joe_ok
       end
-  end
+  end.
 
-  His pid is 1, and he knows that Robert's pid is 0.
+  Where Robert's Pid is 0 and Joe's Pid is 1.
 |#
 (defconst *joe*
-  (make-proc
-    :s (make-erl-state :bind '((Robert :pid 0)) :self '(:pid 1))
-    :klst
-      (list
-        (make-erl-k 
-          :fuel 10000 
-          :kont
-            (make-kont-expr
-              :expr
-                '(:receive
-                    (((cases (:tuple (:cons (:var Robert) (:cons (:atom hello_joe) (:nil)))))
-                      (guards)
-                      (body
-                        (:binop
-                          !
-                          (:var Robert)
-                          (:tuple (:cons (:call self (:nil)) (:cons (:atom hello_robert) (:nil)))))
-                        (:binop
-                          !
-                          (:var Robert)
-                          (:tuple (:cons (:call self (:nil)) (:cons (:atom goodbye_robert) (:nil)))))
-                        (:receive
-                          (((cases (:tuple (:cons (:var Robert) (:cons (:atom goodbye_joe) (:nil)))))
-                            (guards)
-                            (body (:atom joe_ok))))))))))))))
+  (make-exprs-proc
+    '(:pid 1) '((Robert :pid 0))
+    '((:receive
+       (((cases (:tuple (:cons (:var Robert) (:cons (:atom hello_joe) (:nil)))))
+         (guards)
+         (body
+          (:binop !
+            (:var Robert)
+            (:tuple (:cons (:call self (:nil)) (:cons (:atom hello_robert) (:nil)))))
+          (:binop !
+            (:var Robert)
+            (:tuple (:cons (:call self (:nil)) (:cons (:atom goodbye_robert) (:nil)))))
+          (:receive
+            (((cases (:tuple (:cons (:var Robert) (:cons (:atom goodbye_joe) (:nil)))))
+              (guards)
+              (body (:atom joe_ok))))))))))))
 
 
-
+; A network of Erlang processes concisting of Joe and Robert.
 (defconst *network* (omap::from-lists '((:pid 0) (:pid 1)) (list *robert* *joe*)))
 
-;; Test with: (erl-runner *network* 20)
+; Run the processes with: (erl-runner *network* 20)
+
+(assert-equal
+  (erl-state->in (proc->s (omap::lookup '(:pid 0) (erl-runner *network* 20))))
+  '(:atom robert_ok))
+
+(assert-equal
+  (erl-state->in (proc->s (omap::lookup '(:pid 1) (erl-runner *network* 20))))
+  '(:atom joe_ok))

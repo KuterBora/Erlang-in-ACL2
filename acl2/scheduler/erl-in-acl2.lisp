@@ -9,7 +9,7 @@
 
 (in-package "ACL2")
 (include-book "abstract")
-(include-book "../theorems/state/self")
+(include-book "../eval/theorems/state/self")
 
 (define proc-receive ((proc proc-p))
   :returns (rp proc-p)

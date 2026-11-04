@@ -256,7 +256,7 @@
        ((erl-state hd) (eval-match (car ps) (update-erl-state->in s (car vs))))
        
        ; Propagate exceptions and rejections.
-       ((if (not (wf-state-p hd))) hd))
+       ((if (or (not (wf-state-p hd)) (equal (erl-val-kind (erl-state->in hd)) :excpt))) hd))
 
      ; Recursively match the rest of the list.
      (match-args (cdr ps) (cdr vs) hd))

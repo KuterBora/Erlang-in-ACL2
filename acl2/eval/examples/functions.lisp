@@ -32,7 +32,7 @@
 
 ; Example World ---------------------------------------------------------------
 
-; A world with the following modules:
+; An Erlang world with the following modules:
 ; 
 ; -module(arithm1).
 ; -exports([add/2, sum/1]).
