@@ -35,7 +35,7 @@
       (equal
         (omap::lookup fn defns)
         '(; sum_reduce(none, [], GrandTotal)
-          ((cases (:atom none)) (guards) (body (:var GrandTotal)))
+          ((cases (:atom none) (:nil) (:var GrandTotal)) (guards) (body (:var GrandTotal)))
           ; sum_reduce(ParentPid, [], MyTotal)
           ((cases (:var ParentPid) (:nil) (:var MyTotal)) (guards)
            (body
@@ -62,14 +62,14 @@
 ; Remark: The correctness proof of sum_reduce should hold for any world that satisfies [reduce-world-p].
 ; However, it is a lot easier to test the algorithm and get a first iteration of proofs for a concrete world.
 ; Thus, for the moment, I will prove eveything with respect to the following world.
-(define sum-reduce-w ()
+(define sum-reduce-world ()
   :returns (w world-p)
   '((local
       (attrs (module . local) (export) (import))
       (fn-defns
         (((name . sum_reduce) (arity . 3))
          ; sum_reduce(none, [], GrandTotal)
-         ((cases (:atom none)) (guards) (body (:var GrandTotal)))
+         ((cases (:atom none) (:nil) (:var GrandTotal)) (guards) (body (:var GrandTotal)))
          ; sum_reduce(ParentPid, [], MyTotal)
          ((cases (:var ParentPid) (:nil) (:var MyTotal)) (guards)
           (body
@@ -91,9 +91,14 @@
                   (:call sum_reduce
                     (:cons (:var ParentPid)
                       (:cons (:var ChildTl)
-                        (:cons (:binop + (:var LeftTotal) (:var RightTotal)) (:nil))))))))))))))))
+                        (:cons (:binop + (:var LeftTotal) (:var RightTotal)) (:nil)))))))))))))))
+  ///
+    (local (defrule sum-reduce-w-well-formed
+      (sum-reduce-world-p (sum-reduce-world)))))
 
-; Create a process that will call reduce with the given arguments.
+; Create a process that will call reduce with the given arguments. This process uses its index
+; as the value for reduce. This means that the end result of reduce with n processes will be
+; the sum of natural numbers up to n.
 (define make-reduce-proc ((self pid-p) (parent erl-val-p) (children pid-lst-p) (index natp))
   :returns (proc proc-p)
   :guard-hints (("Goal" :in-theory (enable omap::from-lists)))
@@ -104,7 +109,7 @@
     (make-proc
       :s
         (make-erl-state
-          :self self :world (sum-reduce-w)
+          :self self :world (sum-reduce-world)
           :bind
             (omap::from-lists
               (list 'ChildPids 'Parent 'Index)
@@ -177,16 +182,16 @@
           (erl-state->bind s)))
       :enable (make-reduce-proc omap::from-lists omap::lookup-of-update))
    
-    (defrule erl-state->bind-of-make-reduce-proc
-      (equal
-        (erl-state->bind
-          (proc->s (make-reduce-proc self parent children index)))
-        (omap::from-lists
-          (list 'ChildPids 'Parent 'Index)
-          (list (make-erl-val-cons :lst (pid-lst-fix children))
-                (erl-val-fix parent)
-                (make-erl-val-integer :val (nfix index)))))
-      :enable omap::from-lists)
+    ; (defrule erl-state->bind-of-make-reduce-proc
+    ;   (equal
+    ;     (erl-state->bind
+    ;       (proc->s (make-reduce-proc self parent children index)))
+    ;     (omap::from-lists
+    ;       (list 'ChildPids 'Parent 'Index)
+    ;       (list (make-erl-val-cons :lst (pid-lst-fix children))
+    ;             (erl-val-fix parent)
+    ;             (make-erl-val-integer :val (nfix index)))))
+    ;   :enable omap::from-lists)
     
     (defrule natp-of-index-of-make-reduce-proc
       (implies

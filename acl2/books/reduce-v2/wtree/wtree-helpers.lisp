@@ -12,25 +12,25 @@
 
 (set-induction-depth-limit 1)
 
-; This file contains helpers for the function wtree-p.
+; This file contains helpers for [wtree-p] defined in wtree.lisp.
 
 ; Bindings of Wtree ------------------------------------------------------------
 
 ; Wtree-bind are auxillary variables of a Wtree's node which keep track
 ; of the parent, children, and index the process was spawned with.
 ;
-; BOZO: This was a last minute fix, as I had somehow forgotten that
-; a function call loses the scope before the call.In fact, this will
-; not work if there is more code, after the call to reduce, which
-; there would definitely be. A better solution might be to seperate the
-; auxillary variables from the Erlang process, and have a different data
-; structure that keeps track of them.
+; TODO: Unfortunately, the evaluator does not do tail-call elimination,
+; so the original bindings of a call to reduce get buried underneath the
+; call stack as more recursive calls occur. This function parses the call stack
+; to retrieve the original bindings, as a temporary solution.
+;
 (define wtree-bind0 ((bind bind-p) (klst erl-klst-p))
   :returns (b bind-p)
-  (b* ((klst (erl-klst-fix klst))
-       ((unless (consp klst)) (bind-fix bind))
+  (b* ((bind (bind-fix bind))
+       (klst (erl-klst-fix klst))
+       ((unless (consp klst)) bind)
        (kont (erl-k->kont (car (last klst))))
-       ((unless (equal (kont-kind kont) :function-return)) (bind-fix bind)))
+       ((unless (equal (kont-kind kont) :function-return)) bind))
       (kont-function-return->bind kont))
   ///
     (defcong bind-equiv equal (wtree-bind0 bind klst) 1)
@@ -45,6 +45,7 @@
                         :function-return)))
         (equal (wtree-bind0 bind klst) (bind-fix bind)))))
 
+; wrapper around wtree-bind0
 (define wtree-bind ((p proc-p))
   :returns (b bind-p)
   (wtree-bind0 (erl-state->bind (proc->s p)) (proc->klst p))
@@ -55,22 +56,15 @@
              (wtree-bind0 (erl-state->bind (erl-state-fix s))
                           (erl-klst-fix klst))))
 
-    (defrule wtree-bind0-to-wtree-bind
-      (equal (wtree-bind0 (erl-state->bind (proc->s p))
-                          (proc->klst p))
-             (wtree-bind p)))
-
     (defrule wtree-bind-when-no-function-return
       (implies
         (or (not (consp (proc->klst p)))
             (not
               (equal
-                (kont-kind
-                  (erl-k->kont (car (last (proc->klst p)))))
+                (kont-kind (erl-k->kont (car (last (proc->klst p)))))
                 :function-return)))
         (equal (wtree-bind p) (erl-state->bind (proc->s p))))
-      :enable wtree-bind0
-      :disable wtree-bind0-to-wtree-bind)
+      :enable wtree-bind0)
 
     (defrule wtree-bind-of-make-reduce-proc
       (equal (wtree-bind
@@ -78,96 +72,45 @@
              (erl-state->bind
               (proc->s
                 (make-reduce-proc self parent children index))))
-      :enable (make-reduce-proc wtree-bind0)
-      :disable wtree-bind0-to-wtree-bind)
-    
-    (defrule wtree-bind-of-lookup-of-update-when-wtree-bind-equal
+      :enable (make-reduce-proc wtree-bind0))
+
+    (defrule wtree-bind-of-lookup-of-update-when-equal
       (implies
-        (and (network-p net) (omap::assoc q net)
-             (equal (wtree-bind qproc) (wtree-bind (omap::lookup q net))))
-        (equal (wtree-bind (omap::lookup x (omap::update q qproc net)))
+        (and (network-p net) (omap::assoc p net)
+             (equal (wtree-bind proc) (wtree-bind (omap::lookup p net))))
+        (equal (wtree-bind (omap::lookup x (omap::update p proc net)))
                (wtree-bind (omap::lookup x net))))
-      :enable omap::lookup-of-update
-      :disable wtree-bind)
-    
-    (defrule wtree-bind0-of-new-klst
-      (implies
-        (equal
-          klst
-          (proc->klst
-            (make-reduce-proc self parent children index)))
-        (equal (wtree-bind0 bind klst) (bind-fix bind)))
-      :enable make-reduce-proc)
-    
-    (defrule wtree-bind-of-new-proc
-      (implies
-        (and
-          (equal
-            (proc->s p)
-            (proc->s (make-reduce-proc self parent children index)))
-          (equal (proc->klst p)
-                 (proc->klst
-                   (make-reduce-proc self parent children index))))
-        (equal (wtree-bind p) (erl-state->bind (proc->s p))))
-      :enable (wtree-bind0 make-reduce-proc)
-      :disable wtree-bind0-to-wtree-bind)
-    
-    (defruled wtree-bind-when-fields-equal
-      (implies
-        (and (equal (proc->s p1) (proc->s p2))
-             (equal (proc->klst p1) (proc->klst p2)))
-        (equal (wtree-bind p1) (wtree-bind p2)))
-      :disable wtree-bind0-to-wtree-bind)
-
-    (defrule wtree-bind-of-proc-receive
-      (implies
-        (and (equal (proc->s (proc-receive p)) (proc->s p))
-             (equal (proc->klst (proc-receive p)) (proc->klst p)))
-        (equal (wtree-bind (proc-receive p)) (wtree-bind p)))
-      :use ((:instance wtree-bind-when-fields-equal
-              (p1 (proc-receive p)) (p2 p)))
-      :disable (wtree-bind proc-receive))
-
-    (defrule wtree-bindings-of-make-reduce-proc
-      (implies
-        (and
-          (equal
-            (proc->s p)
-            (proc->s (make-reduce-proc self parent children index)))
-          (equal
-            (proc->klst p)
-            (proc->klst (make-reduce-proc self parent children index))))
-        (equal
-          (omap::from-lists
-            '(ChildPids Parent Index)
-            (list (omap::lookup 'ChildPids (wtree-bind p))
-                  (omap::lookup 'Parent (wtree-bind p))
-                  (omap::lookup 'Index (wtree-bind p))))
-          (erl-state->bind (proc->s p))))
-    :use ((:instance wtree-bind-of-new-proc)
-          (:instance bindings-of-make-reduce-proc (s (proc->s p))))
-    :disable
-      (wtree-bind-of-new-proc wtree-bind
-       bindings-of-make-reduce-proc)))
+      :enable omap::lookup-of-update))
 
 ; Nodes of Wtree ---------------------------------------------------------------
 
-; Root is the master process which would have initiated the reduce.
-(define root-p ((p proc-p))
+; In each node of a worker tree, the auxillary bindings are present,
+; the index is a natural number, and the children are a list of pids.
+(define wtree-node0-p ((p proc-p))
   :returns (r booleanp)
-  (b* ((p (proc-fix p))
-       (bind (wtree-bind p))
+  (b* ((bind (wtree-bind p))
        ((unless (omap::assoc 'Parent bind)) nil)
        ((unless (omap::assoc 'ChildPids bind)) nil)
        ((unless (omap::assoc 'Index bind)) nil)
        (index (omap::lookup 'Index bind))
-       (parent (omap::lookup 'Parent bind))
        (children (omap::lookup 'ChildPids bind)))
-      (and (equal index '(:integer 0))
-           (equal parent '(:atom none))
+      (and (equal (erl-val-kind index) :integer)
+           (natp (erl-val-integer->val index))
            (equal (erl-val-kind children) :cons)
            (pid-lst-p (erl-val-cons->lst children))))
   ///
+    (defcong proc-equiv equal (wtree-node0-p p) 1))
+
+; Root is the master process which would have initiated the reduce.
+(define root-p ((p proc-p))
+  :returns (r booleanp)
+  :guard-hints (("Goal" :in-theory (enable wtree-node0-p)))
+  (and (wtree-node0-p p)
+       (equal (omap::lookup 'Index (wtree-bind p)) '(:integer 0))
+       (equal (omap::lookup 'Parent (wtree-bind p)) '(:atom none)))
+  ///
+    (local (in-theory (enable wtree-node0-p)))
+
     (defcong proc-equiv equal (root-p p) 1)
 
     (defrule bindings-of-root
@@ -176,7 +119,7 @@
         (and (omap::assoc 'Index (wtree-bind p))
              (omap::assoc 'Parent (wtree-bind p))
              (omap::assoc 'ChildPids (wtree-bind p)))))
-    
+
     (defrule erl-val-kind-of-root
       (implies
         (root-p p)
@@ -194,7 +137,7 @@
       (implies
         (root-p p)
         (equal (omap::lookup 'Parent (wtree-bind p)) '(:atom none))))
-    
+
     (defrule children-of-root
       (implies
         (root-p p)
@@ -204,58 +147,46 @@
 
     (defrule root-p-of-make-reduce-proc
       (root-p (make-reduce-proc self '(:atom none) children 0))
-      :enable (root-p make-reduce-proc omap::from-lists omap::lookup-of-update))
-    
+      :enable (make-reduce-proc omap::from-lists omap::lookup-of-update))
+
     (defrule root-when-assoc-of-tail-is-root
       (implies (root-p (omap::lookup key (omap::tail map)))
                (root-p (omap::lookup key map)))
       :enable omap::lookup
-      :disable root-p
-      :use (:instance omap::assoc-of-tail-when-assoc-of-tail
-              (map map) (key key)))
-    
-    (defrule root-p-of-change-proc-of-outbox
+      :use (:instance omap::assoc-of-tail-when-assoc-of-tail (map map) (key key)))
+
+    (defrule root-p-of-change-proc-outbox
       (equal
-        (root-p (change-proc p
-                  :s (update-erl-state->outbox (proc->s p) ob)))
-        (root-p p)))
-    
-    (defrule root-p-of-change-proc-of-inbox
-      (equal
-        (root-p (change-proc p :inbox-new inew :ps ps))
-        (root-p p))))
+        (root-p (change-proc p :s (update-erl-state->outbox (proc->s p) outbox)))
+        (root-p p))
+      :enable (wtree-bind wtree-bind0))
 
+    (defrule root-p-of-change-proc-inbox
+      (equal (root-p (change-proc p :inbox-new inew :ps ps)) (root-p p))
+      :enable (wtree-bind wtree-bind0)))
 
-
-; Any node, but the root, in the reduce worker tree.
-; TODO: a better name could have been branch-p, as this
-; predicate includes nodes in the middle of the tree.
+; Any node but the root in the reduce worker tree.
+; TODO: a better name could have been branch-p, as this predicate also
+; includes nodes in the middle of the tree.
 (define leaf-p ((p proc-p))
   :returns (r booleanp)
-  (b* ((p (proc-fix p))
-       (bind (wtree-bind p))
-       ((unless (omap::assoc 'Parent bind)) nil)
-       ((unless (omap::assoc 'ChildPids bind)) nil)
-       ((unless (omap::assoc 'Index bind)) nil)
-       (index (omap::lookup 'Index bind))
-       (parent (omap::lookup 'Parent bind))
-       (children (omap::lookup 'ChildPids bind)))
-      (and (equal (erl-val-kind index) :integer)
-           (natp (erl-val-integer->val index))
-           (not (equal (erl-val-integer->val index) 0))
-           (pid-p parent)
-           (equal (erl-val-kind children) :cons)
-           (pid-lst-p (erl-val-cons->lst children))))
+  :guard-hints (("Goal" :in-theory (enable wtree-node0-p)))
+  (and
+    (wtree-node0-p p)
+    (not (equal (erl-val-integer->val (omap::lookup 'Index (wtree-bind p))) 0))
+    (pid-p (omap::lookup 'Parent (wtree-bind p))))
   ///
+    (local (in-theory (enable wtree-node0-p)))
+
     (defcong proc-equiv equal (leaf-p p) 1)
-    
+
     (defrule bindings-of-leaf
       (implies
         (leaf-p p)
         (and (omap::assoc 'Index (wtree-bind p))
              (omap::assoc 'Parent (wtree-bind p))
              (omap::assoc 'ChildPids (wtree-bind p)))))
-    
+
     (defrule erl-val-kind-of-leaf
       (implies
         (leaf-p p)
@@ -263,7 +194,7 @@
           (equal (erl-val-kind (omap::lookup 'Index (wtree-bind p))) :integer)
           (equal (erl-val-kind (omap::lookup 'Parent (wtree-bind p))) :pid)
           (equal (erl-val-kind (omap::lookup 'ChildPids (wtree-bind p))) :cons)))
-      :enable  pid-p)
+      :enable pid-p)
 
     (defrule index-of-leaf
       (implies
@@ -272,10 +203,8 @@
           (equal (erl-val-integer->val (omap::lookup 'Index (wtree-bind p))) 0))))
 
     (defrule parent-of-leaf
-      (implies
-        (leaf-p p)
-        (pid-p (omap::lookup 'Parent (wtree-bind p)))))
-    
+      (implies (leaf-p p) (pid-p (omap::lookup 'Parent (wtree-bind p)))))
+
     (defrule children-of-leaf
       (implies
         (leaf-p p)
@@ -285,174 +214,169 @@
 
     (defrule leaf-p-of-make-reduce-proc
       (implies (and (posp index) (pid-p parent))
-              (leaf-p (make-reduce-proc self parent children index)))
-      :enable (leaf-p make-reduce-proc omap::from-lists omap::lookup-of-update))
-    
+               (leaf-p (make-reduce-proc self parent children index)))
+      :enable (omap::from-lists omap::lookup-of-update))
+
     (defrule leaf-when-assoc-of-tail-is-leaf
       (implies (leaf-p (omap::lookup key (omap::tail map)))
                (leaf-p (omap::lookup key map)))
       :enable omap::lookup
-      :disable leaf-p
-      :use (:instance omap::assoc-of-tail-when-assoc-of-tail
-              (map map) (key key)))
-    
-    (defrule leaf-p-of-change-proc-of-outbox
-      (equal
-        (leaf-p (change-proc p
-                  :s (update-erl-state->outbox (proc->s p) o)))
-        (leaf-p p)))
-    
-    (defrule leaf-p-of-change-proc-of-inbox
-      (equal
-        (leaf-p (change-proc p :inbox-new inew :ps ps))
-        (leaf-p p))))
+      :use (:instance omap::assoc-of-tail-when-assoc-of-tail (map map) (key key)))
 
+    (defrule leaf-p-of-change-proc-outbox
+      (equal
+        (leaf-p (change-proc p :s (update-erl-state->outbox (proc->s p) outbox)))
+        (leaf-p p))
+      :enable (wtree-bind0 wtree-bind))
+
+    (defrule leaf-p-of-change-proc-inbox
+      (equal (leaf-p (change-proc p :inbox-new inew :ps ps)) (leaf-p p))
+      :enable (wtree-bind0 wtree-bind)))
+
+; Theorems about indices.
 
 (defrule index-of-wtree-node
   (implies
     (or (root-p p) (leaf-p p))
     (natp (erl-val-integer->val (omap::lookup 'Index (wtree-bind p)))))
-  :enable (root-p leaf-p))
+  :enable (root-p leaf-p wtree-node0-p))
 
-(defrule index-of-wtree-node-greater-than-zero
+(defrule natp-of-index-of-wtree-node
   (implies
     (or (root-p p) (leaf-p p))
-    (<= 0 (erl-val-integer->val
-            (omap::lookup 'Index (wtree-bind p)))))
-  :enable (root-p leaf-p))
+    (<= 0 (erl-val-integer->val (omap::lookup 'Index (wtree-bind p)))))
+  :enable (root-p leaf-p wtree-node0-p))
 
-(defrule index-of-wtree-leaf-greater-than-one
+(defrule index-of-leaf-greater-than-one
   (implies
     (leaf-p p)
-    (<= 0 (+ -1 (erl-val-integer->val
-                  (omap::lookup 'Index (wtree-bind p))))))
-  :enable leaf-p)
+    (<= 0 (+ -1 (erl-val-integer->val (omap::lookup 'Index (wtree-bind p))))))
+  :enable (leaf-p wtree-node0-p))
 
+; No node is both a leaf and a root.
 (defrule root-and-leaf-disjoint
   (implies (root-p proc) (not (leaf-p proc)))
   :enable (root-p leaf-p))
 
-(defrule root-equiv-when-bindings-equiv
+; Properties of any worker-tree node
+; (defruled wtree-node-fields
+;   (implies
+;     (or (leaf-p p) (root-p p))
+;     (and
+;       (pid-lst-p (erl-val-cons->lst (omap::lookup 'ChildPids (wtree-bind p))))
+;       (or
+;         (pid-p (omap::lookup 'Parent (wtree-bind p)))
+;         (equal (omap::lookup 'Parent (wtree-bind p)) (make-erl-val-atom :val 'none)))
+;       (natp (erl-val-integer->val (omap::lookup 'Index (wtree-bind p))))))
+;   :enable (leaf-p root-p wtree-node0-p))
+
+; Wtree-Fields -----------------------------------------------------------------
+
+; Helper function to extract the bindings of a wtree
+(define wtree-fields ((p proc-p))
+  (b* ((bind (wtree-bind p)))
+    (list (omap::assoc 'Index bind)
+          (omap::assoc 'Parent bind)
+          (omap::assoc 'ChildPids bind))))
+
+; (defruled root-p-when-wtree-fields-equal
+;   (implies (equal (wtree-fields p1) (wtree-fields p2))
+;            (equal (root-p p1) (root-p p2)))
+;   :enable (root-p wtree-node0-p wtree-fields omap::lookup))
+
+; (defruled leaf-p-when-wtree-fields-equal
+;   (implies (equal (wtree-fields p1) (wtree-fields p2))
+;            (equal (leaf-p p1) (leaf-p p2)))
+;   :enable (leaf-p wtree-node0-p wtree-fields omap::lookup))
+
+; (defruled lookups-when-wtree-fields-equal
+;   (implies
+;     (equal (wtree-fields p1) (wtree-fields p2))
+;     (and (equal (omap::lookup 'Index (wtree-bind p1))
+;                 (omap::lookup 'Index (wtree-bind p2)))
+;         (equal (omap::lookup 'Parent (wtree-bind p1))
+;                 (omap::lookup 'Parent (wtree-bind p2)))
+;         (equal (omap::lookup 'ChildPids (wtree-bind p1))
+;                 (omap::lookup 'ChildPids (wtree-bind p2)))))
+;   :enable (wtree-fields omap::lookup))
+
+; TODO: This probably exists in a community book.
+; (defruled assoc-is-cons-of-lookup
+;   (implies (omap::assoc k m)
+;            (equal (omap::assoc k m) (cons k (omap::lookup k m))))
+;   :enable omap::lookup
+;   :use ((:instance omap::assoc-of-update
+;           (key1 k) (key k) (val (cdr (omap::assoc k m))) (map m)))
+;   :disable omap::assoc-of-update)
+
+; Two wtree nodes with the same bindings have the same wtree-fields.
+; (defruled wtree-fields-equal-when-bindings-equal
+;   (implies
+;     (and (or (leaf-p p1) (root-p p1))
+;          (or (leaf-p p2) (root-p p2))
+;          (equal (omap::lookup 'Index (wtree-bind p1))
+;                 (omap::lookup 'Index (wtree-bind p2)))
+;          (equal (omap::lookup 'Parent (wtree-bind p1))
+;                 (omap::lookup 'Parent (wtree-bind p2)))
+;          (equal (omap::lookup 'ChildPids (wtree-bind p1))
+;                 (omap::lookup 'ChildPids (wtree-bind p2))))
+;     (equal (wtree-fields p1) (wtree-fields p2)))
+;   :enable (wtree-fields assoc-is-cons-of-lookup))
+
+; Updating a node without changing its auxillary bindings maintains root/leaf-p.
+(defrule wtree-fields-of-lookup-of-update
   (implies
+    (and (omap::assoc pid net)
+         (equal (wtree-fields proc) (wtree-fields (omap::lookup pid net))))
     (and
-      (root-p p1) (or (root-p p2) (leaf-p p2))
-      (equal
-        (omap::lookup 'Index (wtree-bind p1))
-        (omap::lookup 'Index (wtree-bind p2)))
-      (equal
-        (omap::lookup 'Parent (wtree-bind p1))
-        (omap::lookup 'Parent (wtree-bind p2)))
-      (equal
-        (omap::lookup 'ChildPids (wtree-bind p1))
-        (omap::lookup 'ChildPids (wtree-bind p2))))
-    (root-p p2))
-  :enable root-p)
+      (equal (root-p (omap::lookup x (omap::update pid proc net)))
+             (root-p (omap::lookup x net)))
+      (equal (leaf-p (omap::lookup x (omap::update pid proc net)))
+             (leaf-p (omap::lookup x net)))
+      (equal (omap::lookup 'Index
+               (wtree-bind (omap::lookup x (omap::update pid proc net))))
+             (omap::lookup 'Index (wtree-bind (omap::lookup x net))))
+      (equal (omap::lookup 'Parent
+               (wtree-bind (omap::lookup x (omap::update pid proc net))))
+             (omap::lookup 'Parent (wtree-bind (omap::lookup x net))))
+      (equal (omap::lookup 'ChildPids
+               (wtree-bind (omap::lookup x (omap::update pid proc net))))
+             (omap::lookup 'ChildPids (wtree-bind (omap::lookup x net))))))
+  :enable omap::lookup-of-update
+  :use ((:instance root-p-when-wtree-fields-equal
+          (p1 proc) (p2 (omap::lookup pid net)))
+        (:instance leaf-p-when-wtree-fields-equal
+          (p1 proc) (p2 (omap::lookup pid net)))
+        (:instance lookups-when-wtree-fields-equal
+          (p1 proc) (p2 (omap::lookup pid net))))
+  :prep-lemmas
+    ((defruled root-p-when-wtree-fields-equal
+       (implies (equal (wtree-fields p1) (wtree-fields p2))
+                (equal (root-p p1) (root-p p2)))
+       :enable (root-p wtree-node0-p wtree-fields omap::lookup))
 
-(defrule leaf-equiv-when-bindings-equiv
-  (implies
-    (and
-      (leaf-p p1) (or (root-p p2) (leaf-p p2))
-      (equal
-        (omap::lookup 'Index (wtree-bind p1))
-        (omap::lookup 'Index (wtree-bind p2)))
-      (equal
-        (omap::lookup 'Parent (wtree-bind p1))
-        (omap::lookup 'Parent (wtree-bind p2)))
-      (equal
-        (omap::lookup 'ChildPids (wtree-bind p1))
-        (omap::lookup 'ChildPids (wtree-bind p2))))
-    (leaf-p p2))
-  :enable leaf-p)
+     (defruled leaf-p-when-wtree-fields-equal
+       (implies (equal (wtree-fields p1) (wtree-fields p2))
+                (equal (leaf-p p1) (leaf-p p2)))
+       :enable (leaf-p wtree-node0-p wtree-fields omap::lookup))
 
-(defruled leaf-root-p-when-bind-equal
-  (implies
-    (equal (wtree-bind p1) (wtree-bind p2))
-    (and (equal (leaf-p p1) (leaf-p p2))
-         (equal (root-p p1) (root-p p2))))
-  :enable (leaf-p root-p)
-  :disable
-    (bindings-of-leaf omap::assoc-when-assoc-tail
-     bindings-of-root omap::assoc-when-emptyp))
-
-(defrule leaf-root-p-of-bind-equal-of-update
-  (implies
-    (and
-      (network-p net) (omap::assoc q net)
-      (equal
-        (wtree-bind qproc)
-        (wtree-bind (omap::lookup q net))))
-    (and (equal (leaf-p (omap::lookup x (omap::update q qproc net)))
-                (leaf-p (omap::lookup x net)))
-         (equal (root-p (omap::lookup x (omap::update q qproc net)))
-                (root-p (omap::lookup x net)))))
-  :use ((:instance leaf-root-p-when-bind-equal
-          (p1 (omap::lookup x (omap::update q qproc net)))
-          (p2 (omap::lookup x net)))))
-
-; TODO: I seem to need a lot of lemmas about leaf and root eqivalenece.
-; There is a cleaner way of doing this, by defining fixtypes for leaf
-; and root. I will implement it at some point.
-; - This lemma is also disabled. I have to call to call it manually,
-;   which is tedious.
-(defruled leaf-root-p-when-wtree-bindings-equal
-  (implies
-    (and (iff (omap::assoc 'Index (wtree-bind p1))
-              (omap::assoc 'Index (wtree-bind p2)))
-         (iff (omap::assoc 'Parent (wtree-bind p1))
-              (omap::assoc 'Parent (wtree-bind p2)))
-         (iff (omap::assoc 'ChildPids (wtree-bind p1))
-              (omap::assoc 'ChildPids (wtree-bind p2)))
-         (equal (omap::lookup 'Index (wtree-bind p1))
-                (omap::lookup 'Index (wtree-bind p2)))
-         (equal (omap::lookup 'Parent (wtree-bind p1))
-                (omap::lookup 'Parent (wtree-bind p2)))
-         (equal (omap::lookup 'ChildPids (wtree-bind p1))
-                (omap::lookup 'ChildPids (wtree-bind p2))))
-    (and (equal (leaf-p p1) (leaf-p p2))
-         (equal (root-p p1) (root-p p2))))
-  :enable (leaf-p root-p)
-  :disable
-    (bindings-of-leaf omap::assoc-when-assoc-tail
-     bindings-of-root omap::assoc-when-emptyp))
-
-(defruled wtree-node-fields
-  (implies
-    (or (leaf-p p) (root-p p))
-    (and
-      (pid-lst-p
-        (erl-val-cons->lst (omap::lookup 'ChildPids (wtree-bind p))))
-      (or
-        (pid-p (omap::lookup 'Parent (wtree-bind p)))
-        (equal (omap::lookup 'Parent (wtree-bind p))
-               (make-erl-val-atom :val 'none)))
-      (natp (erl-val-integer->val (omap::lookup 'Index (wtree-bind p))))))
-  :enable (leaf-p root-p))
-
-; Segment of the wtree that does not contain the root.
-(define non-root-segment-p ((net network-p))
-  :returns (r booleanp)
-  :measure (acl2-count (network-fix net))
-  (b* ((net (network-fix net))
-       ((if (omap::emptyp net)) t))
-      (and (leaf-p (omap::head-val net))
-           (non-root-segment-p (omap::tail net))))
-  ///
-    (defcong network-equiv equal (non-root-segment-p net) 1)
-    (defrule assoc-of-non-root-segment
-      (implies
-        (and (network-p net) (pid-p pid)
-             (non-root-segment-p net)
-             (omap::assoc pid net))
-        (leaf-p (omap::lookup pid net)))
-      :enable (omap::lookup)))
-
+     (defruled lookups-when-wtree-fields-equal
+       (implies
+         (equal (wtree-fields p1) (wtree-fields p2))
+         (and (equal (omap::lookup 'Index (wtree-bind p1))
+                      (omap::lookup 'Index (wtree-bind p2)))
+              (equal (omap::lookup 'Parent (wtree-bind p1))
+                      (omap::lookup 'Parent (wtree-bind p2)))
+              (equal (omap::lookup 'ChildPids (wtree-bind p1))
+                      (omap::lookup 'ChildPids (wtree-bind p2)))))
+       :enable (wtree-fields omap::lookup))))
 
 ; Check-Children ---------------------------------------------------------------
 
 ; Check if the children of a wtree node are well-formed.
 (define check-children ((pid pid-p) (children pid-lst-p) (net network-p))
   :returns (r booleanp)
-  :measure (len (erl-vlst-fix children))
+  :measure (len (pid-lst-fix children))
   (b* ((pid (pid-fix pid))
        (children (pid-lst-fix children))
        (net (network-fix net))
@@ -469,27 +393,21 @@
     (defcong pid-equiv equal (check-children pid children net) 1)
     (defcong pid-lst-equiv equal (check-children pid children net) 2)
     (defcong network-equiv equal (check-children pid children net) 3)
-    
+
     (defrule check-children-of-update
       (implies
         (and (network-p net) (network-p (omap::update pid proc net))
              (not (omap::assoc pid net)) (check-children i chl net))
         (check-children i chl (omap::update pid proc net)))
       :enable omap::lookup-of-update)
-    
-    (defrule check-children-of-update-assoc
+
+    (defrule check-children-of-update-fields
       (implies
-        (and
-          (network-p net) (network-p (omap::update pid proc net))
-          (pid-p pid) (proc-p proc) (omap::assoc pid net)
-          (or (leaf-p proc) (root-p proc))
-          (equal (omap::lookup 'Parent (wtree-bind proc))
-                (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
-          (equal (omap::lookup 'ChildPids (wtree-bind proc))
-                (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
-          (check-children i chl net))
-        (check-children i chl (omap::update pid proc net)))
-      :enable omap::lookup-of-update)
+        (and (network-p net) (network-p (omap::update pid proc net))
+             (omap::assoc pid net)
+             (equal (wtree-fields proc) (wtree-fields (omap::lookup pid net))))
+        (equal (check-children i chl (omap::update pid proc net))
+               (check-children i chl net))))
 
     (defrule check-children-of-nil (check-children pid nil net))
 
@@ -506,10 +424,9 @@
           (check-children pid chl net))
         (check-children pid (cons cpid chl) net)))
 
-    (defruled no-duplicatesp-of-check-children
+    (defrule no-duplicatesp-of-check-children
       (implies (check-children pid children net)
                (no-duplicatesp-equal (pid-lst-fix children)))))
-
 
 ; Check-Parent ---------------------------------------------------------------
 
@@ -532,7 +449,7 @@
     (defcong pid-equiv equal (check-parent pid parent net) 1)
     (defcong erl-val-equiv equal (check-parent pid parent net) 2)
     (defcong network-equiv equal (check-parent pid parent net) 3)
-    
+
     (defrule check-parent-of-update
       (implies
         (and
@@ -540,23 +457,14 @@
           (not (omap::assoc pid net)) (check-parent i p net))
         (check-parent i p (omap::update pid proc net)))
       :enable omap::lookup-of-update)
-        
-    (defrule check-parent-of-update-assoc
+
+    (defrule check-parent-of-update-fields
       (implies
-        (and
-          (network-p net) (network-p (omap::update pid proc net))
-          (pid-p pid) (proc-p proc) (omap::assoc pid net)
-          (or (leaf-p proc) (root-p proc))
-          (or (leaf-p (omap::lookup pid net)) (root-p (omap::lookup pid net)))
-          (equal (omap::lookup 'Index (wtree-bind proc))
-                 (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
-          (equal (omap::lookup 'Parent (wtree-bind proc))
-                 (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
-          (equal (omap::lookup 'ChildPids (wtree-bind proc))
-                 (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
-          (check-parent i p net))
-        (check-parent i p (omap::update pid proc net)))
-      :enable (check-parent omap::lookup-of-update))
+        (and (network-p net) (network-p (omap::update pid proc net))
+             (omap::assoc pid net)
+             (equal (wtree-fields proc) (wtree-fields (omap::lookup pid net))))
+        (equal (check-parent i p (omap::update pid proc net))
+               (check-parent i p net))))
 
     (defrule check-parent-of-root
       (implies
@@ -564,7 +472,6 @@
              (omap::assoc pid net)
              (root-p (omap::lookup pid net)))
         (check-parent pid '(:atom none) net))))
-
 
 ; Rightmost-Child ------------------------------------------------------------
 
@@ -574,14 +481,13 @@
   :returns rpid
   :measure (nfix fuel)
   :guard-hints
-    (("Goal" :in-theory (enable erl-val-crock)))
-  :hints (("Goal" :in-theory
-    (disable last-when-atom-of-cdr last
-             consp-of-cdr-of-erl-vlst erl-vlst-p-of-pid-lst
-             pid-lst-p-of-cdr-when-pid-lst-p)))
+    (("Goal" :in-theory (enable erl-val-crock wtree-node0-p leaf-p root-p)))
   :prepwork
     ((local (include-book "std/lists/last" :dir :system))
-     (local (defruled erl-val-crock (implies (erl-val-p v) (consp v)))))
+     (local (defruled erl-val-crock (implies (erl-val-p v) (consp v))))
+     (local (defrule pid-p-of-car-last-of-pid-lst
+              (implies (and (pid-lst-p x) (consp x)) (pid-p (car (last x))))
+              :induct (last x) :enable last)))
   (b* ((pid (pid-fix pid))
        (net (network-fix net))
        (fuel (nfix fuel))
@@ -593,7 +499,6 @@
        (children (erl-val-cons->lst (omap::lookup 'ChildPids bind)))
        ((if (null children)) pid)
        (cpid (car (last children)))
-       ((unless (pid-p cpid)) nil)
        ((unless (omap::assoc cpid net)) nil)
        ((unless (leaf-p (omap::lookup cpid net))) nil))
       (rightmost-child0 cpid net (- fuel 1)))
@@ -604,7 +509,6 @@
 
     (local (in-theory
       (disable
-        consp-of-cdr-of-erl-vlst
         wtree-bind-when-no-function-return erl-vlst-p-of-pid-lst
         lookup-of-tail-when-assoc-tail-of-network
         pid-lst-p-of-cdr-when-pid-lst-p assoc-of-runnable?
@@ -632,7 +536,7 @@
              (<= (nfix f1) (nfix f2)))
         (equal (rightmost-child0 pid net f2)
                (rightmost-child0 pid net f1))))
-    
+
     (defrule rightmost-child0-of-update
       (implies
         (and
@@ -645,29 +549,17 @@
       :induct (rightmost-child0 i net fuel)
       :expand (rightmost-child0 i (omap::update pid proc net) fuel))
 
-    (defrule rightmost-child0-of-update-assoc
+    (defrule rightmost-child0-of-update-fields
       (implies
-        (and
-          (network-p net) (network-p (omap::update pid proc net))
-          (pid-p pid) (proc-p proc) (omap::assoc pid net)
-          (or (leaf-p proc) (root-p proc))
-          (or (leaf-p (omap::lookup pid net)) (root-p (omap::lookup pid net)))
-          (equal (omap::lookup 'Index (wtree-bind proc))
-                 (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
-          (equal (omap::lookup 'Parent (wtree-bind proc))
-                 (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
-          (equal (omap::lookup 'ChildPids (wtree-bind proc))
-                 (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net)))))
+        (and (network-p net) (network-p (omap::update pid proc net))
+             (omap::assoc pid net)
+             (equal (wtree-fields proc) (wtree-fields (omap::lookup pid net))))
         (equal (rightmost-child0 i (omap::update pid proc net) fuel)
                (rightmost-child0 i net fuel)))
-      :enable (omap::lookup-of-update)
-      :disable (zp-open nfix assoc-of-runnable? runnable-of-tail
-                lookup-of-tail-when-assoc-tail-of-network
-                omap::assoc-when-assoc-tail last network-p-of-tail)
       :induct (rightmost-child0 i net fuel)
       :expand (rightmost-child0 i (omap::update pid proc net) fuel))
-    
-    (defrule rightmost-child0-of-end
+
+    (defrule rightmost-child0-of-nil
       (implies
         (and
           (network-p net) (pid-p self) (natp index)
@@ -679,7 +571,11 @@
             (omap::update self
               (make-reduce-proc self parent nil index) net) fuel)
           self))
-      :disable erl-state->bind-of-make-reduce-proc)
+      :expand (:free (parent index)
+                (rightmost-child0 self
+                  (omap::update self (make-reduce-proc self parent nil index) net)
+                  fuel))
+      :enable omap::lookup-of-update)
 
     (defrule rightmost-child0-when-no-children
       (implies
@@ -730,7 +626,7 @@
               (omap::lookup 'ChildPids (wtree-bind (omap::lookup rpid net))))))
         :hints (("Goal" :use (:instance no-children-of-rightmost-child0
                                (fuel (omap::size (network-fix net))))))))
-    
+
     (defrule rightmost-child-of-update
       (implies
         (and (network-p net) (network-p (omap::update key v net))
@@ -743,23 +639,15 @@
               (pid i) (f1 (omap::size net))
               (f2 (omap::size (omap::update key v net))))))
 
-(defrule rightmost-child-of-update-assoc
-  (implies
-    (and
-      (network-p net) (network-p (omap::update pid proc net))
-      (pid-p pid) (proc-p proc) (omap::assoc pid net)
-      (or (leaf-p proc) (root-p proc))
-      (or (leaf-p (omap::lookup pid net)) (root-p (omap::lookup pid net)))
-      (equal (omap::lookup 'Index (wtree-bind proc))
-             (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
-      (equal (omap::lookup 'Parent (wtree-bind proc))
-             (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
-      (equal (omap::lookup 'ChildPids (wtree-bind proc))
-             (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net)))))
-    (equal (rightmost-child i (omap::update pid proc net))
-           (rightmost-child i net))))
+    (defrule rightmost-child-of-update-fields
+      (implies
+        (and (network-p net) (network-p (omap::update pid proc net))
+             (omap::assoc pid net)
+             (equal (wtree-fields proc) (wtree-fields (omap::lookup pid net))))
+        (equal (rightmost-child i (omap::update pid proc net))
+               (rightmost-child i net))))
 
-    (defrule rightmost-child-of-end
+    (defrule rightmost-child-when-no-children
       (implies
         (and (network-p net) (pid-p cpid) (omap::assoc cpid net)
              (leaf-p (omap::lookup cpid net))
@@ -768,12 +656,11 @@
         (equal (rightmost-child cpid net) cpid))
       :expand (rightmost-child0 cpid net (omap::size net))))
 
-
 ; Check-Indices --------------------------------------------------------------
 
 ; Check if the indices of the nodes in the reduce work tree are well formed.
-;   W0 
-;   |  \ 
+;   W0
+;   |  \
 ;   |    \ W2
 ;   | \    | \
 ;   |  |   |  |
@@ -782,31 +669,27 @@
 ; - the first (leftmost) child must have index = i + 1
 ; - the rightmost child of the first child must have 1 less than
 ;   the index of the second child.
-; BOZO: I hope that description makes sense!
+; A child without children is its own rightmost child.
 (define check-indices ((index natp) (children pid-lst-p) (net network-p))
   :returns (r booleanp)
   :measure (len (pid-lst-fix children))
   :guard-hints
-    (("Goal" :use ((:instance node-p-of-rightmost-child (net net) (pid (car children))))))
+    (("Goal"
+      :use ((:instance node-p-of-rightmost-child (net net) (pid (car children))))))
   (b* ((index (nfix index))
        (children (pid-lst-fix children))
        (net (network-fix net))
-       ((if (null children)) t)
+       ((if (endp children)) t)
        (cpid (car children))
-       ((unless (pid-p cpid)) nil)
        ((unless (omap::assoc cpid net)) nil)
        (cproc (omap::lookup cpid net))
        ((unless (leaf-p cproc)) nil)
-       (cbind (wtree-bind cproc))
-       (cchildren (erl-val-cons->lst (omap::lookup 'ChildPids cbind)))
-       (cindex (erl-val-integer->val (omap::lookup 'Index cbind)))
+       (cindex (erl-val-integer->val (omap::lookup 'Index (wtree-bind cproc))))
        ((unless (equal (+ 1 index) cindex)) nil)
-       ((if (null cchildren)) (check-indices cindex (cdr children) net))
        (rpid (rightmost-child cpid net))
        ((unless rpid) nil)
-        (rproc (omap::lookup rpid net))
-        (rbind (wtree-bind rproc))
-        (rindex (erl-val-integer->val (omap::lookup 'Index rbind))))
+       (rindex (erl-val-integer->val
+                 (omap::lookup 'Index (wtree-bind (omap::lookup rpid net))))))
       (check-indices rindex (cdr children) net))
   ///
     (defcong nat-equiv equal (check-indices i c n) 1
@@ -819,35 +702,26 @@
     (defcong network-equiv equal (check-indices i c n) 3
       :hints
         (("Goal" :expand ((check-indices i c n) (check-indices i c n-equiv)))))
-    
+
     (defrule check-indices-of-nil (check-indices i nil net))
-    
+
     (defrule check-indices-of-update
       (implies
         (and (network-p net) (network-p (omap::update pid proc net))
              (not (omap::assoc pid net))
              (check-indices i chl net))
         (check-indices i chl (omap::update pid proc net)))
-      :enable (omap::lookup-of-update)
+      :enable omap::lookup-of-update
       :induct (check-indices i chl net)
       :expand (check-indices i chl (omap::update pid proc net)))
-    
-    (defrule check-indices-of-update-assoc
+
+    (defrule check-indices-of-update-fields
       (implies
-        (and
-          (network-p net) (network-p (omap::update pid proc net))
-          (pid-p pid) (proc-p proc) (omap::assoc pid net)
-          (or (leaf-p proc) (root-p proc))
-          (or (leaf-p (omap::lookup pid net)) (root-p (omap::lookup pid net)))
-          (equal (omap::lookup 'Index (wtree-bind proc))
-                (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
-          (equal (omap::lookup 'Parent (wtree-bind proc))
-                (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))))
-          (equal (omap::lookup 'ChildPids (wtree-bind proc))
-                (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
-          (check-indices i chl net))
-        (check-indices i chl (omap::update pid proc net)))
-      :enable (omap::lookup-of-update)
+        (and (network-p net) (network-p (omap::update pid proc net))
+             (omap::assoc pid net)
+             (equal (wtree-fields proc) (wtree-fields (omap::lookup pid net))))
+        (equal (check-indices i chl (omap::update pid proc net))
+               (check-indices i chl net)))
       :disable nfix
       :induct (check-indices i chl net)
       :expand (check-indices i chl (omap::update pid proc net)))
@@ -860,7 +734,7 @@
            (rightmost-child cpid net) (natp i)
            (equal (erl-val-integer->val
                     (omap::lookup 'Index (wtree-bind (omap::lookup cpid net))))
-                  (+ 1 i))  
+                  (+ 1 i))
            (check-indices
              (erl-val-integer->val
                (omap::lookup 'Index (wtree-bind (omap::lookup
@@ -870,10 +744,10 @@
        :expand (check-indices i (cons cpid chl) net)
        :disable check-indices))
 
-; This is very important for the reduce prove
-(defrule check-indices-of-suffix
+; If check-indices holds for children, then it also holds for the tail of the children.
+(defrule check-indices-of-cdr
   (implies
-    (and (network-p net) (pid-lst-p children) (pid-lst-p cps) cps
+    (and (network-p net) (pid-lst-p children)(pid-lst-p cps) cps
          (prefixp (rev cps) (rev children))
          (check-indices i children net))
     (check-indices
@@ -885,7 +759,6 @@
   :hints (("Subgoal *1/3" :cases ((equal cps children)))
           ("Subgoal *1/2" :cases ((equal cps children)))
           ("Subgoal *1/1" :cases ((equal cps children))))
-  ; TODO: I tried using the community book, but it did not work.
   :prep-lemmas
     ((defrule len-when-prefixp
       (implies (prefixp x y) (<= (len x) (len y)))
