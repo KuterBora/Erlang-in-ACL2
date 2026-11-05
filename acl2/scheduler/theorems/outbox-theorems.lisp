@@ -15,6 +15,11 @@
 ; Some  functions and rules about outboxes.
 ; TODO: Some of these should be better organized and renamed.
 
+(defrule proc->outbox-of-proc
+  (equal (proc->outbox (proc ps s inbox-new inbox-tried klst))
+         (erl-state->outbox s))
+  :enable proc->outbox)
+
 (defrule head-of-outbox
   (implies
     (and (not (omap::emptyp m)) (outbox-p m))

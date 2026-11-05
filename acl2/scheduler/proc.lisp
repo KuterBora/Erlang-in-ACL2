@@ -13,7 +13,7 @@
 ; Erlang Process --------------------------------------------------------------
 
 (std::defenum proc-state-p
-  (:idle :terminated :receive :blocked :spawn))
+  (:idle :terminated :receive :blocked))
 
 (fty::defprod proc
   (; State of the Erlang process

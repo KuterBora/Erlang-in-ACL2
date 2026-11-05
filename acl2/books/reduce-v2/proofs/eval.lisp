@@ -11,6 +11,15 @@
 (include-book "inv")
 (include-book "../../../theorems/top")
 
+; Initial klst of a process that is awaiting to receive
+(defconst *reduce-receive-body*
+  '((:call sum_reduce
+           (:cons (:var parentpid)
+                  (:cons (:var childtl)
+                         (:cons (:binop + (:var lefttotal)
+                                          (:var righttotal))
+                                (:nil)))))))
+
 ; BOZO: a lot of these can become way shorter and cheaper by proving some
 ; core properties. However, I am leaving that work for after we have
 ; implemented a meta-function/clause-processor.
