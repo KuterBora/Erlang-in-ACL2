@@ -9,881 +9,290 @@
 
 (in-package "ACL2")
 (include-book "inv")
-(include-book "../../../theorems/top")
 
-; Proving that the invariant holds after erl-step of deliver.
+; Inv of Deliver ---------------------------------------------------------------
 
-; Useless runes:
-(local (in-theory
-  (disable
-    wtree-bind-when-no-function-return
-    omap::assoc-when-assoc-tail member-equal
-    assoc-of-runnable? pid-p-when-member-equal-of-pid-lst-p
-    last consp-of-expr-list-p remove-equal pid-lst-crock
-    omap::assoc-when-assoc-of-tail-cheap omap::lookup-when-emptyp
-    runnable-of-tail (:type-prescription omap::tail-when-emptyp)
-    pid-lst-p-when-not-consp default-cdr wtree0-of-zero
-    subsetp-when-atom-right omap::mapp-non-nil-implies-not-emptyp
-    consp-when-member-equal-of-symbol-truelist-alistp
-    consp-when-member-equal-of-keyword-truelist-alistp
-    leaf-when-assoc-of-tail-is-leaf outbox-p-of-tail
-    parent-still-waiting-p-of-inv)))
+; Hypotheses needed by every deliver case.
+; In the current implementation, there are a lot of them...
+(local (define deliver-hyps (src dst psrc pdst net)
+  :enabled t
+  :verify-guards nil
+  (and
+    (network-p net) (pid-p src) (pid-p dst)
+    (inv-all net) (has-message-for-dst? net src dst)
+    (omap::assoc src net) (omap::assoc dst net) (not (equal src dst))
+    
+    ; src is terminated, dst is not
+    (equal (proc->ps (omap::lookup src net)) :terminated)
+    (not (equal (proc->ps (omap::lookup dst net)) :terminated))
 
-; Inv of Deliver ----------------------------------------------------
+    ; message is well-formed
+    (equal
+      (erl-val-kind (car (omap::lookup dst (proc->outbox (omap::lookup src net)))))
+      :tuple)
+    (equal
+      (len (erl-val-tuple->lst (car (omap::lookup dst
+                                      (proc->outbox (omap::lookup src net)))))) 2)
+    (equal (car (erl-val-tuple->lst
+              (car (omap::lookup dst
+                     (proc->outbox (omap::lookup src net)))))) src)
+    
+    ; updated sender: unchanged except for outbox
+    (proc-p psrc)
+    (equal (proc->ps psrc) :terminated)
+    (network-p (omap::update src psrc net))
+    (network-p (omap::update dst pdst (omap::update src psrc net)))
+    (equal (erl-state->bind (proc->s psrc))
+           (erl-state->bind (proc->s (omap::lookup src net))))
+    (equal (erl-state->in (proc->s psrc))
+           (erl-state->in (proc->s (omap::lookup src net))))
+    (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
+    (equal (proc->inbox-new psrc) (proc->inbox-new (omap::lookup src net)))
+    (equal (proc->inbox-tried psrc)
+           (proc->inbox-tried (omap::lookup src net)))
+    (outbox-emptyp (proc->outbox psrc))
+    
+    ; updated destination: inbox-new changes, unblocks if required
+    (proc-p pdst)
+    (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
+    (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
+    (or (and (not (equal (proc->ps (omap::lookup dst net)) :blocked))
+             (equal (proc->ps pdst) (proc->ps (omap::lookup dst net)))
+             (equal (proc->inbox-tried pdst)
+                    (proc->inbox-tried (omap::lookup dst net)))
+             (equal (proc->inbox-new pdst)
+                    (append (proc->inbox-new (omap::lookup dst net))
+                            (list (car (omap::lookup dst
+                                         (proc->outbox
+                                           (omap::lookup src net))))))))
+        (and (equal (proc->ps (omap::lookup dst net)) :blocked)
+             (equal (proc->ps pdst) :receive)
+             (null (proc->inbox-tried pdst))
+             (equal (proc->inbox-new pdst)
+                    (append (proc->inbox-tried (omap::lookup dst net))
+                            (proc->inbox-new (omap::lookup dst net))
+                            (list (car (omap::lookup dst
+                                         (proc->outbox
+                                           (omap::lookup src net))))))))))))
 
-
-; inv of unchanged nodes --------------------------------------------------------
-
-; this is a helper for the next lemma
-(local (defruled inv-of-other-nodes-of-update
+(local (defrule received-messages-wf-of-deliver
   (implies
-    (and
-      (network-p net) (inv pid net)
-      (pid-p pid) (not (equal pid p))
-      (not (terminated? (omap::update p proc net)))
-      
-      ; the node which was updated to proc
-      (omap::assoc p net) (proc-p proc) (erl-vlst-p msgs)
-      (network-p (omap::update p proc net))
-      (equal (erl-state->self (proc->s proc)) p)
-      (equal (erl-state->bind (proc->s proc))
-             (erl-state->bind (proc->s (omap::lookup p net))))
-      (equal (wtree-bind proc) (wtree-bind (omap::lookup p net)))
-      (equal (erl-state->in (proc->s proc))
-             (erl-state->in (proc->s (omap::lookup p net))))
-      (or (not (outbox-emptyp (proc->outbox (omap::lookup p net))))
-          (outbox-emptyp (proc->outbox proc)))
-      (or
-        ; process was already on receive (or on idle).
-        (and (equal (proc->ps proc) (proc->ps (omap::lookup p net)))
-             (equal (proc->inbox-tried proc)
-                    (proc->inbox-tried (omap::lookup p net)))
-             (equal (proc->inbox-new proc)
-                    (append (proc->inbox-new (omap::lookup p net)) msgs)))
-        ; process was unblocked after the delivery.
-        (and (equal (proc->ps (omap::lookup p net)) :blocked)
-              (equal (proc->ps proc) :receive)
-              (null (proc->inbox-tried proc))
-              (equal (proc->inbox-new proc)
-                    (append (proc->inbox-tried (omap::lookup p net))
-                            (proc->inbox-new (omap::lookup p net))
-                            msgs)))))
-    (inv pid (omap::update p proc net)))
-  :enable inv
-  :use ((:instance leaf-root-p-when-bind-equal
-         (p1 proc) (p2 (omap::lookup p net)))
-        (:instance wtree-nodes-are-leaf-or-root (pid p)))))
+    (and (deliver-hyps src dst psrc pdst net)
+         (received-messages-wf inbox cpids net))
+    (received-messages-wf inbox cpids
+      (omap::update dst pdst (omap::update src psrc net))))
+  :enable (received-messages-wf omap::lookup-of-update)))
 
-(local (defrule inv-of-other-nodes
+(local (defrule sent-message-wf-of-deliver
   (implies
-    (and
-      (network-p net) (wtree-p net) (inv-all net)
-      (omap::assoc pid net)
-      (not (equal pid src)) (not (equal pid dst))
-      ; src facts
-      (proc-p psrc) (omap::assoc src net)
-      (equal (erl-state->self (proc->s psrc)) src)
-      (equal (erl-state->bind (proc->s psrc))
-             (erl-state->bind (proc->s (omap::lookup src net))))
-      (equal (erl-state->in (proc->s psrc))
-             (erl-state->in (proc->s (omap::lookup src net))))
-      (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
-      (equal (wtree-bind psrc) (wtree-bind (omap::lookup src net)))
-      (equal (proc->inbox-new psrc)
-             (proc->inbox-new (omap::lookup src net)))
-      (equal (proc->inbox-tried psrc)
-             (proc->inbox-tried (omap::lookup src net)))
-      (equal (proc->ps psrc) :terminated)
-      (outbox-emptyp (proc->outbox psrc)) (proc->outbox psrc)
-      ; dst facts
-      (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst (proc->outbox (omap::lookup src net)))
-      (omap::lookup dst (proc->outbox (omap::lookup src net)))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (or
-        (and ; idle -> idle, or receive -> receive
-          (equal (proc->ps pdst) (proc->ps (omap::lookup dst net)))
-          (not (equal (proc->ps (omap::lookup dst net)) :blocked))
-          (equal (proc->inbox-tried pdst)
-                 (proc->inbox-tried (omap::lookup dst net)))
-          (equal
-            (proc->inbox-new pdst)
-            (append (proc->inbox-new (omap::lookup dst net))
-                    (list (car (omap::lookup dst
-                                (proc->outbox (omap::lookup src net))))))))
-        (and ; blocked -> receive
-          (equal (proc->ps (omap::lookup dst net)) :blocked)
-          (equal (proc->ps pdst) :receive)
-          (null (proc->inbox-tried pdst))
-          (equal
-            (proc->inbox-new pdst)
-            (append (proc->inbox-tried (omap::lookup dst net))
-                    (proc->inbox-new (omap::lookup dst net))
-                    (list (car (omap::lookup dst
-                                  (proc->outbox (omap::lookup src net))))))))))
+    (and (deliver-hyps src dst psrc pdst net)
+         (sent-message-wf self outbox parent net))
+    (sent-message-wf self outbox parent
+      (omap::update dst pdst (omap::update src psrc net))))
+  :prep-lemmas
+    ((defrule lookup-when-not-assoc
+       (implies (not (omap::assoc k m))
+                (equal (omap::lookup k m) nil))
+       :enable omap::lookup))
+  :enable (sent-message-wf omap::lookup-of-update)))
+
+; inv of the nodes other than src and dst ---------------------------------------
+
+(local (defrule inv-of-deliver-other
+  (implies
+    (and (deliver-hyps src dst psrc pdst net)
+         (not (equal pid src)) (not (equal pid dst))
+         (omap::assoc pid net))
     (inv pid (omap::update dst pdst (omap::update src psrc net))))
-  :enable (proc->pid proc->outbox)
-  :use
-    ((:instance sender-with-message-props)
-     (:instance inv-of-inv-all)
-     (:instance not-terminated?-when-runnable-or-outbox
-       (pid src) (net (omap::update src psrc net)))
-     (:instance not-terminated?-when-runnable-or-outbox
-       (pid dst) (net (omap::update dst pdst (omap::update src psrc net))))       
-     (:instance inv-of-other-nodes-of-update
-       (p src) (proc psrc) (msgs nil))
-     (:instance inv-of-other-nodes-of-update
-       (p dst) (proc pdst) (net (omap::update src psrc net))
-       (msgs (list (car (omap::lookup dst (proc->outbox (omap::lookup src net))))))))))
+  :expand ((inv pid (omap::update dst pdst (omap::update src psrc net)))
+           (inv pid net)
+           (wtree-bind psrc) (wtree-bind (omap::lookup src net))
+           (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
+  :enable wtree-fields
+  :disable (inv-of-inv-all)
+  :use (:instance inv-of-inv-all)))
 
+; inv of the sender ---------------------------------------------------------------
 
-; inv of dst --------------------------------------------------------------------
+(local (defrule inv-of-deliver-src
+  (implies
+    (and (deliver-hyps src dst psrc pdst net)
+         (equal (omap::lookup 'Parent (wtree-bind (omap::lookup src net))) dst))
+    (inv src (omap::update dst pdst (omap::update src psrc net))))  
+  :enable wtree-fields
+  :disable (inv-of-inv-all sent-message-wf-when-parent-has-message)
+  :expand ((:free (x) (inv src (omap::update x pdst (omap::update src psrc net))))
+           (:free (x) (wtree-bind (omap::lookup x net))) (inv src net)
+           (wtree-bind pdst) (wtree-bind psrc) (wtree-bind (omap::lookup src net))) 
+  :use ((:instance inv-of-inv-all (pid src))
+        (:instance sent-message-wf-when-parent-has-message
+          (self psrc) (outbox (proc->outbox psrc))
+          (parent (omap::lookup 'Parent (wtree-bind (omap::lookup src net))))
+          (net (omap::update dst pdst (omap::update src psrc net)))))
+  :prep-lemmas
+    ((defrule lemma-1
+       (implies (and (network-p (omap::update k p net)) (pid-p k))
+                (equal (proc->pid p) k))
+       :use ((:instance proc->pid-of-lookup-of-network
+               (pid k) (net (omap::update k p net)))))
+     (defrule lemma-2
+       (implies
+        (and (outbox-p outbox) (equal (erl-val-kind (car (omap::lookup d outbox))) :tuple))
+        (erl-val-p (car (omap::lookup d outbox))))
+       :cases ((omap::assoc d outbox))
+       :hints (("Subgoal 2" :in-theory (enable omap::lookup)))))))
 
-; receiver is idle
-(local (defruled inv-of-update-idle-dst
+; inv of the receiver ------------------------------------------------------------
+
+(local (defrule received-messages-wf-of-append-message
   (implies
     (and
-      (network-p net) (inv dst net)
-      (network-p (omap::update dst pdst net))
-      (not (terminated? (omap::update dst pdst net)))
-
-      ; src facts
-      (pid-p src) (omap::assoc src net)
-      (equal (proc->ps (omap::lookup src net)) :terminated)
-      (outbox-emptyp (proc->outbox (omap::lookup src net)))
-      (equal (erl-val-kind (erl-state->in (proc->s (omap::lookup src net))))
-             :integer)
-      
-      ; dst facts, pdst is the proc after erl-step
-      (pid-p dst) (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst net)
-      (not (equal (proc->ps (omap::lookup dst net)) :terminated))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (member-equal src
-        (erl-val-cons->lst
-          (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net)))))
-      ; dst is idle, so CPids do not exist yet
-      (not (and (omap::assoc 'CPids
-               (erl-state->bind (proc->s (omap::lookup dst net))))
-             (equal (erl-val-kind
-                      (omap::lookup 'CPids
-                        (erl-state->bind (proc->s (omap::lookup dst net)))))
-                    :cons)))
-      (not (inbox-contains (proc->inbox-new (omap::lookup dst net)) src))
-      (not (inbox-contains (proc->inbox-tried (omap::lookup dst net)) src))
-      (equal (proc->ps pdst) (proc->ps (omap::lookup dst net)))
-      (not (equal (proc->ps (omap::lookup dst net)) :blocked))
-      (equal (proc->inbox-tried pdst)
-             (proc->inbox-tried (omap::lookup dst net)))
-      (equal (proc->inbox-new pdst)
-             (append (proc->inbox-new (omap::lookup dst net))
-                     (list m)))
-      ; message facts
-      (equal (erl-val-kind m) :tuple)
-      (equal (len (erl-val-tuple->lst m)) 2)
-      (equal (car (erl-val-tuple->lst m)) src)
-      (equal (cadr (erl-val-tuple->lst m))
-             (erl-state->in (proc->s (omap::lookup src net)))))
-    (inv dst (omap::update dst pdst net)))
-  :enable (inv proc->outbox received-messages-wf)
-  :disable
-    (leaf-root-p-when-bind-equal wtree-nodes-are-leaf-or-root
-     received-messages-wf-of-append-message)
-  :use ((:instance leaf-root-p-when-bind-equal
-          (p1 pdst) (p2 (omap::lookup dst net)))
-        (:instance wtree-nodes-are-leaf-or-root (pid dst))
-        (:instance received-messages-wf-of-append-message
-          (net (omap::update dst pdst net))
-          (sender src)
-          (inbox (proc->inbox-new (omap::lookup dst net)))
-          (cpids
-            (erl-val-cons->lst
-              (omap::lookup 'ChildPids
-                (wtree-bind (omap::lookup dst net)))))))))
-
-; receiver is in receive or blocked
-(local (defrule inv-of-update-receive-dst
-  (implies
-    (and
-      (network-p net) (inv dst net)
-      (network-p (omap::update dst pdst net))
-      (not (terminated? (omap::update dst pdst net)))
-
-      ; src facts
-      (omap::assoc src net)
-      (equal (proc->ps (omap::lookup src net)) :terminated)
-      (outbox-emptyp (proc->outbox (omap::lookup src net)))
+      (network-p net) (omap::assoc sender net)
+      (erl-vlst-p inbox) (erl-vlst-p cpids)
+      (member-equal sender cpids)
+      (not (inbox-contains inbox sender))
+      (equal (proc->ps (omap::lookup sender net)) :terminated)
+      (outbox-emptyp (proc->outbox (omap::lookup sender net)))
       (equal
         (erl-val-kind
-          (erl-state->in (proc->s (omap::lookup src net))))
+          (erl-state->in (proc->s (omap::lookup sender net))))
         :integer)
-      ; dst facts, pdst is the proc after erl-step
-      (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst net)
-      (not (equal (proc->ps (omap::lookup dst net)) :terminated))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
+      (equal (erl-val-kind m) :tuple)
+      (equal (len (erl-val-tuple->lst m)) 2)
+      (equal (car (erl-val-tuple->lst m)) sender)
+      (equal (cadr (erl-val-tuple->lst m))
+             (erl-state->in (proc->s (omap::lookup sender net))))
+      (received-messages-wf inbox cpids net))
+    (received-messages-wf (append inbox (list m)) cpids net))
+  :enable (received-messages-wf inbox-contains)
+  :induct (received-messages-wf inbox cpids net)))
+
+(local (defrule inv-of-deliver-dst
+  (implies
+    (and
+      (deliver-hyps src dst psrc pdst net)
+      (equal
+        (cadr (erl-val-tuple->lst
+                (car (omap::lookup dst (proc->outbox (omap::lookup src net))))))
+        (erl-state->in (proc->s (omap::lookup src net))))
       (member-equal src
         (erl-val-cons->lst
           (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net)))))
-      ; Cpids exists because dst has already run at least once.
-      (member-equal src
-        (erl-val-cons->lst
-          (omap::lookup 'CPids
-            (erl-state->bind (proc->s (omap::lookup dst net))))))
-      (not (inbox-contains (proc->inbox-new (omap::lookup dst net)) src))
-      (not (inbox-contains (proc->inbox-tried (omap::lookup dst net)) src))
-      (equal (proc->ps pdst) (proc->ps (omap::lookup dst net)))
-      (not (equal (proc->ps (omap::lookup dst net)) :blocked))
-      (equal (proc->inbox-tried pdst)
-             (proc->inbox-tried (omap::lookup dst net)))
-      (equal (proc->inbox-new pdst)
-             (append (proc->inbox-new (omap::lookup dst net))
-                     (list m)))
-      ; message facts
-      (equal (erl-val-kind m) :tuple)
-      (equal (len (erl-val-tuple->lst m)) 2)
-      (equal (car (erl-val-tuple->lst m)) src)
-      (equal (cadr (erl-val-tuple->lst m))
-             (erl-state->in (proc->s (omap::lookup src net)))))
-    (inv dst (omap::update dst pdst net)))
-  :enable (inv proc->outbox received-messages-wf)
-  :use ((:instance leaf-root-p-when-bind-equal
-          (p1 pdst) (p2 (omap::lookup dst net)))
-        (:instance wtree-nodes-are-leaf-or-root (pid dst))
+      (or (not (and (omap::assoc 'CPids
+                      (erl-state->bind (proc->s (omap::lookup dst net))))
+                    (equal (erl-val-kind
+                             (omap::lookup 'CPids
+                               (erl-state->bind (proc->s (omap::lookup dst net)))))
+                           :cons)))
+          (member-equal src
+            (erl-val-cons->lst
+              (omap::lookup 'CPids
+                (erl-state->bind (proc->s (omap::lookup dst net))))))))
+    (inv dst (omap::update dst pdst (omap::update src psrc net))))
+  :enable wtree-fields
+  :disable (inv-of-inv-all wtree-bind0-of-reduce-receive-klst-p member-equal
+            received-messages-wf-of-append-message inv len not member-of-cons)
+  :expand ((:free (c n) (received-messages-wf nil c n))
+           (inv dst (omap::update dst pdst (omap::update src psrc net)))
+           (inv dst net) (proc->outbox pdst) (proc->outbox (omap::lookup dst net))
+           (wtree-bind psrc) (wtree-bind (omap::lookup src net))
+           (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
+  
+  :use ((:instance inv-of-inv-all (pid src)) (:instance inv-of-inv-all (pid dst))
+        (:instance integer-value-of-inv-terminated (pid src)) ; this causes speedup?
         (:instance received-messages-wf-of-append-message
-          (net (omap::update dst pdst net))
-          (sender src)
+          (net (omap::update dst pdst (omap::update src psrc net))) (sender src)
+          (m (car (omap::lookup dst (proc->outbox (omap::lookup src net)))))
           (inbox (proc->inbox-new (omap::lookup dst net)))
           (cpids (erl-val-cons->lst
                    (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net))))))
         (:instance received-messages-wf-of-append-message
-          (net (omap::update dst pdst net))
-          (sender src)
+          (net (omap::update dst pdst (omap::update src psrc net))) (sender src)
+          (m (car (omap::lookup dst (proc->outbox (omap::lookup src net)))))
           (inbox (proc->inbox-new (omap::lookup dst net)))
           (cpids (erl-val-cons->lst
                    (omap::lookup 'CPids
-                     (erl-state->bind (proc->s (omap::lookup dst net))))))))))
-
-; inv of blocked -> receive, with unbound CPids.
-; This case would never happen, but it helps performace if I prove it.
-(local (defrule inv-of-update-blocked-dst-1
-  (implies
-    (and
-      (network-p net) (inv dst net)
-      (network-p (omap::update dst pdst net))
-      (not (terminated? (omap::update dst pdst net)))
-      ; src facts
-      (omap::assoc src net)
-      (equal (proc->ps (omap::lookup src net)) :terminated)
-      (outbox-emptyp (proc->outbox (omap::lookup src net)))
-      (equal
-        (erl-val-kind
-          (erl-state->in (proc->s (omap::lookup src net))))
-        :integer)
-      ; dst facts, pdst is the proc after erl-step
-      (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst net)
-      (not (equal (proc->ps (omap::lookup dst net)) :terminated))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (member-equal src
-        (erl-val-cons->lst
-          (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net)))))
-      ; Remark: this would never actually happen
-      (not
-        (and (omap::assoc 'CPids
-               (erl-state->bind (proc->s (omap::lookup dst net))))
-             (equal (erl-val-kind
-                      (omap::lookup 'CPids
-                        (erl-state->bind (proc->s (omap::lookup dst net)))))
-                    :cons)))
-      (not (inbox-contains (proc->inbox-new (omap::lookup dst net)) src))
-      (not (inbox-contains (proc->inbox-tried (omap::lookup dst net)) src))
-      (equal (proc->ps (omap::lookup dst net)) :blocked)
-      (equal (proc->ps pdst) :receive)
-      (null (proc->inbox-tried pdst))
-      (equal (proc->inbox-new pdst)
-             (append (proc->inbox-tried (omap::lookup dst net))
-                     (proc->inbox-new (omap::lookup dst net))
-                     (list m)))
-      ; message facts
-      (equal (erl-val-kind m) :tuple)
-      (equal (len (erl-val-tuple->lst m)) 2)
-      (equal (car (erl-val-tuple->lst m)) src)
-      (equal (cadr (erl-val-tuple->lst m))
-             (erl-state->in (proc->s (omap::lookup src net)))))
-    (inv dst (omap::update dst pdst net)))
-  :enable (inv proc->outbox received-messages-wf)
-  :disable
-    (leaf-root-p-when-bind-equal wtree-nodes-are-leaf-or-root
-     received-messages-wf-of-append-message)
-  :use ((:instance leaf-root-p-when-bind-equal
-          (p1 pdst) (p2 (omap::lookup dst net)))
-        (:instance wtree-nodes-are-leaf-or-root (pid dst))
+                     (erl-state->bind (proc->s (omap::lookup dst net)))))))
         (:instance received-messages-wf-of-append-message
-          (net (omap::update dst pdst net))
-          (sender src)
-          (inbox (proc->inbox-new (omap::lookup dst net)))
-          (cpids (erl-val-cons->lst
-                   (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net)))))))))
-
-; the real inv for blocked -> receive
-(local (defruled inv-of-update-blocked-dst-2
-  (implies
-    (and
-      (network-p net) (inv dst net)
-      (network-p (omap::update dst pdst net))
-      (not (terminated? (omap::update dst pdst net)))
-      ; src facts
-      (omap::assoc src net)
-      (equal (proc->ps (omap::lookup src net)) :terminated)
-      (outbox-emptyp (proc->outbox (omap::lookup src net)))
-      (equal
-        (erl-val-kind
-          (erl-state->in (proc->s (omap::lookup src net))))
-        :integer)
-      ; dst facts, pdst is the proc after erl-step
-      (pid-p dst) (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst net)
-      (not (equal (proc->ps (omap::lookup dst net)) :terminated))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (member-equal src
-        (erl-val-cons->lst
-          (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net)))))
-      (member-equal src
-        (erl-val-cons->lst
-          (omap::lookup 'CPids
-            (erl-state->bind (proc->s (omap::lookup dst net))))))
-      (not (inbox-contains (proc->inbox-new (omap::lookup dst net)) src))
-      (not (inbox-contains (proc->inbox-tried (omap::lookup dst net)) src))
-      (equal (proc->ps (omap::lookup dst net)) :blocked)
-      (equal (proc->ps pdst) :receive)
-      (null (proc->inbox-tried pdst))
-      (equal (proc->inbox-new pdst)
-             (append (proc->inbox-tried (omap::lookup dst net))
-                     (proc->inbox-new (omap::lookup dst net))
-                     (list m)))
-      ; message facts
-      (equal (erl-val-kind m) :tuple)
-      (equal (len (erl-val-tuple->lst m)) 2)
-      (equal (car (erl-val-tuple->lst m)) src)
-      (equal (cadr (erl-val-tuple->lst m))
-             (erl-state->in (proc->s (omap::lookup src net)))))
-    (inv dst (omap::update dst pdst net)))
-  :enable (inv proc->outbox received-messages-wf)
-  :disable
-    (leaf-root-p-when-bind-equal wtree-nodes-are-leaf-or-root
-     received-messages-wf-of-append-message)
-  :use ((:instance leaf-root-p-when-bind-equal
-          (p1 pdst) (p2 (omap::lookup dst net)))
-        (:instance wtree-nodes-are-leaf-or-root (pid dst))
-        (:instance received-messages-wf-of-append-message
-          (net (omap::update dst pdst net))
-          (sender src)
-          (inbox (proc->inbox-new (omap::lookup dst net)))
-          (cpids (erl-val-cons->lst
-                   (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net))))))
-        (:instance received-messages-wf-of-append-message
-          (net (omap::update dst pdst net))
-          (sender src)
+          (net (omap::update dst pdst (omap::update src psrc net))) (sender src)
+          (m (car (omap::lookup dst (proc->outbox (omap::lookup src net)))))
           (inbox (proc->inbox-tried (omap::lookup dst net)))
           (cpids (erl-val-cons->lst
                    (omap::lookup 'CPids
                      (erl-state->bind (proc->s (omap::lookup dst net))))))))))
 
-; inv of dst, all cases
-(local (defrule inv-of-update-dst
-  (implies
-    (and
-      (network-p net) (inv dst net)
-      (network-p (omap::update dst pdst net))
-      (not (terminated? (omap::update dst pdst net)))
-      ; src facts
-      (omap::assoc src net)
-      (equal (proc->ps (omap::lookup src net)) :terminated)
-      (outbox-emptyp (proc->outbox (omap::lookup src net)))
-      (equal
-        (erl-val-kind
-          (erl-state->in (proc->s (omap::lookup src net))))
-        :integer)
-      ; dst facts, pdst is the proc after erl-step
-      (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst net)
-      (not (equal (proc->ps (omap::lookup dst net)) :terminated))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (member-equal src
-        (erl-val-cons->lst
-          (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net)))))
-      (or
-        ; idle
-        (not
-          (and
-            (omap::assoc 'CPids
-              (erl-state->bind (proc->s (omap::lookup dst net))))
-            (equal
-              (erl-val-kind
-                (omap::lookup 'CPids
-                  (erl-state->bind (proc->s (omap::lookup dst net)))))
-              :cons)))
-        ; blocked or receive
-        (member-equal src
-          (erl-val-cons->lst
-            (omap::lookup 'CPids
-              (erl-state->bind (proc->s (omap::lookup dst net)))))))
-      (not (inbox-contains (proc->inbox-new (omap::lookup dst net)) src))
-      (not (inbox-contains (proc->inbox-tried (omap::lookup dst net)) src))
-      (or
-        (and ; idle -> idle, or receive -> receive
-          (equal (proc->ps pdst) (proc->ps (omap::lookup dst net)))
-          (not (equal (proc->ps (omap::lookup dst net)) :blocked))
-          (equal (proc->inbox-tried pdst)
-                (proc->inbox-tried (omap::lookup dst net)))
-          (equal (proc->inbox-new pdst)
-                (append (proc->inbox-new (omap::lookup dst net))
-                        (list m))))
-        (and ; blocked -> receive
-          (equal (proc->ps (omap::lookup dst net)) :blocked)
-          (equal (proc->ps pdst) :receive)
-          (null (proc->inbox-tried pdst))
-          (equal (proc->inbox-new pdst)
-                (append (proc->inbox-tried (omap::lookup dst net))
-                        (proc->inbox-new (omap::lookup dst net))
-                        (list m)))))
-      ; message facts
-      (equal (erl-val-kind m) :tuple)
-      (equal (len (erl-val-tuple->lst m)) 2)
-      (equal (car (erl-val-tuple->lst m)) src)
-      (equal (cadr (erl-val-tuple->lst m))
-             (erl-state->in (proc->s (omap::lookup src net)))))
-    (inv dst (omap::update dst pdst net)))
-  :use
-    (inv-of-update-idle-dst
-     inv-of-update-receive-dst
-     inv-of-update-blocked-dst-1
-     inv-of-update-blocked-dst-2)))
-
-
-; inv of src --------------------------------------------------------------------
-
-(local (defruled inv-of-update-src
-  (implies
-    (and
-      (network-p net) (inv src net)
-      (omap::assoc src net)
-      (pid-p src) (proc-p psrc)
-      (network-p (omap::update src psrc net))
-      (equal (erl-state->self (proc->s psrc)) src)
-      (equal (erl-state->bind (proc->s psrc))
-             (erl-state->bind (proc->s (omap::lookup src net))))
-      (equal (erl-state->in (proc->s psrc))
-             (erl-state->in (proc->s (omap::lookup src net))))
-      (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
-      (equal (wtree-bind psrc) (wtree-bind (omap::lookup src net)))
-      (equal (proc->inbox-new psrc)
-             (proc->inbox-new (omap::lookup src net)))
-      (equal (proc->inbox-tried psrc)
-             (proc->inbox-tried (omap::lookup src net)))
-      ; sender is termiated
-      (equal (proc->ps (omap::lookup src net)) :terminated)
-      (equal (proc->ps psrc) :terminated)
-      (sent-message-wf psrc (proc->outbox psrc)
-        (omap::lookup 'Parent (wtree-bind psrc))
-        (omap::update src psrc net)))
-    (inv src (omap::update src psrc net)))
-  :enable inv
-  :use ((:instance leaf-root-p-when-bind-equal
-          (p1 psrc) (p2 (omap::lookup src net)))
-        (:instance wtree-nodes-are-leaf-or-root (pid src)))))
-
-
-; inv of both updates -----------------------------------------------------------
-
-; case when dst is not blocked
-(local (defrule inv-of-update-src-and-dst-receive
-  (implies
-    (and
-      (network-p net) (wtree-p net) (inv-all net)
-      ; src facts, psrc is the proc after erl-step.
-      (proc-p psrc) (omap::assoc src net)
-      (equal (erl-state->self (proc->s psrc)) src)
-      (equal (erl-state->bind (proc->s psrc))
-             (erl-state->bind (proc->s (omap::lookup src net))))
-      (equal (erl-state->in (proc->s psrc))
-             (erl-state->in (proc->s (omap::lookup src net))))
-      (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
-      (equal (wtree-bind psrc) (wtree-bind (omap::lookup src net)))
-      (equal (proc->inbox-new psrc) (proc->inbox-new (omap::lookup src net)))
-      (equal (proc->inbox-tried psrc)
-             (proc->inbox-tried (omap::lookup src net)))
-      (equal (proc->ps psrc) :terminated)
-      (outbox-emptyp (proc->outbox psrc)) (proc->outbox psrc)
-      ; dst facts, pdst is the proc after erl-step.
-      (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst (proc->outbox (omap::lookup src net)))
-      (omap::lookup dst (proc->outbox (omap::lookup src net)))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (equal (proc->ps pdst) (proc->ps (omap::lookup dst net)))
-      (not (equal (proc->ps (omap::lookup dst net)) :blocked))
-      (equal (proc->inbox-tried pdst)
-             (proc->inbox-tried (omap::lookup dst net)))
-      (equal (proc->inbox-new pdst)
-             (append (proc->inbox-new (omap::lookup dst net))
-                     (list (car (omap::lookup dst
-                                  (proc->outbox (omap::lookup src net))))))))
-    (inv src (omap::update src psrc (omap::update dst pdst net))))
-  :enable (proc->pid proc->outbox)
-  :use
-    ((:instance sender-with-message-props)
-     (:instance inv-of-inv-all (pid src))
-     (:instance inv-of-inv-all (pid dst))
-     (:instance not-terminated?-when-runnable-or-outbox
-       (pid dst) (net (omap::update dst pdst net)))
-     (:instance inv-of-other-nodes-of-update
-      (pid src) (p dst) (proc pdst)
-      (msgs
-        (list (car (omap::lookup dst
-                     (proc->outbox (omap::lookup src net)))))))
-    (:instance inv-of-update-src (net (omap::update dst pdst net)))
-    (:instance inbox-contains-of-append-message
-      (l (proc->inbox-new (omap::lookup dst net))) (pid src)
-      (m (car (omap::lookup dst (proc->outbox (omap::lookup src net))))))
-    (:instance inbox-contains-of-append-2
-      (pid src) (a (proc->inbox-tried (omap::lookup dst net)))
-      (b (append (proc->inbox-new (omap::lookup dst net))
-                 (list (car (omap::lookup dst
-                              (proc->outbox (omap::lookup src net))))))))
-    (:instance sent-message-wf-when-parent-has-message
-      (self psrc) (outbox (proc->outbox psrc)) (parent dst)
-      (net (omap::update src psrc (omap::update dst pdst net)))))))
-
-
-; blocked case
-(local (defrule inv-of-update-src-and-dst-blocked
-  (implies
-    (and
-      (network-p net) (wtree-p net) (inv-all net)
-      ; src facts, psrc is the proc after erl-step.
-      (proc-p psrc) (omap::assoc src net)
-      (equal (erl-state->self (proc->s psrc)) src)
-      (equal (erl-state->bind (proc->s psrc))
-             (erl-state->bind (proc->s (omap::lookup src net))))
-      (equal (erl-state->in (proc->s psrc))
-             (erl-state->in (proc->s (omap::lookup src net))))
-      (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
-      (equal (wtree-bind psrc) (wtree-bind (omap::lookup src net)))
-      (equal (proc->inbox-new psrc)
-             (proc->inbox-new (omap::lookup src net)))
-      (equal (proc->inbox-tried psrc)
-             (proc->inbox-tried (omap::lookup src net)))
-      (equal (proc->ps psrc) :terminated)
-      (outbox-emptyp (proc->outbox psrc)) (proc->outbox psrc)
-      ; dst facts, pdst is the proc after erl-step.
-      (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst (proc->outbox (omap::lookup src net)))
-      (omap::lookup dst (proc->outbox (omap::lookup src net)))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (equal (proc->ps (omap::lookup dst net)) :blocked)
-      (equal (proc->ps pdst) :receive)
-      (null (proc->inbox-tried pdst))
-      (equal
-        (proc->inbox-new pdst)
-        (append (proc->inbox-tried (omap::lookup dst net))
-                (proc->inbox-new (omap::lookup dst net))
-                (list (car (omap::lookup dst
-                              (proc->outbox (omap::lookup src net))))))))
-    (inv src (omap::update src psrc (omap::update dst pdst net))))
-  :enable (proc->pid proc->outbox)
-  :use
-    ((:instance sender-with-message-props)
-     (:instance inv-of-inv-all (pid src))
-     (:instance inv-of-inv-all (pid dst))
-     (:instance not-terminated?-when-runnable-or-outbox
-       (pid dst) (net (omap::update dst pdst net)))
-     (:instance inv-of-other-nodes-of-update
-       (pid src) (p dst) (proc pdst)
-       (msgs
-         (list (car (omap::lookup dst
-                       (proc->outbox (omap::lookup src net)))))))
-     (:instance inv-of-update-src
-       (net (omap::update dst pdst net)))
-     (:instance inbox-contains-of-append-message
-       (l (proc->inbox-new (omap::lookup dst net))) (pid src)
-       (m (car (omap::lookup dst (proc->outbox (omap::lookup src net))))))
-     (:instance inbox-contains-of-append-2
-       (a (proc->inbox-tried (omap::lookup dst net))) (pid src)
-       (b (append (proc->inbox-new (omap::lookup dst net))
-                  (list (car (omap::lookup dst
-                               (proc->outbox (omap::lookup src net))))))))
-     (:instance sent-message-wf-when-parent-has-message
-       (self psrc) (outbox (proc->outbox psrc)) (parent dst)
-       (net (omap::update src psrc (omap::update dst pdst net)))))))
-
-
-; Helper for the next theorem
-(local (defrule inbox-of-inv-when-non-empty-outbox
-  (implies
-    (and
-      (network-p net) (inv dst net)
-      (omap::assoc src net) (omap::assoc dst net)
-      (not (outbox-emptyp (proc->outbox (omap::lookup src net))))
-      (erl-val-cons->lst
-        (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net)))))
-    (and (not (inbox-contains (proc->inbox-new (omap::lookup dst net)) src))
-         (not (inbox-contains (proc->inbox-tried (omap::lookup dst net)) src))))
-  :enable inv
-  :expand ((inbox-contains nil src))
-  :use ((:instance wtree-nodes-are-leaf-or-root (pid dst)))))
-
-
-(local (defruled inv-of-dst-receive
-  (implies
-    (and
-      (network-p net) (wtree-p net) (inv-all net)
-      ; src facts, psrc is the proc after erl-step.
-      (proc-p psrc) (omap::assoc src net)
-      (equal (erl-state->self (proc->s psrc)) src)
-      (equal (erl-state->bind (proc->s psrc))
-             (erl-state->bind (proc->s (omap::lookup src net))))
-      (equal (erl-state->in (proc->s psrc))
-             (erl-state->in (proc->s (omap::lookup src net))))
-      (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
-      (equal (wtree-bind psrc) (wtree-bind (omap::lookup src net)))
-      (equal (proc->inbox-new psrc)
-             (proc->inbox-new (omap::lookup src net)))
-      (equal (proc->inbox-tried psrc)
-             (proc->inbox-tried (omap::lookup src net)))
-      (equal (proc->ps psrc) :terminated)
-      (outbox-emptyp (proc->outbox psrc)) (proc->outbox psrc)
-      (equal
-        (erl-val-kind
-          (erl-state->in (proc->s (omap::lookup src net))))
-        :integer)
-      ; dst facts, pdst is the proc after erl-step.
-      (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst (proc->outbox (omap::lookup src net)))
-      (omap::lookup dst (proc->outbox (omap::lookup src net)))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (equal (proc->ps pdst) (proc->ps (omap::lookup dst net)))
-      (not (equal (proc->ps (omap::lookup dst net)) :blocked))
-      (equal (proc->inbox-tried pdst)
-             (proc->inbox-tried (omap::lookup dst net)))
-      (equal (proc->inbox-new pdst)
-             (append (proc->inbox-new (omap::lookup dst net))
-                     (list (car (omap::lookup dst
-                                   (proc->outbox (omap::lookup src net))))))))
-    (inv dst (omap::update dst pdst (omap::update src psrc net))))
-  :enable (proc->pid check-parent)
-  :use
-    ((:instance sender-with-message-props)
-     (:instance inv-of-inv-all (pid dst))
-     (:instance check-parent-of-wtree-p (pid src))
-     (:instance not-terminated?-when-runnable-or-outbox
-      (pid dst) (net (omap::update dst pdst (omap::update src psrc net))))
-     (:instance not-terminated?-when-runnable-or-outbox
-       (pid src) (net (omap::update src psrc net)))
-     (:instance inv-of-other-nodes-of-update
-       (pid dst) (p src) (proc psrc) (msgs nil))
-     (:instance inbox-of-inv-when-non-empty-outbox)
-     (:instance inv-of-update-dst
-       (net (omap::update src psrc net))
-       (m (car (omap::lookup dst
-                  (proc->outbox (omap::lookup src net)))))))))
-
-(local (defrule inv-of-dst-blocked
-  (implies
-    (and
-      (network-p net) (wtree-p net) (inv-all net)
-      ; src facts, psrc is the proc after erl-step.
-      (proc-p psrc) (omap::assoc src net)
-      (equal (erl-state->self (proc->s psrc)) src)
-      (equal (erl-state->bind (proc->s psrc))
-             (erl-state->bind (proc->s (omap::lookup src net))))
-      (equal (erl-state->in (proc->s psrc))
-             (erl-state->in (proc->s (omap::lookup src net))))
-      (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
-      (equal (wtree-bind psrc) (wtree-bind (omap::lookup src net)))
-      (equal (proc->inbox-new psrc)
-             (proc->inbox-new (omap::lookup src net)))
-      (equal (proc->inbox-tried psrc)
-             (proc->inbox-tried (omap::lookup src net)))
-      (equal (proc->ps psrc) :terminated)
-      (outbox-emptyp (proc->outbox psrc)) (proc->outbox psrc)
-      (equal
-        (erl-val-kind
-          (erl-state->in (proc->s (omap::lookup src net))))
-        :integer)
-      ; dst facts, pdst is the proc after erl-step.
-      (proc-p pdst) (not (equal src dst))
-      (omap::assoc dst (proc->outbox (omap::lookup src net)))
-      (omap::lookup dst (proc->outbox (omap::lookup src net)))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (equal (proc->ps (omap::lookup dst net)) :blocked)
-      (equal (proc->ps pdst) :receive)
-      (null (proc->inbox-tried pdst))
-      (equal
-        (proc->inbox-new pdst)
-        (append (proc->inbox-tried (omap::lookup dst net))
-                (proc->inbox-new (omap::lookup dst net))
-                (list (car (omap::lookup dst
-                              (proc->outbox (omap::lookup src net))))))))
-    (inv dst (omap::update dst pdst (omap::update src psrc net))))
-  :enable (proc->pid check-parent)
-  :use ((:instance sender-with-message-props)
-        (:instance inv-of-inv-all (pid dst))
-        (:instance check-parent-of-wtree-p (pid src))
-        (:instance not-terminated?-when-runnable-or-outbox
-          (pid dst) (net (omap::update dst pdst (omap::update src psrc net))))
-        (:instance not-terminated?-when-runnable-or-outbox
-          (pid src) (net (omap::update src psrc net)))
-        (:instance inv-of-other-nodes-of-update
-          (pid dst) (p src) (proc psrc) (msgs nil))
-        (:instance inbox-of-inv-when-non-empty-outbox)
-        (:instance inv-of-update-dst
-          (net (omap::update src psrc net))
-          (m (car (omap::lookup dst
-                    (proc->outbox (omap::lookup src net)))))))))
-
-; Combining the cases for non blocked dst
-(local (defrule inv-of-deliver-of-not-blocked
-  (implies
-    (and
-      (network-p net) (wtree-p net) (inv-all net)
-      ; src facts
-      (omap::assoc src net) (proc-p psrc)
-      (equal (erl-state->self (proc->s psrc)) src)
-      (equal (erl-state->bind (proc->s psrc))
-             (erl-state->bind (proc->s (omap::lookup src net))))
-      (equal (erl-state->in (proc->s psrc))
-             (erl-state->in (proc->s (omap::lookup src net))))
-      (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
-      (equal (wtree-bind psrc) (wtree-bind (omap::lookup src net)))
-      (equal (proc->inbox-new psrc)
-             (proc->inbox-new (omap::lookup src net)))
-      (equal (proc->inbox-tried psrc)
-             (proc->inbox-tried (omap::lookup src net)))
-      (equal (proc->ps psrc) :terminated)
-      (outbox-emptyp (proc->outbox psrc)) (proc->outbox psrc)
-      ; dst facts
-      (not (equal src dst)) (proc-p pdst)
-      (omap::assoc dst (proc->outbox (omap::lookup src net)))
-      (omap::lookup dst (proc->outbox (omap::lookup src net)))
-      (not (equal (proc->ps (omap::lookup dst net)) :blocked))
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (equal (proc->ps pdst) (proc->ps (omap::lookup dst net)))
-      (equal (proc->inbox-tried pdst)
-             (proc->inbox-tried (omap::lookup dst net)))
-      (equal
-        (proc->inbox-new pdst)
-        (append (proc->inbox-new (omap::lookup dst net))
-                (list (car (omap::lookup dst
-                             (proc->outbox (omap::lookup src net)))))))
-      (omap::assoc pid
-        (omap::update src psrc (omap::update dst pdst net))))
-    (inv pid (omap::update src psrc (omap::update dst pdst net))))
-  :use ((:instance sender-with-message-props)
-        (:instance inv-of-update-src-and-dst-blocked)
-        (:instance inv-of-update-src-and-dst-receive)
-        (:instance inv-of-dst-blocked)
-        (:instance inv-of-dst-receive)
-        (:instance wtree-nodes-are-leaf-or-root (pid src))
-        (:instance inv-of-other-nodes))))
-
-; All nodes, including src and dst, for dst blocked -> receive
-(local (defrule inv-of-deliver-of-blocked
-  (implies
-    (and
-      (network-p net) (wtree-p net) (inv-all net)
-      ; src facts
-      (omap::assoc src net) (proc-p psrc)
-      (equal (erl-state->self (proc->s psrc)) src)
-      (equal (erl-state->bind (proc->s psrc))
-             (erl-state->bind (proc->s (omap::lookup src net))))
-      (equal (erl-state->in (proc->s psrc))
-             (erl-state->in (proc->s (omap::lookup src net))))
-      (equal (proc->klst psrc) (proc->klst (omap::lookup src net)))
-      (equal (wtree-bind psrc) (wtree-bind (omap::lookup src net)))
-      (equal (proc->inbox-new psrc)
-             (proc->inbox-new (omap::lookup src net)))
-      (equal (proc->inbox-tried psrc)
-             (proc->inbox-tried (omap::lookup src net)))
-      (equal (proc->ps psrc) :terminated)
-      (outbox-emptyp (proc->outbox psrc)) (proc->outbox psrc)
-      ; dst facts
-      (not (equal src dst)) (proc-p pdst)
-      (omap::assoc dst (proc->outbox (omap::lookup src net)))
-      (omap::lookup dst (proc->outbox (omap::lookup src net)))
-      (equal (proc->ps (omap::lookup dst net)) :blocked)
-      (equal (erl-state->self (proc->s pdst)) dst)
-      (equal (proc->s pdst) (proc->s (omap::lookup dst net)))
-      (equal (proc->klst pdst) (proc->klst (omap::lookup dst net)))
-      (equal (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-      (equal (proc->ps pdst) :receive)
-      (null (proc->inbox-tried pdst))
-      (equal
-        (proc->inbox-new pdst)
-        (append (proc->inbox-tried (omap::lookup dst net))
-                (proc->inbox-new (omap::lookup dst net))
-                (list (car (omap::lookup dst
-                            (proc->outbox (omap::lookup src net)))))))
-      (omap::assoc pid
-        (omap::update src psrc (omap::update dst pdst net))))
-    (inv pid (omap::update src psrc (omap::update dst pdst net))))
-  :use ((:instance sender-with-message-props)
-        (:instance inv-of-update-src-and-dst-receive)
-        (:instance inv-of-update-src-and-dst-blocked)
-        (:instance inv-of-dst-receive)
-        (:instance inv-of-dst-blocked)
-        (:instance wtree-nodes-are-leaf-or-root (pid src))
-        (:instance inv-of-other-nodes))))
-
 ; inv of deliver ---------------------------------------------------------------
 
-; This is all we really want from this file.
+; The following can be derived from (inv-all net).
+; BOZO: This is a brute force solution.
+(local (defruled inv-of-deliver-props
+  (implies
+    (and (network-p net) (inv-all net)
+         (pid-p src) (pid-p dst)
+         (has-message-for-dst? net src dst))
+    (and
+      (omap::assoc src net)
+      (equal (proc->ps (omap::lookup src net)) :terminated)
+      (equal (omap::lookup 'Parent (wtree-bind (omap::lookup src net))) dst)
+      (not (equal (proc->ps (omap::lookup dst net)) :terminated))
+      (omap::emptyp (omap::tail (proc->outbox (omap::lookup src net))))
+      (not (cdr (omap::lookup dst (proc->outbox (omap::lookup src net)))))
+      (equal (erl-val-kind
+               (car (omap::lookup dst (proc->outbox (omap::lookup src net)))))
+             :tuple)
+      (equal
+        (len (erl-val-tuple->lst
+              (car (omap::lookup dst
+                      (proc->outbox (omap::lookup src net)))))) 2)
+      (equal
+        (car (erl-val-tuple->lst
+          (car (omap::lookup dst
+                  (proc->outbox (omap::lookup src net)))))) src)
+      (equal
+        (cadr (erl-val-tuple->lst
+          (car (omap::lookup dst
+                (proc->outbox (omap::lookup src net))))))
+        (erl-state->in (proc->s (omap::lookup src net))))
+      (or (not (and (omap::assoc 'CPids
+                      (erl-state->bind (proc->s (omap::lookup dst net))))
+                    (equal (erl-val-kind
+                             (omap::lookup 'CPids
+                               (erl-state->bind
+                                 (proc->s (omap::lookup dst net)))))
+                           :cons)))
+          (member-equal src
+            (erl-val-cons->lst
+              (omap::lookup 'CPids
+                (erl-state->bind (proc->s (omap::lookup dst net)))))))))
+  :enable (sent-message-wf has-message-for-dst? proc-has-message-for-dst?
+           proc->outbox make-reduce-proc)
+  :disable (omap::assoc-of-tail-when-not-head)
+  :expand (inv src net)
+  :use ((:instance inv-of-inv-all (pid src))
+        (:instance omap::assoc-of-tail-when-not-head
+          (key dst) (map (proc->outbox (omap::lookup src net))))
+        (:instance omap::assoc-of-tail-when-not-head
+          (key (omap::lookup 'Parent (wtree-bind (omap::lookup src net))))
+          (map (proc->outbox (omap::lookup src net)))))))
+
+; The deliver step preseves the invariant.
 (defrule inv-of-erl-step-of-deliver
   (implies
     (and
-      (network-p net) (inv-all net)
-      (not (terminated? net))
+      (network-p net) (inv-all net) (not (terminated? net))
       (equal (scheduling-kind (schedule net)) :deliver)
       (omap::assoc pid (erl-step net)))
     (inv pid (erl-step net)))
-  :enable (erl-step proc->pid proc->outbox
-           has-message-for-dst? proc-has-message-for-dst?)
+  :enable (erl-step check-parent)
+  :disable (omap::update-different scheduler-correct-when-deliver
+            check-parent-of-wtree-p)
   :use ((:instance scheduler-correct-when-deliver)
+        (:instance inv-of-deliver-props
+          (src (scheduling-deliver->p1 (schedule net)))
+          (dst (scheduling-deliver->p2 (schedule net))))
         (:instance wtree-p-of-inv
           (pid (scheduling-deliver->p1 (schedule net))))
-        (:instance sender-with-message-props
-          (src (scheduling-deliver->p1 (schedule net)))
-          (dst (scheduling-deliver->p2 (schedule net))))))
+        (:instance check-parent-of-wtree-p
+          (pid (scheduling-deliver->p1 (schedule net)))))
+  :cases ((equal pid (scheduling-deliver->p1 (schedule net)))
+          (equal pid (scheduling-deliver->p2 (schedule net)))))

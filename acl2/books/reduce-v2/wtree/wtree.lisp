@@ -95,6 +95,15 @@
   :use wtree-node-p-when-wtree-p
   :enable wtree-node-p)
 
+; The parent of a node is an erl-value.
+(defrule erl-val-p-of-parent-of-wtree-node
+  (implies
+    (and (network-p net) (wtree-p net) (omap::assoc pid net))
+    (erl-val-p (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))))
+  :use wtree-nodes-are-leaf-or-root
+  :disable wtree-nodes-are-leaf-or-root
+  :enable (leaf-p root-p wtree-node0-p))
+
 (defrule check-children-of-wtree-node
   (implies
     (and (network-p net) (wtree-p net) (omap::assoc pid net))

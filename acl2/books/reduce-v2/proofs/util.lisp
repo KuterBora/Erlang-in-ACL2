@@ -320,6 +320,10 @@
                   (omap::lookup x m)))
   :enable omap::lookup-of-update)
 
+  (defrule lookup-of-update-val
+  (equal (omap::lookup k (omap::update k v m)) v)
+  :enable omap::lookup-of-update)
+
 (defrule prefixp-of-same
   (prefixp x x)
   :enable prefixp)
