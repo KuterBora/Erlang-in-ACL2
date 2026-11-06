@@ -17,6 +17,7 @@
 ; helpers to compute the work completed by a wtree so far.
 
 ; compute sum of numbers up to n.
+; TODO: rename to sum_of_nats
 (define sum ((n natp))
   (b* ((n (nfix n))
        ((if (= n 0)) 0))
@@ -70,7 +71,7 @@
 
 ; Wtree Utility ---------------------------------------------------------------
 
-; The children a node whose messages have no been received yet.
+; The children of a node whose messages have no been received yet.
 ; Remark: In an earlier implementation, instead of ChildHd and ChildTl,
 ; the last clause of reduce had CPids as a parameter, and then
 ; matched head and tail of the arguments in the body of the function.
@@ -168,157 +169,6 @@
       (parent-still-waiting-p self parent (omap::update p proc net)))
     :enable omap::lookup-of-update))
 
-; slighly different to make the rule fire.
-; (defrule parent-still-waiting-p-of-update-of-run-with-self
-;   (implies
-;     (and
-;       (network-p net) (network-p (omap::update p proc net))
-;       (pid-p self) (erl-val-p parent)
-;       (or
-;         (not (equal parent p))
-;         (and
-;           (not (equal (proc->ps proc) :terminated))
-;           (or
-;             (not (and (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
-;                       (equal (erl-val-kind
-;                                 (omap::lookup 'CPids
-;                                   (erl-state->bind (proc->s proc))))
-;                                 :cons)))
-;             (member-equal self
-;               (erl-val-cons->lst
-;                 (omap::lookup 'CPids
-;                   (erl-state->bind (proc->s proc))))))))
-;       (parent-still-waiting-p self parent net))
-;     (parent-still-waiting-p self parent (omap::update p proc net)))
-;   :enable (parent-still-waiting-p omap::lookup-of-update))
-
-; Covers both receive->receive and receive->terminate
-; (defruled parent-still-waiting-p-of-update-of-receive
-;   (implies
-;     (and
-;       (network-p net) (network-p (omap::update p proc net))
-;       (omap::assoc pid net)
-;       (omap::assoc 'CPids (erl-state->bind (proc->s (omap::lookup p net))))
-;       (equal (erl-val-kind
-;                (omap::lookup 'CPids
-;                  (erl-state->bind (proc->s (omap::lookup p net)))))
-;              :cons)
-;       (not (equal (proc->ps (omap::lookup pid net)) :terminated))
-;       (equal (proc->ps
-;                (omap::lookup
-;                  (car (erl-val-cons->lst (omap::lookup 'CPids
-;                         (erl-state->bind (proc->s (omap::lookup p net))))))
-;                  net))
-;              :terminated)
-;       (or (null (cdr (erl-val-cons->lst (omap::lookup 'CPids
-;                        (erl-state->bind (proc->s (omap::lookup p net)))))))
-;           (and (not (equal (proc->ps proc) :terminated))
-;                (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
-;                (equal (erl-val-kind
-;                         (omap::lookup 'CPids (erl-state->bind (proc->s proc))))
-;                       :cons)
-;                (equal (erl-val-cons->lst
-;                         (omap::lookup 'CPids (erl-state->bind (proc->s proc))))
-;                       (cdr (erl-val-cons->lst (omap::lookup 'CPids
-;                              (erl-state->bind
-;                                (proc->s (omap::lookup p net)))))))))
-;       (parent-still-waiting-p pid
-;         (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
-;         net))
-;     (parent-still-waiting-p pid
-;       (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
-;       (omap::update p proc net)))
-;   :enable (parent-still-waiting-p omap::lookup-of-update))
-
-; Superseded by wtree-fields-of-lookup-of-update (wtree-helpers.lisp).
-; (defrule wtree-bindings-of-lookup-of-update-when-bindings-equal
-;   (implies
-;     (and
-;       (network-p net)
-;       (omap::assoc q net)
-;       (equal (omap::lookup 'Index (wtree-bind qproc))
-;              (omap::lookup 'Index (wtree-bind (omap::lookup q net))))
-;       (equal (omap::lookup 'Parent (wtree-bind qproc))
-;              (omap::lookup 'Parent (wtree-bind (omap::lookup q net))))
-;       (equal (omap::lookup 'ChildPids (wtree-bind qproc))
-;              (omap::lookup 'ChildPids (wtree-bind (omap::lookup q net)))))
-;     (and
-;       (equal (omap::lookup 'Index
-;                (wtree-bind (omap::lookup x (omap::update q qproc net))))
-;              (omap::lookup 'Index (wtree-bind (omap::lookup x net))))
-;       (equal (omap::lookup 'Parent
-;                (wtree-bind (omap::lookup x (omap::update q qproc net))))
-;              (omap::lookup 'Parent (wtree-bind (omap::lookup x net))))
-;       (equal (omap::lookup 'ChildPids
-;                (wtree-bind (omap::lookup x (omap::update q qproc net))))
-;              (omap::lookup 'ChildPids (wtree-bind (omap::lookup x net))))))
-;   :enable omap::lookup-of-update)
-;
-; (defrule leaf-root-p-of-lookup-of-update-when-wtree-bindings-equal
-;   (implies
-;     (and
-;       (network-p net)
-;       (omap::assoc q net)
-;       (iff (omap::assoc 'Index (wtree-bind qproc))
-;            (omap::assoc 'Index (wtree-bind (omap::lookup q net))))
-;       (iff (omap::assoc 'Parent (wtree-bind qproc))
-;            (omap::assoc 'Parent (wtree-bind (omap::lookup q net))))
-;       (iff (omap::assoc 'ChildPids (wtree-bind qproc))
-;            (omap::assoc 'ChildPids (wtree-bind (omap::lookup q net))))
-;       (equal (omap::lookup 'Index (wtree-bind qproc))
-;              (omap::lookup 'Index (wtree-bind (omap::lookup q net))))
-;       (equal (omap::lookup 'Parent (wtree-bind qproc))
-;              (omap::lookup 'Parent (wtree-bind (omap::lookup q net))))
-;       (equal (omap::lookup 'ChildPids (wtree-bind qproc))
-;              (omap::lookup 'ChildPids (wtree-bind (omap::lookup q net)))))
-;     (and
-;       (equal (leaf-p (omap::lookup x (omap::update q qproc net)))
-;              (leaf-p (omap::lookup x net)))
-;       (equal (root-p (omap::lookup x (omap::update q qproc net)))
-;              (root-p (omap::lookup x net)))))
-;   :enable omap::lookup-of-update
-;   :use ((:instance leaf-root-p-when-wtree-bindings-equal
-;           (p1 qproc) (p2 (omap::lookup q net)))))
-
-; (defruled check-indices-props
-;   (implies
-;     (and (network-p net) (pid-lst-p cps) (consp (cdr cps))
-;          (check-indices i cps net))
-;     (and (omap::assoc (car cps) net)
-;          (leaf-p (omap::lookup (car cps) net))
-;          (equal
-;           (erl-val-integer->val
-;             (omap::lookup 'Index
-;               (wtree-bind (omap::lookup (car cps) net))))
-;           (+ 1 (nfix i)))
-;          (omap::assoc (cadr cps) net)
-;          (leaf-p (omap::lookup (cadr cps) net))
-;          (or
-;            (erl-val-cons->lst
-;                   (omap::lookup 'ChildPids
-;                     (wtree-bind (omap::lookup (car cps) net))))
-;            (equal (erl-val-integer->val
-;                     (omap::lookup 'Index
-;                       (wtree-bind (omap::lookup (cadr cps) net))))
-;                   (+ 2 (nfix i))))
-;          (or
-;            (not
-;              (erl-val-cons->lst
-;               (omap::lookup 'ChildPids
-;                 (wtree-bind (omap::lookup (car cps) net)))))
-;            (and (rightmost-child (car cps) net)
-;                 (equal (erl-val-integer->val
-;                          (omap::lookup 'Index
-;                            (wtree-bind (omap::lookup (cadr cps) net))))
-;                        (+ 1 (nfix
-;                               (erl-val-integer->val
-;                                 (omap::lookup 'Index
-;                                   (wtree-bind
-;                                     (omap::lookup
-;                                       (rightmost-child (car cps) net)
-;                                       net)))))))))))
-;   :enable check-indices)
-
 ; General Utility -------------------------------------------------------------
 
 ; TODO: Some of these should move to other files, and some of them might be obselete. 
@@ -384,14 +234,3 @@
    (defrule prefixp-of-rev-cdr-rev
      (prefixp (rev (cdr l)) (rev l))
      :expand (rev l))))
-
-; (defruled no-duplicatesp-of-rev
-;   (equal (no-duplicatesp-equal (rev l)) (no-duplicatesp-equal l))
-;   :enable rev
-;   :prep-lemmas
-;     ((defrule member-of-rev
-;        (iff (member-equal e (rev l)) (member-equal e l))
-;        :enable rev)
-;      (defrule no-duplicatesp-of-append-singleton
-;        (equal (no-duplicatesp-equal (append x (list a)))
-;               (and (no-duplicatesp-equal x) (not (member-equal a x)))))))

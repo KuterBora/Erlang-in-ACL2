@@ -18,19 +18,18 @@
 ; Inv of Run -------------------------------------------------------------------
 
 ; BOZO: It is expesnive to expand inv, it causes way too many big subgoals.
-; A temporary solution is the following lemmas.
+; The following is a temporary brute-force solution.
 
 (local (defruled run-idle-props
-  (b* ((pp (omap::lookup p net))
-       (wbind (wtree-bind pp))
+  (b* ((wbind (wtree-bind (omap::lookup p net)))
        (parent (omap::lookup 'Parent wbind))
        (children (erl-val-cons->lst (omap::lookup 'ChildPids wbind)))
-       (ns (apply-k (proc->s pp) (proc->klst pp))))
+       (ns (apply-k (proc->s (omap::lookup p net)) (proc->klst (omap::lookup p net)))))
   (implies
     (and
       (network-p net) (inv-all net)
       (pid-p p) (omap::assoc p net)
-      (equal (proc->ps pp) :idle)
+      (equal (proc->ps (omap::lookup p net)) :idle)
       (or (pid-p parent) (equal parent (make-erl-val-atom :val 'none)))
       (natp (erl-val-integer->val (omap::lookup 'Index wbind)))
       (pid-lst-p children))
@@ -58,31 +57,29 @@
   :expand (inv c net)))
 
 (local (defruled run-receive-props
-  (b* ((pp (omap::lookup p net)))
   (implies
     (and
       (network-p net) (pid-p p) (inv p net)
-      (equal (proc->ps pp) :receive)
-      (not (equal (omap::lookup 'Parent (wtree-bind pp)) p)))
-    (receiving-proc-p p pp net)))
+      (equal (proc->ps (omap::lookup p net)) :receive)
+      (not (equal (omap::lookup 'Parent (wtree-bind (omap::lookup p net))) p)))
+    (receiving-proc-p p (omap::lookup p net) net))
   :expand (inv p net)))
 
 (local (defruled run-receive-bind-props
-  (b* ((pp (omap::lookup p net))
-       (bind (erl-state->bind (proc->s pp)))
-       (wbind (wtree-bind pp))
+  (b* ((bind (erl-state->bind (proc->s (omap::lookup p net))))
+       (wbind (wtree-bind (omap::lookup p net)))
        (parent (omap::lookup 'Parent wbind))
        (children (erl-val-cons->lst (omap::lookup 'ChildPids wbind))))
   (implies
     (and
       (network-p net)
       (pid-p p) (omap::assoc p net)
-      (receiving-proc-p p pp net)
+      (receiving-proc-p p (omap::lookup p net) net)
       (or (pid-p parent) (equal parent (make-erl-val-atom :val 'none)))
       (pid-lst-p children))
     (and (pid-p (omap::lookup 'ChildHd bind))
          (pid-lst-p (erl-val-cons->lst (omap::lookup 'ChildTl bind)))
-         (wf-inbox-p (proc->inbox-new pp))
+         (wf-inbox-p (proc->inbox-new (omap::lookup p net)))
          (or (equal (erl-val-kind (omap::lookup 'ParentPid bind)) :pid)
              (equal (omap::lookup 'ParentPid bind) (make-erl-val-atom :val 'none))))))
   :enable (remaining-children remaining-children-p)
@@ -92,21 +89,21 @@
                 (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))))))
 
 (local (defruled run-receive-match-props
-  (b* ((pp (omap::lookup p net))
-       (bind (erl-state->bind (proc->s pp)))
-       (wbind (wtree-bind pp))
+  (b* ((proc (omap::lookup p net))
+       (bind (erl-state->bind (proc->s proc)))
+       (wbind (wtree-bind proc))
        (index (erl-val-integer->val (omap::lookup 'Index wbind)))
        (children (erl-val-cons->lst (omap::lookup 'ChildPids wbind)))
        (chd (omap::lookup 'ChildHd bind))
        (ctl (erl-val-cons->lst (omap::lookup 'ChildTl bind)))
        (c2 (car ctl))
-       (inbox (proc->inbox-new pp)))
+       (inbox (proc->inbox-new proc)))
   (implies
     (and
       (network-p net) (inv-all net) (wtree-p net)
       (pid-p p) (omap::assoc p net)
-      (equal (proc->ps pp) :receive)
-      (receiving-proc-p p pp net)
+      (equal (proc->ps proc) :receive)
+      (receiving-proc-p p proc net)
       (natp index)
       (pid-lst-p children)
       (inbox-contains inbox chd)
@@ -158,9 +155,9 @@
                  (erl-state->bind (proc->s (omap::lookup p net)))))))))
 
 (local (defruled run-receive-to-terminated-props-1
-  (b* ((pp (omap::lookup p net))
-       (bind (erl-state->bind (proc->s pp)))
-       (wbind (wtree-bind pp))
+  (b* ((proc (omap::lookup p net))
+       (bind (erl-state->bind (proc->s proc)))
+       (wbind (wtree-bind proc))
        (index (erl-val-integer->val (omap::lookup 'Index wbind)))
        (children (erl-val-cons->lst (omap::lookup 'ChildPids wbind)))
        (chd (omap::lookup 'ChildHd bind))
@@ -168,13 +165,13 @@
        (r (rightmost-child p net))
        (ri (erl-val-integer->val
              (omap::lookup 'Index (wtree-bind (omap::lookup r net)))))
-       (inbox (proc->inbox-new pp)))
+       (inbox (proc->inbox-new proc)))
   (implies
     (and
       (network-p net) (inv-all net) (wtree-p net)
       (pid-p p) (omap::assoc p net)
-      (equal (proc->ps pp) :receive)
-      (receiving-proc-p p pp net)
+      (equal (proc->ps proc) :receive)
+      (receiving-proc-p p proc net)
       (natp index)
       (pid-lst-p children)
       (pid-p chd)
@@ -233,72 +230,72 @@
             :enable rev))))))
 
 (local (defruled run-receive-to-terminated-props-2
-  (b* ((pp (omap::lookup p net))
-       (chd (omap::lookup 'ChildHd (erl-state->bind (proc->s pp)))))
+  (b* ((proc (omap::lookup p net))
+       (chd (omap::lookup 'ChildHd (erl-state->bind (proc->s proc)))))
   (implies
     (and (network-p net) (omap::assoc p net)
-         (receiving-proc-p p pp net)
-         (equal (proc->ps pp) :receive)
+         (receiving-proc-p p proc net)
+         (equal (proc->ps proc) :receive)
          (pid-p chd)
-         (inbox-contains (proc->inbox-new pp) chd))
+         (inbox-contains (proc->inbox-new proc) chd))
     (and (equal (proc->ps (omap::lookup chd net)) :terminated)
          (outbox-emptyp (proc->outbox (omap::lookup chd net)))
          (implies (not (consp (erl-val-cons->lst
                                 (omap::lookup 'ChildTl
-                                  (erl-state->bind (proc->s pp))))))
-                  (not (inbox-without (proc->inbox-new pp) chd))))))
+                                  (erl-state->bind (proc->s proc))))))
+                  (not (inbox-without (proc->inbox-new proc) chd))))))
   :enable (remaining-children-p remaining-children)
   :disable (wtree-bind0-of-reduce-receive-klst-p)))
 
 ; receive -> blocked
 (local (defruled inv-of-run-receive-no-match
-  (b* ((pp (omap::lookup p net))
-       (bind (erl-state->bind (proc->s pp)))
-       (wbind (wtree-bind pp))
-       (qp (omap::lookup pid net))
-       (qparent (omap::lookup 'Parent (wtree-bind qp))))
+  (b* ((proc (omap::lookup p net))
+       (bind (erl-state->bind (proc->s proc)))
+       (wbind (wtree-bind proc))
+       (qproc (omap::lookup pid net))
+       (qparent (omap::lookup 'Parent (wtree-bind qproc))))
   (implies
     (and
       (network-p net) (inv-all net)
       (pid-p p) (omap::assoc p net)
       (pid-p pid) (omap::assoc pid net)
-      (equal (proc->ps pp) :receive)
-      (receiving-proc-p p pp net)
+      (equal (proc->ps proc) :receive)
+      (receiving-proc-p p proc net)
       (not (equal (omap::lookup 'Parent wbind) p))
       (pid-lst-p (erl-val-cons->lst (omap::lookup 'ChildPids wbind)))
       (pid-p (omap::lookup 'ChildHd bind))
-      (wf-inbox-p (proc->inbox-new pp))
-      (not (inbox-contains (proc->inbox-new pp) (omap::lookup 'ChildHd bind)))
+      (wf-inbox-p (proc->inbox-new proc))
+      (not (inbox-contains (proc->inbox-new proc) (omap::lookup 'ChildHd bind)))
       (erl-val-p qparent)
-      (or (not (equal (proc->ps qp) :terminated))
-          (sent-message-wf qp (proc->outbox qp) qparent net))
-      (or (equal (proc->ps qp) :terminated)
+      (or (not (equal (proc->ps qproc) :terminated))
+          (sent-message-wf qproc (proc->outbox qproc) qparent net))
+      (or (equal (proc->ps qproc) :terminated)
           (parent-still-waiting-p pid qparent net)))
-    (inv pid (omap::update p (proc-receive pp) net))))
+    (inv pid (omap::update p (proc-receive proc) net))))
   :enable (remaining-children-p proc-receive-when-no-match)
   :disable (wtree-bind0-of-reduce-receive-klst-p)
   :use ((:instance inv-of-run-receive-to-blocked))))
 
 ; receive -> blocked / receive / terminated
 (local (defruled inv-of-run-receive-all-cases
-  (b* ((pp (omap::lookup p net))
-       (bind (erl-state->bind (proc->s pp)))
-       (wbind (wtree-bind pp))
+  (b* ((proc (omap::lookup p net))
+       (bind (erl-state->bind (proc->s proc)))
+       (wbind (wtree-bind proc))
        (parent (omap::lookup 'Parent wbind))
        (index (erl-val-integer->val (omap::lookup 'Index wbind)))
        (children (erl-val-cons->lst (omap::lookup 'ChildPids wbind)))
        (chd (omap::lookup 'ChildHd bind))
        (ctl (erl-val-cons->lst (omap::lookup 'ChildTl bind)))
-       (inbox (proc->inbox-new pp))
-       (qp (omap::lookup pid net))
-       (qparent (omap::lookup 'Parent (wtree-bind qp))))
+       (inbox (proc->inbox-new proc))
+       (qproc (omap::lookup pid net))
+       (qparent (omap::lookup 'Parent (wtree-bind qproc))))
   (implies
     (and
       (network-p net) (inv-all net) (wtree-p net)
       (pid-p p) (omap::assoc p net)
       (pid-p pid) (omap::assoc pid net)
-      (equal (proc->ps pp) :receive)
-      (receiving-proc-p p pp net)
+      (equal (proc->ps proc) :receive)
+      (receiving-proc-p p proc net)
       (or (pid-p parent) (equal parent (make-erl-val-atom :val 'none)))
       (not (equal parent p))
       (natp index)
@@ -309,11 +306,11 @@
       (or (equal (erl-val-kind (omap::lookup 'ParentPid bind)) :pid)
           (equal (omap::lookup 'ParentPid bind) (make-erl-val-atom :val 'none)))
       (erl-val-p qparent)
-      (or (not (equal (proc->ps qp) :terminated))
-          (sent-message-wf qp (proc->outbox qp) qparent net))
-      (or (equal (proc->ps qp) :terminated)
+      (or (not (equal (proc->ps qproc) :terminated))
+          (sent-message-wf qproc (proc->outbox qproc) qparent net))
+      (or (equal (proc->ps qproc) :terminated)
           (parent-still-waiting-p pid qparent net)))
-    (inv pid (omap::update p (proc-receive pp) net))))
+    (inv pid (omap::update p (proc-receive proc) net))))
   :cases ((not (inbox-contains (proc->inbox-new (omap::lookup p net))
                  (omap::lookup 'ChildHd
                    (erl-state->bind (proc->s (omap::lookup p net))))))
@@ -331,15 +328,15 @@
 ; inv of run --------------------------------------------------------------------
 
 (local (defruled inv-of-run-props
-  (b* ((qp (omap::lookup pid net))
-       (qparent (omap::lookup 'Parent (wtree-bind qp))))
+  (b* ((proc (omap::lookup pid net))
+       (parent (omap::lookup 'Parent (wtree-bind proc))))
     (implies
       (and (network-p net) (pid-p pid) (inv pid net))
       (and
-        (or (not (equal (proc->ps qp) :terminated))
-            (sent-message-wf qp (proc->outbox qp) qparent net))
-        (or (equal (proc->ps qp) :terminated)
-            (parent-still-waiting-p pid qparent net)))))
+        (or (not (equal (proc->ps proc) :terminated))
+            (sent-message-wf proc (proc->outbox proc) parent net))
+        (or (equal (proc->ps proc) :terminated)
+            (parent-still-waiting-p pid parent net)))))
   :expand (inv pid net)))
 
 ; receive -> any, for every node: the facts from inv-all.

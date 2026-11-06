@@ -125,7 +125,7 @@
   :enable wf-state-p))
 
 ; Induction schema for apply-k-of-sum-of-nats.
-(local (define apply-k-of-sum-induct (args k)
+(local (define eval-sum-of-nats-induct (args k)
   (declare (irrelevant k))
   :measure (nfix (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in args)))))
   :verify-guards nil
@@ -134,7 +134,7 @@
       nil
       (if (= (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in args)))) 0)
           t
-          (apply-k-of-sum-induct
+          (eval-sum-of-nats-induct
             (update-erl-state->bind
               (update-erl-state->in args
                 (erl-val-cons
@@ -145,7 +145,7 @@
             (erl-k (+ -5 (erl-k->fuel k)) '(:local-call sum_of_nats)))))))
 
 ; Base Case
-(local (defrule apply-k-of-sum-of-nats-base-case
+(local (defrule eval-sum-of-nats-base-case
   (implies
     (and
       ; there is enough fuel
@@ -167,7 +167,7 @@
   :use (:instance apply-k-of-local-call-when-match)))
 
 ; Inductive Step.
-(local (defrule apply-k-of-sum-of-nats-inductive-step
+(local (defrule eval-of-sum-of-nats-inductive-step
   (implies
     (and
       ; there is enough fuel
@@ -218,7 +218,7 @@
   :enable (omap::lookup-of-update apply-k-of-binop-expr1 apply-k-of-cons)))
 
 ; local call to sum_of_nats is equivalent to the acl2 sum-of-nats.
-(local (defrule apply-k-of-sum-of-nats
+(local (defrule eval-sum-of-nats
   (implies
     (and
       ; there is enough fuel for each recursive call
@@ -242,7 +242,7 @@
       (make-erl-val-integer :val
         (sum-of-nats
           (erl-val-integer->val (car (erl-val-cons->lst (erl-state->in s))))))))
-  :induct (apply-k-of-sum-induct s k)
+  :induct (eval-sum-of-nats-induct s k)
   :enable sum-of-nats))
 
 ; Now we use the existing ACL2 arithemtic books.
@@ -254,7 +254,7 @@
   :enable sum-of-nats))
 
 ; Closed of summation for the Erlang suum_of_nats.
-(defrule apply-k-of-sum-of-nats-closed-form
+(defrule eval-sum-of-nats-closed-form
   (implies
     (and
       ; there is enough fuel for each recursive call

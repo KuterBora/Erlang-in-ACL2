@@ -258,18 +258,6 @@
   (implies (root-p proc) (not (leaf-p proc)))
   :enable (root-p leaf-p))
 
-; Properties of any worker-tree node
-; (defruled wtree-node-fields
-;   (implies
-;     (or (leaf-p p) (root-p p))
-;     (and
-;       (pid-lst-p (erl-val-cons->lst (omap::lookup 'ChildPids (wtree-bind p))))
-;       (or
-;         (pid-p (omap::lookup 'Parent (wtree-bind p)))
-;         (equal (omap::lookup 'Parent (wtree-bind p)) (make-erl-val-atom :val 'none)))
-;       (natp (erl-val-integer->val (omap::lookup 'Index (wtree-bind p))))))
-;   :enable (leaf-p root-p wtree-node0-p))
-
 ; Wtree-Fields -----------------------------------------------------------------
 
 ; Helper function to extract the bindings of a wtree
@@ -278,50 +266,6 @@
     (list (omap::assoc 'Index bind)
           (omap::assoc 'Parent bind)
           (omap::assoc 'ChildPids bind))))
-
-; (defruled root-p-when-wtree-fields-equal
-;   (implies (equal (wtree-fields p1) (wtree-fields p2))
-;            (equal (root-p p1) (root-p p2)))
-;   :enable (root-p wtree-node0-p wtree-fields omap::lookup))
-
-; (defruled leaf-p-when-wtree-fields-equal
-;   (implies (equal (wtree-fields p1) (wtree-fields p2))
-;            (equal (leaf-p p1) (leaf-p p2)))
-;   :enable (leaf-p wtree-node0-p wtree-fields omap::lookup))
-
-; (defruled lookups-when-wtree-fields-equal
-;   (implies
-;     (equal (wtree-fields p1) (wtree-fields p2))
-;     (and (equal (omap::lookup 'Index (wtree-bind p1))
-;                 (omap::lookup 'Index (wtree-bind p2)))
-;         (equal (omap::lookup 'Parent (wtree-bind p1))
-;                 (omap::lookup 'Parent (wtree-bind p2)))
-;         (equal (omap::lookup 'ChildPids (wtree-bind p1))
-;                 (omap::lookup 'ChildPids (wtree-bind p2)))))
-;   :enable (wtree-fields omap::lookup))
-
-; TODO: This probably exists in a community book.
-; (defruled assoc-is-cons-of-lookup
-;   (implies (omap::assoc k m)
-;            (equal (omap::assoc k m) (cons k (omap::lookup k m))))
-;   :enable omap::lookup
-;   :use ((:instance omap::assoc-of-update
-;           (key1 k) (key k) (val (cdr (omap::assoc k m))) (map m)))
-;   :disable omap::assoc-of-update)
-
-; Two wtree nodes with the same bindings have the same wtree-fields.
-; (defruled wtree-fields-equal-when-bindings-equal
-;   (implies
-;     (and (or (leaf-p p1) (root-p p1))
-;          (or (leaf-p p2) (root-p p2))
-;          (equal (omap::lookup 'Index (wtree-bind p1))
-;                 (omap::lookup 'Index (wtree-bind p2)))
-;          (equal (omap::lookup 'Parent (wtree-bind p1))
-;                 (omap::lookup 'Parent (wtree-bind p2)))
-;          (equal (omap::lookup 'ChildPids (wtree-bind p1))
-;                 (omap::lookup 'ChildPids (wtree-bind p2))))
-;     (equal (wtree-fields p1) (wtree-fields p2)))
-;   :enable (wtree-fields assoc-is-cons-of-lookup))
 
 ; Updating a node without changing its auxillary bindings maintains root/leaf-p.
 (defrule wtree-fields-of-lookup-of-update

@@ -178,8 +178,7 @@
                 (no-duplicatesp-equal x))
        :enable prefixp)))
 
-; In a suffix cps of the children, the second child comes right after the
-; rightmost child of the first one.
+; the second child comes right after the rightmost child of the first one.
 (defruled check-indices-next-child
   (implies
     (and (network-p net) (pid-lst-p children) (pid-lst-p cps)
@@ -302,7 +301,7 @@
           (net0 (omap::update pid proc net)))
         (:instance wtree0-p-when-subset-of-keys
           (net1 (omap::update pid proc net)) (net net) (net0 net))))
-
+          
 
 ; TODO: This is a temporary solution for a proof in run.lisp.
 (defruled wtree-node-props
