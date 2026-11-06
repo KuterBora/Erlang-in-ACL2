@@ -12,7 +12,10 @@
 
 ; Erlang Receive ---------------------------------------------------------------
 
-; TODO: documentation
+; Attempt to receive a message by trying to match it the clauses of
+; the receive expression. If successful, return the body of that clause.
+; If no clauses match, return '(:blocked) which will make the evaluator
+; pass control back to the scheduler.
 (define eval-receive ((s erl-state-p) (cls erl-clause-list-p))
   :returns (mv (rs erl-state-p) (body expr-list-p))
   (b* (((erl-state s) (erl-state-fix s))

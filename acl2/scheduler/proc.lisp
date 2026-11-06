@@ -16,23 +16,29 @@
   (:idle :terminated :receive :blocked))
 
 (fty::defprod proc
-  (; state of the Erlang process
+  (; State of the Erlang process
    (ps proc-state-p :default :idle)
 
-   ; BOZO: state of the Erlang program run by the process
+   ; State of the Erlang program run by the process
    (s erl-state-p :default (make-erl-state))
 
-   ; BOZO: the messages received, but not yet tried on the next
-   ; receive. This makes implementation easier later on.
+   ; TODO: while it is not necessary to split the inbox as done
+   ; below, it has made some parts of the implementation and proofs
+   ; easier. However, the scheduler has changed a lot since then,
+   ; and they may no longer be useful.
+
+   ; Messages that have been received, but not yet matched in a
+   ; receive expression.
    (inbox-new erl-vlst-p :default nil)
 
-   ; BOZO: messages that have been received and have already been
-   ; tried by the next receive. This makes implementation easier later on.
+   ; Messages that have been received and have been tried to be matched
+   ; by the current receive expression, and have failed.
    (inbox-tried erl-vlst-p :default nil)
    
    ; the remaining computation
    (klst erl-klst-p :default nil)))
 
+; Get the PID of a process.
 (define proc->pid ((p proc-p))
   :returns (pid pid-p)
   (b* ((p (proc-fix p)))
@@ -51,6 +57,7 @@
       (equal (proc->pid (proc ps s inew itried klst))
              (erl-state->self (erl-state-fix s)))))
 
+; Get the outbox of a process.
 (define proc->outbox ((p proc-p))
   :returns (o outbox-p)
   (b* ((p (proc-fix p)))
@@ -58,6 +65,7 @@
   ///
     (defcong proc-equiv equal (proc->outbox p) 1))
 
+; Check if a process if runnable.
 (define proc-runnable? ((p proc-p))
   :returns (b booleanp)
   (b* ((p (proc-fix p)))
@@ -66,6 +74,7 @@
   ///
     (defcong proc-equiv equal (proc-runnable? p) 1))
 
+; Check if a process has a message for the given destination process.
 (define proc-has-message-for-dst? ((p proc-p) (dst pid-p))
   (b* ((p (proc-fix p))
        (dst (pid-fix dst)))

@@ -8,43 +8,38 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "../../theorems/top")
+(include-book "../../eval/top")
 
 (set-induction-depth-limit 1)
 
-;; An Erlang World with the following functions defined locally:
-;; - Remark: When Erlang is run on the command line, the module is set to 'local.
-;;   Normally, functions like [add] would be defined in a different module
-;;   which we would then have to import (or do a remote call [m:f()]) but I will
-;;   ignore that here for simplicity by defining [add] in the local module.
-;;
-;; add(X, Y) when is_integer(X), is_integer(Y) -> X + Y.
-;;
-(define add-test-w ()
-  :returns (w world-p)
+; An Erlang World with the following function defined locally:
+;
+; add(X, Y) when is_integer(X), is_integer(Y) -> X + Y.
+;
+; We make no claim about the rest of the world, i.e. there could be other
+; modules and functions.
+(define add-world-p ((w world-p))
   :enabled t
-  '((local
-      (attrs (module . local)
-             (export)
-             (import))
-      (fn-defns
-        (((name . add) (arity . 2))
-         ((cases (:var X) (:var Y))
-          (guards ((:call is_integer (:cons (:var X) (:nil))) 
-                   (:call is_integer (:cons (:var Y) (:nil)))))
-          (body (:binop
-                  + 
-                  (:var X) 
-                  (:var Y)))))))))
+  (b* (((unless (omap::assoc 'local w)) nil)
+       (defns (module->fn-defns (omap::lookup 'local w)))
+       (fn '((name . add) (arity . 2)))
+       ((unless (omap::assoc fn defns)) nil))
+      (equal
+        (omap::lookup fn defns)
+        '(((cases (:var X) (:var Y))
+           (guards ((:call is_integer (:cons (:var X) (:nil))) 
+                    (:call is_integer (:cons (:var Y) (:nil)))))
+           (body (:binop + (:var X) (:var Y))))))))
 
-; Steps: 93998
+; Show that calling [add X Y] returns [X + Y].
 (defrule apply-k-of-add
   (b* (; The starting state is well-formed
        ((unless (wf-state-p s)) t)
+       ((if (equal (erl-val-kind (erl-state->in s)) :excpt)) t)
        ((erl-state s) s)
 
        ; The state has the world defined above.
-       ((unless (equal s.world (add-test-w))) t)
+       ((unless (add-world-p s.world)) t)
        ((unless (equal s.module 'local)) t)
        
        ; The next continuation calls add(X, Y).
@@ -66,7 +61,8 @@
     (equal (erl-state->in (apply-k s (cons k nil)))
            (erl-val-integer (+ (erl-val-integer->val (car vals))
                                (erl-val-integer->val (cadr vals))))))
- :enable (apply-k-of-local-call-when-match eval-local-call eval-clauses
-          eval-clauses-when-consp
-          match-args eval-match eval-guard-seq eval-guard-seq-when-consp
-          eval-guard eval-guard-expr eval-bif apply-k-of-binop-expr1))
+ :use (:instance apply-k-of-local-call-when-match)
+ :enable (omap::lookup-of-update eval-local-call eval-clauses
+          eval-clauses-when-consp match-args eval-match eval-guard-seq
+          eval-guard-seq-when-consp eval-guard eval-guard-expr eval-bif
+          apply-k-of-binop-expr1))

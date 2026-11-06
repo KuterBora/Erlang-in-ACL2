@@ -8,188 +8,164 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "../top")
+(include-book "util")
 
-; Reduce Example --------------------------------------------------------------
+; Example 2: Reduce -----------------------------------------------------------
 
-; An example Lin & Snyder style reduce that computes the sum over a list of integers.
-
-
-; Lin & Snyder style reduce:
-; called by the leaves.
-; returns the GrandTotal to each leaf.
-; reduce({ParentPid, ChildPids}, Value) ->
-;   reduce(ParentPid, ChildPids, Value).
+; Lin & Snyder style reduce, and the corresponding Erlang world.
 ;
-; reduce(none, [], GrandTotal) -> GrandTotal;
-; reduce(ParentPid, [], MyTotal) ->
+; reduce({ParentPid, ChildPids}, CombineFun, Value) ->
+;   reduce(ParentPid, ChildPids, CombineFun, Value).
+;
+; reduce(none, [], _, GrandTotal) -> GrandTotal;
+; reduce(ParentPid, [], _, MyTotal) ->
 ;   ParentPid ! {self(), reduce_up, MyTotal},
 ;   receive
 ;     {ParentPid, reduce_down, GrandTotal} -> GrandTotal
 ;   end;
-; reduce(Parent, [ChildHd | ChildTl], LeftTotal) ->
+; reduce(Parent, [ChildHd | ChildTl], CombineFun, LeftTotal) ->
 ;   receive
 ;     {ChildHd, reduce_up, RightTotal} ->
 ;       GrandTotal =
-;         reduce(Parent, ChildTl, LeftTotal + RightTotal),
+;         reduce(Parent, ChildTl, CombineFun, CombineFun(LeftTotal, RightTotal)),
 ;       ChildHd ! {self(), reduce_down, GrandTotal},
 ;       GrandTotal
 ;   end.
-(local (define sum-reduce-w1 ()
+
+(local (define reduce-world ()
   :returns (w world-p)
   '((local
       (attrs (module . local) (export) (import))
       (fn-defns
-        (((name . init_sum_reduce) (arity . 2))
+        ; reduce/3
+        (((name . reduce) (arity . 3))
          ((cases
-            (:tuple
-              (:cons (:var ParentPid)
-                     (:cons (:var ChildPids)
-                            (:nil))))
+            (:tuple (:cons (:var ParentPid) (:cons (:var ChildPids) (:nil))))
+            (:var CombineFun)
             (:var Value))
           (guards)
           (body
-            (:call
-              sum_reduce
-              (:cons (:var ParentPid)
-                     (:cons (:var ChildPids)
-                            (:cons (:var Value)
-                                   (:nil))))))))
-        (((name . sum_reduce) (arity . 3))
-         ((cases (:atom none) (:nil) (:var GrandTotal))
+            ; reduce(ParentPid, ChildPids, CombineFun, Value)
+            (:call reduce
+               (:cons (:var ParentPid)
+                 (:cons (:var ChildPids)
+                   (:cons (:var CombineFun)
+                     (:cons (:var Value) (:nil)))))))))
+        ; reduce/4
+        (((name . reduce) (arity . 4))
+         ; reduce(none, [], _, GrandTotal)
+         ((cases (:atom none) (:nil) (:var _) (:var GrandTotal))
           (guards)
           (body (:var GrandTotal)))
-
-         ((cases (:var ParentPid) (:nil) (:var MyTotal))
+         ; reduce(ParentPid, [], _, MyTotal)
+         ((cases (:var ParentPid) (:nil) (:var _) (:var MyTotal))
           (guards)
           (body
+            ; ParentPid ! {self(), reduce_up, MyTotal}
             (:binop !
               (:var ParentPid)
-              (:tuple (:cons (:call self (:nil))
-                             (:cons (:atom reduce_up)
-                                    (:cons (:var MyTotal)
-                                           (:nil))))))
+              (:tuple
+                (:cons (:call self (:nil))
+                  (:cons (:atom reduce_up)
+                    (:cons (:var MyTotal) (:nil))))))
+            ; receive {ParentPid, reduce_down, GrandTotal} -> GrandTotal end
             (:receive
               (((cases
-                  (:tuple (:cons (:var ParentPid)
-                                 (:cons (:atom reduce_down)
-                                        (:cons (:var GrandTotal)
-                                               (:nil))))))
+                  (:tuple
+                    (:cons (:var ParentPid)
+                      (:cons (:atom reduce_down)
+                        (:cons (:var GrandTotal) (:nil))))))
                 (guards)
                 (body (:var GrandTotal)))))))
-
-         ((cases (:var Parent) (:var ChildPids) (:var LeftTotal))
+         ; reduce(Parent, [ChildHd | ChildTl], CombineFun, LeftTotal)
+         ((cases (:var Parent) (:cons (:var ChildHd) (:var ChildTl))
+                 (:var CombineFun) (:var LeftTotal))
           (guards)
           (body
-            (:match (:var ChildHd) (:call hd (:cons (:var ChildPids) (:nil))))
-            (:match (:var ChildTl) (:call tl (:cons (:var ChildPids) (:nil))))
+            ; receive {ChildHd, reduce_up, RightTotal} -> ... end
             (:receive
               (((cases
-                  (:tuple (:cons (:var ChildHd)
-                                 (:cons (:atom reduce_up)
-                                        (:cons (:var RightTotal)
-                                               (:nil))))))
+                  (:tuple
+                    (:cons (:var ChildHd)
+                      (:cons (:atom reduce_up)
+                        (:cons (:var RightTotal) (:nil))))))
                 (guards)
+                ; GrandTotal = reduce(...)
                 (body
                   (:match
                     (:var GrandTotal)
-                    (:call sum_reduce
+                    (:call reduce
                       (:cons (:var Parent)
-                             (:cons (:var ChildTl)
-                                    (:cons (:binop + (:var LeftTotal) (:var RightTotal))
-                                           (:nil))))))
+                        (:cons (:var ChildTl)
+                          (:cons (:var CombineFun)
+                            (:cons (:fun-call (:var CombineFun)
+                                      (:cons (:var LeftTotal)
+                                        (:cons (:var RightTotal) (:nil))))
+                                    (:nil)))))))
+                  ; ChildHd ! {self(), reduce_down, GrandTotal}
                   (:binop !
                     (:var ChildHd)
-                    (:tuple (:cons (:call self (:nil))
-                                   (:cons (:atom reduce_down)
-                                          (:cons (:var GrandTotal)
-                                                 (:nil))))))
+                    (:tuple
+                      (:cons (:call self (:nil))
+                        (:cons (:atom reduce_down)
+                          (:cons (:var GrandTotal) (:nil))))))
+                  ; GrandTotal
                   (:var GrandTotal)))))))))))))
 
-; Create a process with given id, parent id, child ids, and value.
-(local (define make-reduce-proc ((self pid-p) (parent erl-val-p) (children erl-vlst-p) (value natp))
-  :guard-hints (("Goal" :in-theory (enable omap::from-lists)))
+; Create a process that will call reduce with the given arguments.
+(local (define make-reduce-proc ((self pid-p) (parent erl-val-p) (children erl-vlst-p) (fn erl-fun-p) (value erl-val-p))
+  :verify-guards nil
   (b* ((self (pid-fix self))
        (parent (erl-val-fix parent))
-       (value (nfix value))
-       (children (erl-vlst-fix children)))
-    (make-proc
-      :s
-        (make-erl-state
-          :bind
-            (omap::from-lists
-              (list 'ChildPids 'Parent 'Value)
-              (list (make-erl-val-cons :lst children) parent (make-erl-val-integer :val value)))
-            :self self
-            :world (sum-reduce-w1))
-      :klst
-        (list
-          (make-erl-k
-            :fuel 1000
-            :kont
-              (make-kont-expr
-                :expr
-                  (make-node-call
-                    :fn 'init_sum_reduce
-                    :args
-                      (make-node-cons
-                        :hd
-                          (make-node-tuple
-                            :lst 
-                              (make-node-cons
-                                :hd (make-node-var :id 'Parent)
-                                :tl (make-node-cons
-                                      :hd (make-node-var :id 'ChildPids)
-                                      :tl (make-node-nil))))
+       (children (erl-vlst-fix children))
+       (fn (erl-fun-fix fn))
+       (value (erl-val-fix value)))
+      (make-expr-proc
+        self
+        (omap::from-lists
+          (list 'Parent 'ChildPids 'CombineFun 'Value)
+          (list parent (make-erl-val-cons :lst children) fn value))
+        (reduce-world)
+        (make-node-call
+          :fn 'reduce
+          :args
+            (make-node-cons
+              :hd
+                (make-node-tuple
+                  :lst
+                    (make-node-cons
+                      :hd (make-node-var :id 'Parent)
+                      :tl (make-node-cons
+                            :hd (make-node-var :id 'ChildPids)
+                            :tl (make-node-nil))))
+                :tl (make-node-cons
+                        :hd (make-node-var :id 'CombineFun)
                         :tl (make-node-cons
                               :hd (make-node-var :id 'Value)
-                              :tl (make-node-nil)))))))))))
+                              :tl (make-node-nil)))))))))
 
-; example with 4 processes
-(local (defconst *net1*
-  (omap::from-lists
-    '((:pid 1) (:pid 2) (:pid 3) (:pid 4))
-     (list
-      (make-reduce-proc '(:pid 1) '(:atom none) (list '(:pid 2) '(:pid 3)) 1)
-      (make-reduce-proc '(:pid 2) '(:pid 1) nil 2)
-      (make-reduce-proc '(:pid 3) '(:pid 1) (list '(:pid 4)) 3)
-      (make-reduce-proc '(:pid 4) '(:pid 3) nil 4)))))
-
-; Execute the network and print the results.
-#| 
-  (b* ((result (erl-runner *net1* 22))
-       (- (cw "The final leaf values are: ~%"))
-      )
-      (list
-        (erl-state->in (proc->s (omap::lookup '(:pid 1) result)))
-        (erl-state->in (proc->s (omap::lookup '(:pid 2) result)))
-        (erl-state->in (proc->s (omap::lookup '(:pid 3) result)))
-        (erl-state->in (proc->s (omap::lookup '(:pid 4) result)))))
-|#
-
-
-; Example for any number of processes.
-; This still assumes the individual parts of the leafs has been computed,
-; and that a worker tree has been created in Erlang, corresponding to the
-; result of the following lisp function.
-
-(local (include-book "arithmetic-3/top" :dir :system))
-
-(local (define create-wtree ((n natp) (par erl-val-p) (children erl-vlst-p) (self natp) (vlst nat-listp))
-  ;returns (net network-p)
+; Create a worker tree of [n] processes, where each leaf has already finished the sequential work
+; and is about to call reduce. This is a lot simpler than what might happen in a real Erlang program,
+; where some processes could call reduce while other processes are not done with their sequential
+; work yet. More importantly, in this worker tree, the PID of a process is equal to the process' index,
+; which definitely would not in an Erlang program. There is another exaqmple in books/reduce-v2 that
+; has a more accurate worker tree. 
+(local (define create-wtree ((n natp) (par erl-val-p) (chl erl-vlst-p) (self natp) (fn erl-fun-p) (vlst erl-vlst-p))
+  :prepwork ((local (include-book "arithmetic-3/top" :dir :system)))
   :verify-guards nil
   :measure (nfix n)
   (b* ((n (nfix n))
        (par (erl-val-fix par))
-       (children (erl-vlst-fix children))
+       (chl (erl-vlst-fix chl))
        (self (nfix self))
-       (vlst (nat-list-fix vlst))
+       (fn (erl-fun-fix fn))
+       (vlst (erl-vlst-fix vlst))
        ((unless (nth self vlst)) nil)
        ((if (zp n)) nil)
        ((if (equal n 1))
         (omap::update
           (make-erl-val-pid :id self)
-          (make-reduce-proc (make-erl-val-pid :id self) par children (nth self vlst))
+          (make-reduce-proc (make-erl-val-pid :id self) par chl fn (nth self vlst))
           nil))
        (child-net
         (create-wtree
@@ -197,30 +173,40 @@
           (make-erl-val-pid :id self)
           nil
           (+ self (floor n 2))
+          fn
           vlst))
        (parent-net
         (create-wtree
           (- n (ceiling n 2))
           par
-          (cons (make-erl-val-pid :id (+ self (floor n 2))) children)
+          (cons (make-erl-val-pid :id (+ self (floor n 2))) chl)
           self
+          fn
           vlst))
        ((unless (omap::compatiblep parent-net child-net)) nil))
       (omap::update* parent-net child-net))))
 
-; Reduce network with 10 processes.
-(local (defconst *net2* (create-wtree 10 '(:atom none) nil 0 (list 7 16 2 19 11 6 16 8 3 12)))
-)
-; helper to print the leaf values
-(local (define print-omap-values ((n network-p))
-  :measure (acl2-count (network-fix n))
-  (b* ((n (network-fix n))
-       ((if (omap::emptyp n)) 'ok)
-       (val (erl-state->in (proc->s (omap::head-val n))))
-       (- (cw "~x0~%" val)))
-    (print-omap-values (omap::tail n)))))
+; Reduce network with 10 processes, where CombineFun = fun(X, Y) -> X + Y end.
+; Test with: (print-omap-values (erl-runner *reduce-sum* 64))
+(local (defconst *reduce-sum*
+  (create-wtree
+    10 '(:atom none) nil 0
+    (make-erl-val-fun
+      :arity 2
+      :cls '(((cases (:var X) (:var Y)) (guards) (body (:binop + (:var X) (:var Y)))))
+      :bind nil
+      :module 'local)
+    (ints-to-erl-ints (list 7 16 2 19 11 6 16 8 3 12)))))
 
-; Execute the network and print the results.
-#| 
-  (print-omap-values (erl-runner *net2* 64))
-|#
+; Reduce network with 10 processes, where CombineFun = fun(X, Y) -> max(X, Y) end.
+; Test with: (print-omap-values (erl-runner *reduce-max* 64))
+(local (defconst *reduce-max*
+  (create-wtree
+    10 '(:atom none) nil 0
+    (make-erl-val-fun
+      :arity 2
+      :cls '(((cases (:var X) (:var Y)) (guards)
+              (body (:call max (:cons (:var X) (:cons (:var Y) (:nil)))))))
+      :bind nil
+      :module 'local)
+    (ints-to-erl-ints (list 1 0 2 19 11 36 16 8 -3 12)))))

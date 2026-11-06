@@ -6,6 +6,7 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 (include-book "eval-match")
 (include-book "eval-guards")
@@ -14,17 +15,16 @@
 
 ; Returns the body of the first clause which has patterns that can match the 
 ; given args, and a has guard sequence that is satisfied. If no clauses match, 
-; nil is returned, and the caller can decide on the appropiate clause error.
+; nil is returned, and the caller can throw the appropiate clause error.
 ;
 ; If a clause causes an exception during pattern maching or guard evaluation
-; for any reason, it is treated as if the clause failed to match the arguments
-; and it is skipped. Remark: some operations that would cause an exceptions in
+; for any reason, it is treated as if the clause failed to match and it is skipped.
+;
+; Remark: some operations that would have caused an exceptions in
 ; expression context might instead cause a rejection in a different context.
 ; For example, '1 div 0' as an expression would throw a badarith exception, but
-; as an arithmetic expression used in a pattern it would instead cause a compiler
-; error, as arithemtic expressions in patterns are evaluated at compile time.
-; (Meanwhile, in a guard sequence, a badarith expression is treated the same way as 
-; the guard evaluating to false).
+; as a pattern it would instead cause a compiler error, as arithemtic expressions
+; in patterns are evaluated at compile time.
 ;
 (define eval-clauses-when-consp ((args erl-vlst-p) (cls erl-clause-list-p) (s erl-state-p))
   :returns (mv (rs erl-state-p) (body expr-list-p))
@@ -33,7 +33,7 @@
        (cls (erl-clause-list-fix cls))
        (s (erl-state-fix s))
        
-       ; No clauses matched -- the caller can return the appropiate clause error.
+       ; No clauses matched -- the caller can throw the appropiate clause error.
        ((if (null cls)) (mv s nil))
 
        ; Pick the first clause, get its cases and guards.
@@ -47,7 +47,7 @@
        ; Attempt to match cases to args.
        ((erl-state ms) (match-args cases args s))
        
-       ; If a case fails to match, try rest of the clauses. 
+       ; If a case fails to match, try the rest. 
        ((if (equal (erl-val-kind ms.in) :excpt)) (mv rs body))
 
        ; Propagate rejections.
@@ -78,9 +78,8 @@
 ; case where no clauses are passed to the evaluator initially. If the evaluator 
 ; runs out of clauses to try, it returns nil, and the caller can decide the
 ; appropiate exception to throw. However, if, initially, no clauses are given to
-; the evaluator, that is a cause for rejection -- Erlang expects at least one
-; clause in a clause-list.
-
+; the evaluator, that is a cause for rejection -- the Erlang compiler expects at
+; least one clause in a clause-list.
 (define eval-clauses ((args erl-vlst-p) (cls erl-clause-list-p) (s erl-state-p))
   :returns (mv (s erl-state-p) (body expr-list-p))
   (b* ((args (erl-vlst-fix args))

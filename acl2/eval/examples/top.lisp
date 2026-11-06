@@ -6,10 +6,13 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 
-(include-book "anon-functions")
+(include-book "util")
 (include-book "basic")
-(include-book "clauses")
 (include-book "comparison")
+(include-book "clauses")
+(include-book "anon-functions")
 (include-book "functions")
+(include-book "try-catch")

@@ -11,10 +11,10 @@
 
 (include-book "eval/top")
 (include-book "eval/examples/top")
-
-(include-book "theorems/top")
+(include-book "eval/theorems/top")
 
 (include-book "scheduler/top")
 (include-book "scheduler/examples/top")
+(include-book "scheduler/theorems/top")
 
 (include-book "books/top")

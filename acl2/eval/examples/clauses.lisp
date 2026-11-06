@@ -8,369 +8,237 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "../top")
-(include-book "std/testing/assert-equal" :dir :system)
+(include-book "util")
 
 ; This file contains some tests for evaluating if and case clauses
 
-; TODO: 
-; This file probably does not have enough tests. Especially for error conditions.
-
-
 ; Erlang If --------------------------------------------------------------------
 
-; If constructor
-
 ; if
-;   X, Y -> 2 - 1;
-;   X > 0 -> 2;
+;   X, Y -> 1;
+;   X > 0 -> 2; 
 ;   false; Y; false -> 3;
 ;   1 div 0; X == -1 -> 4;
 ;   true -> 5
-; end.
-; (make-node-if 
-;   :clauses 
-;     (list
-;       (make-node-clause 
-;         :cases nil
-;         :guards '(((:var X) (:var Y)))
-;         :body '((:binop - (:integer 2) (:integer 1))))
-;       (make-node-clause
-;         :cases nil
-;         :guards '(((:binop > (:var X) (:integer 0))))
-;         :body '((:integer 2)))
-;       (make-node-clause 
-;         :cases nil
-;         :guards '(((:atom false)) ((:var Y)) ((:atom false)))
-;         :body '((:integer 3)))
-;       (make-node-clause 
-;         :cases nil                 
-;         :guards '(((:binop div (:integer 1) (:integer 0))) 
-;                   ((:binop == (:var X) (:integer -1)))) 
-;         :body '((:integer 4)))
-;       (make-node-clause 
-;         :cases nil                 
-;         :guards '(((:atom true))) 
-;         :body '((:integer 5)))))
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :atom true) (Y :atom true)))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr 
-              '(:if 
-                (((cases)
-                  (guards ((:var X) (:var Y)))
-                  (body (:binop - (:integer 2) (:integer 1))))
-                 ((cases)
-                  (guards ((:binop > (:var X) (:integer 0))))
-                  (body (:integer 2)))
-                 ((cases)
-                  (guards ((:atom false))
-                          ((:var Y))
-                          ((:atom false)))
-                  (body (:integer 3)))
-                 ((cases)
-                  (guards ((:binop div (:integer 1) (:integer 0)))
-                          ((:binop == (:var X) (:integer -1))))
-                  (body (:integer 4)))
-                 ((cases)
-                  (guards ((:atom true)))
-                  (body (:integer 5)))))))))
-  (make-erl-state :in '(:integer 1) :bind '((X :atom true) (Y :atom true))))
+; X = true, Y = true
+(assert-equal
+  (eval-expr-bind-val
+    '(:if
+      (((cases)
+        (guards ((:var X) (:var Y)))
+        (body (:integer 1)))
+       ((cases)
+        (guards ((:binop > (:var X) (:integer 0))))
+        (body (:integer 2)))
+       ((cases)
+        (guards ((:atom false)) ((:var Y)) ((:atom false)))
+        (body (:integer 3)))
+       ((cases)
+        (guards ((:binop div (:integer 1) (:integer 0)))
+                ((:binop == (:var X) (:integer -1))))
+        (body (:integer 4)))
+      ((cases)
+       (guards ((:atom true)))
+       (body (:integer 5)))))
+    '((X :atom true) (Y :atom true)))
+  '(:integer 1))
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :integer 1) (Y :atom true)))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr 
-              '(:if 
-                (((cases)
-                  (guards ((:var X) (:var Y)))
-                  (body (:binop - (:integer 2) (:integer 1))))
-                 ((cases)
-                  (guards ((:binop > (:var X) (:integer 0))))
-                  (body (:integer 2)))
-                 ((cases)
-                  (guards ((:atom false))
-                          ((:var Y))
-                          ((:atom false)))
-                  (body (:integer 3)))
-                 ((cases)
-                  (guards ((:binop div (:integer 1) (:integer 0)))
-                          ((:binop == (:var X) (:integer -1))))
-                  (body (:integer 4)))
-                 ((cases)
-                  (guards ((:atom true)))
-                  (body (:integer 5)))))))))
-  (make-erl-state :in '(:integer 2) :bind '((X :integer 1) (Y :atom true))))
+; X = 1, Y = true
+(assert-equal
+  (eval-expr-bind-val
+    '(:if
+      (((cases)
+        (guards ((:var X) (:var Y)))
+        (body (:integer 1)))
+       ((cases)
+        (guards ((:binop > (:var X) (:integer 0))))
+        (body (:integer 2)))
+       ((cases)
+        (guards ((:atom false)) ((:var Y)) ((:atom false)))
+        (body (:integer 3)))
+       ((cases)
+        (guards ((:binop div (:integer 1) (:integer 0)))
+                ((:binop == (:var X) (:integer -1))))
+        (body (:integer 4)))
+      ((cases)
+       (guards ((:atom true)))
+       (body (:integer 5)))))
+    '((X :integer 1) (Y :atom true)))
+  '(:integer 2))
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :integer -1) (Y :atom true)))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr 
-              '(:if 
-                (((cases)
-                  (guards ((:var X) (:var Y)))
-                  (body (:binop - (:integer 2) (:integer 1))))
-                 ((cases)
-                  (guards ((:binop > (:var X) (:integer 0))))
-                  (body (:integer 2)))
-                 ((cases)
-                  (guards ((:atom false))
-                          ((:var Y))
-                          ((:atom false)))
-                  (body (:integer 3)))
-                 ((cases)
-                  (guards ((:binop div (:integer 1) (:integer 0)))
-                          ((:binop == (:var X) (:integer -1))))
-                  (body (:integer 4)))
-                 ((cases)
-                  (guards ((:atom true)))
-                  (body (:integer 5)))))))))
-  (make-erl-state :in '(:integer 3) :bind '((X :integer -1) (Y :atom true))))
+; X = -1, Y = true
+(assert-equal
+  (eval-expr-bind-val
+    '(:if
+      (((cases)
+        (guards ((:var X) (:var Y)))
+        (body (:integer 1)))
+       ((cases)
+        (guards ((:binop > (:var X) (:integer 0))))
+        (body (:integer 2)))
+       ((cases)
+        (guards ((:atom false)) ((:var Y)) ((:atom false)))
+        (body (:integer 3)))
+       ((cases)
+        (guards ((:binop div (:integer 1) (:integer 0)))
+                ((:binop == (:var X) (:integer -1))))
+        (body (:integer 4)))
+      ((cases)
+       (guards ((:atom true)))
+       (body (:integer 5)))))
+    '((X :integer -1) (Y :atom true)))
+  '(:integer 3))
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :integer -1) (Y :atom false)))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr 
-              '(:if 
-                (((cases)
-                  (guards ((:var X) (:var Y)))
-                  (body (:binop - (:integer 2) (:integer 1))))
-                 ((cases)
-                  (guards ((:binop > (:var X) (:integer 0))))
-                  (body (:integer 2)))
-                 ((cases)
-                  (guards ((:atom false))
-                          ((:var Y))
-                          ((:atom false)))
-                  (body (:integer 3)))
-                 ((cases)
-                  (guards ((:binop div (:integer 1) (:integer 0)))
-                          ((:binop == (:var X) (:integer -1))))
-                  (body (:integer 4)))
-                 ((cases)
-                  (guards ((:atom true)))
-                  (body (:integer 5)))))))))
-  (make-erl-state :in '(:integer 4) :bind '((X :integer -1) (Y :atom false))))
+; X = -1, Y = false
+(assert-equal
+  (eval-expr-bind-val
+    '(:if
+      (((cases)
+        (guards ((:var X) (:var Y)))
+        (body (:integer 1)))
+       ((cases)
+        (guards ((:binop > (:var X) (:integer 0))))
+        (body (:integer 2)))
+       ((cases)
+        (guards ((:atom false)) ((:var Y)) ((:atom false)))
+        (body (:integer 3)))
+       ((cases)
+        (guards ((:binop div (:integer 1) (:integer 0)))
+                ((:binop == (:var X) (:integer -1))))
+        (body (:integer 4)))
+      ((cases)
+       (guards ((:atom true)))
+       (body (:integer 5)))))
+    '((X :integer -1) (Y :atom false)))
+  '(:integer 4))
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :integer -2) (Y :atom false)))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr 
-              '(:if 
-                (((cases)
-                  (guards ((:var X) (:var Y)))
-                  (body (:binop - (:integer 2) (:integer 1))))
-                 ((cases)
-                  (guards ((:binop > (:var X) (:integer 0))))
-                  (body (:integer 2)))
-                 ((cases)
-                  (guards ((:atom false))
-                          ((:var Y))
-                          ((:atom false)))
-                  (body (:integer 3)))
-                 ((cases)
-                  (guards ((:binop div (:integer 1) (:integer 0)))
-                          ((:binop == (:var X) (:integer -1))))
-                  (body (:integer 4)))
-                 ((cases)
-                  (guards ((:atom true)))
-                  (body (:integer 5)))))))))
-  (make-erl-state :in '(:integer 5) :bind '((X :integer -2) (Y :atom false))))
-
+; X = -2, Y = false 
+(assert-equal
+  (eval-expr-bind-val
+    '(:if
+      (((cases)
+        (guards ((:var X) (:var Y)))
+        (body (:integer 1)))
+       ((cases)
+        (guards ((:binop > (:var X) (:integer 0))))
+        (body (:integer 2)))
+       ((cases)
+        (guards ((:atom false)) ((:var Y)) ((:atom false)))
+        (body (:integer 3)))
+       ((cases)
+        (guards ((:binop div (:integer 1) (:integer 0)))
+                ((:binop == (:var X) (:integer -1))))
+        (body (:integer 4)))
+      ((cases)
+       (guards ((:atom true)))
+       (body (:integer 5)))))
+    '((X :integer -2) (Y :atom false)))
+  '(:integer 5))
 
 ; Erlang Case ------------------------------------------------------------------
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :tuple ((:integer 1) (:integer 2)))))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr
-              '(:case-of 
-                (:var X)
-                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
-                  (guards ((:binop == (:var One) (:integer 1))))
-                  (body (:binop + (:var One) (:integer 2))))
-                 ((cases (:tuple
-                           (:cons (:var Two)
-                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
-                  (guards ((:binop == (:var Two) (:integer 2))))
-                  (body (:binop * (:var Two) (:var Two))))
-                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                           (:binop >= (:var Nat) (:integer 0))))
-                  (body (:atom at_least_it_is_nat)))
-                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Int) (:nil)))))
-                  (body (:atom at_least_it_is_int)))
-                 ((cases (:var _))
-                  (guards)
-                  (body (:atom no_match_at_all)))))))))
-  (make-erl-state 
-    :in '(:integer 3) 
-    :bind '((One :integer 1)
-            (X :tuple ((:integer 1) (:integer 2))))))
+; case X of
+;   {0, B} -> err;
+;   {A, B} when is_integer(A), A >= 0 -> B div A;
+;   {A, B} when is_integer(A) -> B div (-1 * A);
+;   {_, B} -> A = 1, B
+; end.  
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :tuple ((:integer 2) (:integer 2)))))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr
-              '(:case-of 
-                (:var X)
-                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
-                  (guards ((:binop == (:var One) (:integer 1))))
-                  (body (:binop + (:var One) (:integer 2))))
-                 ((cases (:tuple
-                           (:cons (:var Two)
-                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
-                  (guards ((:binop == (:var Two) (:integer 2))))
-                  (body (:binop * (:var Two) (:var Two))))
-                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                           (:binop >= (:var Nat) (:integer 0))))
-                  (body (:atom at_least_it_is_nat)))
-                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Int) (:nil)))))
-                  (body (:atom at_least_it_is_int)))
-                 ((cases (:var _))
-                  (guards)
-                  (body (:atom no_match_at_all)))))))))
-  (make-erl-state 
-    :in '(:integer 4)
-    :bind '((Two :integer 2)
-            (X :tuple ((:integer 2) (:integer 2))))))
+(assert-equal
+  (eval-expr-bind-val
+    '(:case-of (:var X)
+      (((cases (:tuple (:cons (:integer 0) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:atom err)))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))
+                 (:binop >= (:var A) (:integer 0))))
+        (body (:binop div (:var B) (:var A))))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))))
+        (body (:binop div (:var B) (:binop * (:integer -1) (:var A)))))
+       ((cases (:tuple (:cons (:var _) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:match (:var A) (:integer 1)) (:var B)))))
+    '((X :tuple ((:integer 0) (:integer 100)))))
+  '(:atom err))
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :tuple ((:integer 3) (:atom bogus)))))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr
-              '(:case-of 
-                (:var X)
-                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
-                  (guards ((:binop == (:var One) (:integer 1))))
-                  (body (:binop + (:var One) (:integer 2))))
-                 ((cases (:tuple
-                           (:cons (:var Two)
-                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
-                  (guards ((:binop == (:var Two) (:integer 2))))
-                  (body (:binop * (:var Two) (:var Two))))
-                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                           (:binop >= (:var Nat) (:integer 0))))
-                  (body (:atom at_least_it_is_nat)))
-                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Int) (:nil)))))
-                  (body (:atom at_least_it_is_int)))
-                 ((cases (:var _))
-                  (guards)
-                  (body (:atom no_match_at_all)))))))))
-  (make-erl-state 
-    :in '(:atom at_least_it_is_nat)
-    :bind '((Nat :integer 3)
-            (X :tuple ((:integer 3) (:atom bogus))))))
+(assert-equal
+  (eval-expr-bind-val
+    '(:case-of (:var X)
+      (((cases (:tuple (:cons (:integer 0) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:atom err)))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))
+                 (:binop >= (:var A) (:integer 0))))
+        (body (:binop div (:var B) (:var A))))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))))
+        (body (:binop div (:var B) (:binop * (:integer -1) (:var A)))))
+       ((cases (:tuple (:cons (:var _) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:match (:var A) (:integer 1)) (:var B)))))
+    '((X :tuple ((:integer 2) (:integer 100)))))
+  '(:integer 50))
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :tuple ((:integer -1) (:atom bogus)))))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr
-              '(:case-of 
-                (:var X)
-                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
-                  (guards ((:binop == (:var One) (:integer 1))))
-                  (body (:binop + (:var One) (:integer 2))))
-                 ((cases (:tuple
-                           (:cons (:var Two)
-                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
-                  (guards ((:binop == (:var Two) (:integer 2))))
-                  (body (:binop * (:var Two) (:var Two))))
-                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                           (:binop >= (:var Nat) (:integer 0))))
-                  (body (:atom at_least_it_is_nat)))
-                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Int) (:nil)))))
-                  (body (:atom at_least_it_is_int)))
-                 ((cases (:var _))
-                  (guards)
-                  (body (:atom no_match_at_all)))))))))
-  (make-erl-state 
-    :in '(:atom at_least_it_is_int)
-    :bind '((Int :integer -1)
-            (X :tuple ((:integer -1) (:atom bogus))))))
+(assert-equal
+  (eval-expr-bind-val
+    '(:case-of (:var X)
+      (((cases (:tuple (:cons (:integer 0) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:atom err)))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))
+                 (:binop >= (:var A) (:integer 0))))
+        (body (:binop div (:var B) (:var A))))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))))
+        (body (:binop div (:var B) (:binop * (:integer -1) (:var A)))))
+       ((cases (:tuple (:cons (:var _) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:match (:var A) (:integer 1)) (:var B)))))
+    '((X :tuple ((:integer -2) (:integer 100)))))
+  '(:integer 50))
 
-(assert-equal 
-  (apply-k
-    (make-erl-state :bind '((X :tuple ((:atom bogus) (:atom bogus)))))
-    (list
-      (make-erl-k 
-        :fuel 10000 
-        :kont 
-          (make-kont-expr
-            :expr
-              '(:case-of 
-                (:var X)
-                (((cases (:tuple (:cons (:var One) (:cons (:integer 2) (:nil)))))
-                  (guards ((:binop == (:var One) (:integer 1))))
-                  (body (:binop + (:var One) (:integer 2))))
-                 ((cases (:tuple
-                           (:cons (:var Two)
-                                  (:cons (:binop + (:integer 1) (:integer 1)) (:nil)))))
-                  (guards ((:binop == (:var Two) (:integer 2))))
-                  (body (:binop * (:var Two) (:var Two))))
-                 ((cases (:tuple (:cons (:var Nat) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Nat) (:nil)))
-                           (:binop >= (:var Nat) (:integer 0))))
-                  (body (:atom at_least_it_is_nat)))
-                 ((cases (:tuple (:cons (:var Int) (:cons (:var _) (:nil)))))
-                  (guards ((:call is_integer (:cons (:var Int) (:nil)))))
-                  (body (:atom at_least_it_is_int)))
-                 ((cases (:var _))
-                  (guards)
-                  (body (:atom no_match_at_all)))))))))
-  (make-erl-state 
-    :in '(:atom no_match_at_all)
-    :bind '((X :tuple ((:atom bogus) (:atom bogus))))))
+(assert-equal
+  (eval-expr-bind
+    '(:case-of (:var X)
+      (((cases (:tuple (:cons (:integer 0) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:atom err)))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))
+                 (:binop >= (:var A) (:integer 0))))
+        (body (:binop div (:var B) (:var A))))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))))
+        (body (:binop div (:var B) (:binop * (:integer -1) (:var A)))))
+       ((cases (:tuple (:cons (:var _) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:match (:var A) (:integer 1)) (:var B)))))
+    '((X :tuple ((:atom cow) (:integer 100)))))
+  (make-erl-state
+    :in '(:integer 100)
+    :bind '((A :integer 1) (B :integer 100)
+            (X :tuple ((:atom cow) (:integer 100))))))
+
+(assert-equal
+  (eval-expr-bind-val
+    '(:case-of (:var X)
+      (((cases (:tuple (:cons (:integer 0) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:atom err)))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))
+                 (:binop >= (:var A) (:integer 0))))
+        (body (:binop div (:var B) (:var A))))
+       ((cases (:tuple (:cons (:var A) (:cons (:var B) (:nil)))))
+        (guards ((:call is_integer (:cons (:var A) (:nil)))))
+        (body (:binop div (:var B) (:binop * (:integer -1) (:var A)))))
+       ((cases (:tuple (:cons (:var _) (:cons (:var B) (:nil)))))
+        (guards)
+        (body (:match (:var A) (:integer 1)) (:var B)))))
+    '((X :atom cow)))
+  '(:excpt (:atom error) (:tuple ((:atom case_clause) (:atom cow))) nil))

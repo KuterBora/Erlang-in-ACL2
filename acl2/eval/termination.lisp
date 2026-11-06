@@ -10,9 +10,9 @@
 (in-package "ACL2")
 (include-book "erl-state")
 
-; Termination Proof for apply-k ------------------------------------------------
-
 (set-induction-depth-limit 1)
+
+; Termination Proof for apply-k ------------------------------------------------
 
 (encapsulate
   ; Evaluation function and a recognizer for its return value

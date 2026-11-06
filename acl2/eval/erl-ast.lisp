@@ -12,18 +12,18 @@
 (include-book "centaur/fty/top" :dir :system)
 (include-book "kestrel/fty/defsubtype" :dir :system)
 
-; Erlang AST Types -------------------------------------------------------------
+; Erlang AST Definitions -------------------------------------------------------
 
 (set-induction-depth-limit 1)
 (set-well-founded-relation l<)
 
 ; Term comparison operations
-; =:= is represented as =-colon-=
+; Remark: =:= is represented as =.= for now.
 (fty::defsubtype comp-binop
   :supertype symbolp
   :restriction 
     (lambda (x) 
-      (not (null (member x '(== /= =< < >= > =-colon-= =/=)))))
+      (not (null (member x '(== /= =< < >= > =.= =/=)))))
   :fix-value '==)
 
 ; Arithmetic binary operations
@@ -107,6 +107,7 @@
     (:cons ((hd node-p)
             (tl node-p)))
     (:tuple ((lst node-p)))
+    ; TODO: symbols are not a good representations of Erlang variables.
     (:var ((id symbolp)))
     (:unop ((op erl-unop-p) (expr node-p)))
     (:binop ((op erl-binop-p)
@@ -115,6 +116,7 @@
     (:match ((lhs node-p) (rhs node-p)))
     (:if ((clauses node-clause-list)))
     (:case-of ((expr node-p) (clauses node-clause-list)))
+    (:try ((exprs node-list-p) (err-clauses node-clause-list)))
     (:remote-call ((module symbolp) (fn symbolp) (args node-p)))
     (:fun-call ((fun node-p) (args node-p)))
     (:call ((fn symbolp) (args node-p)))
@@ -170,6 +172,7 @@
          (:match nil)
          (:if nil)
          (:case-of nil)
+         (:try nil)
          (:remote-call nil)
          (:call nil)
          (:fun-call nil)
@@ -211,6 +214,7 @@
                              (pattern-p (node-match->rhs x))))
                 (:if nil)
                 (:case-of nil)
+                (:try nil)
                 (:remote-call nil)
                 (:call nil)
                 (:fun-call nil)
@@ -228,7 +232,6 @@
         (pattern-p x)
         :already-definedp t
         :true-listp t))
-
 
 ; Erlang Guard Expression ------------------------------------------------------
 
@@ -262,6 +265,7 @@
           (:match nil)
           (:if nil)
           (:case-of nil)
+          (:try nil)
           (:remote-call nil)
           (:call (and (guard-expr-p (node-call->args x))
                       (or (equal (node-kind (node-call->args x)) :cons)
@@ -297,7 +301,6 @@
         :already-definedp t
         :true-listp t))
 
-
 ; Erlang Expression ------------------------------------------------------------
 
 ; All Erlang expression types supported by the evaluator.
@@ -330,6 +333,10 @@
           (:case-of 
             (and (expr-p (node-case-of->expr x))
                  (erl-clause-list-p (node-case-of->clauses x))))
+          (:try
+            (and (expr-list-p (node-try->exprs x))
+                 (erl-clause-list-p (node-try->err-clauses x))
+                  ))
           (:remote-call
             (and (expr-p (node-remote-call->args x))
                  (or (equal (node-kind (node-remote-call->args x)) :cons)
@@ -441,7 +448,6 @@
 
 (set-well-founded-relation o<)
 
-
 ; Fixing Functions -------------------------------------------------------------
 
 (define arithm-expr-fix ((x arithm-expr-p))
@@ -513,7 +519,6 @@
   (implies (erl-clause-p x)
            (equal (erl-clause-fix x) x))
   :expand (erl-clause-fix x))
-
 
 ; FTY Types --------------------------------------------------------------------
 

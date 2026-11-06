@@ -22,8 +22,8 @@
 
 ; Weakly Fair Abstract Scheduler ----------------------------------------------
 
-; helper function that returns a message from the given outbox, or nil
-; if none exists.
+; Helper to pick a message from the given outbox, or nil if none exists. If there
+; are multiple messages for the same destination, the earliest sent message is picked.
 (define parse-outbox ((x outbox-p))
   :returns rpid
   :measure (acl2-count (outbox-fix x))
@@ -58,10 +58,11 @@
         (parse-outbox (proc->outbox p)))
       :enable (proc->outbox proc-has-message-for-dst?)))
 
+; Weakly fair abstract scheduler.
+; Remark: This scheduler is very weak. The only guarantee is
+; that it will not decide to stutter if there a possible non
+; stutter action.
 (encapsulate
-  ; TODO: for fairness properties, we also need an abstarct state.
-  ; that the scheduler uses to choose what action to take.
-  ; I am guessing we will need this when we introduce fairness.
   (((schedule * ) => * :formals (net) :guard (network-p net)))
 
   ; Witness function
@@ -96,7 +97,7 @@
     (implies (and (omap::assoc x m) (not (omap::assoc x (omap::tail m))))
              (equal (omap::head-key m) x))))
 
-  ; The scheduler is weakly fair
+  ; The scheduler does not stutter unless necessary.
   (defrule scheduler-weakly-fair-when-runnable
     (implies
       (and (pid-p pid)
@@ -117,7 +118,8 @@
     :enable schedule
     :hints (("Subgoal *1/6" :use (:instance crock-1 (x pid) (m net)))))
   
-  ; The scheduler is correct
+  ; The scheduler is correct, i.e. only runs runnable processes and
+  ; only attempts to deliver existing messages.
   (defrule scheduler-correct-when-run
     (implies
       (equal (scheduling-kind (schedule net)) :run)
@@ -134,7 +136,8 @@
     :enable (schedule network-fix has-message-for-dst? proc-has-message-for-dst?)))
 
 
-; Executable counterpart
+; Executable counterpart: run the first runnable process, and deliver
+; the first encountered message, starting from the head of the network.
 (define in-order-schedule ((net network-p))
   :returns (s scheduling-p)
   :measure (acl2-count (network-fix net))
@@ -155,7 +158,6 @@
       (implies (and (omap::assoc x m) (not (omap::assoc x (omap::tail m))))
               (equal (omap::head-key m) x))))
 
-    ; The scheduler is weakly fair
     (defrule in-order-scheduler-weakly-fair-when-runnable
       (implies 
         (and (pid-p pid)
@@ -175,7 +177,6 @@
         (not (equal (in-order-schedule net) '(:stutter))))
       :hints (("Subgoal *1/6" :use (:instance crock-1 (x pid) (m net)))))
     
-    ; The scheduler is correct
     (defrule in-order-scheduler-correct-when-run
       (implies
         (equal (scheduling-kind (in-order-schedule net)) :run)
@@ -191,6 +192,5 @@
           (scheduling-deliver->p2 (in-order-schedule net))))
       :enable (network-fix has-message-for-dst? proc-has-message-for-dst? proc->outbox)))
 
-(defattach
-  (schedule in-order-schedule)
+(defattach (schedule in-order-schedule)
   :hints (("Goal" :use (:instance in-order-scheduler-weakly-fair-when-deliverable))))

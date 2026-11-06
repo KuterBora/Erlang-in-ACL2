@@ -6,6 +6,7 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 (include-book "erl-ast")
 (include-book "erl-value")
@@ -13,19 +14,16 @@
 
 ; Erlang World -----------------------------------------------------------------
 
-; Representation of the Erlang modules known by the interpreter. For now, the
-; world is static -- it cannot be dynamically modified during interpretation.
-; Future work could consider how to reason about changing worlds.
+; Representation of the Erlang modules. For now, the world is static,
+; i.e, it cannot be dynamically modified during evaluation.
+; Future work could consider how to reason about dynamic worlds.
 
 ; A function declaration consists of a name and arirty, mappped to a
 ; sequence of function clauses.
 ;
-; A function clause is an erl-clause-p where the patterns are the parameters,
-; guard-lists are the guards, and the body is the function body to be evaluated.
-; - Each function clause in the same sequence must have the same 
-;   number of parameters.
-;
-; A function name is an atom. 
+; A function clause is an erl-clause-p where patterns are the function's parameters,
+; guard-lists are its guards, and the body is its body. Each function clause in
+; the same sequence must have the same arity.
 
 (set-well-founded-relation l<)
 
@@ -37,17 +35,18 @@
   :elt-type fn-p
   :true-listp t)
 
-; A map from function name and arity to function definition
+; A map from function's name and arity to its clauses.
 (fty::defomap fn-map
   :key-type fn
   :val-type erl-clause-list)
 
-; A map from fn to module. This is for looking up module imports.
+; A map from fn to module. This is for looking up imports.
 (fty::defomap fn-mod-map
   :key-type fn
   :val-type symbol)
 
 ; Module attributes. Currently, only the following three are supported.
+; TODO: There should be some revision regarding imports/exports.
 (fty::defprod attrs
   ; name of the module
   ((module symbolp :default 'local)
@@ -73,14 +72,17 @@
 ; Erlang BIFs ------------------------------------------------------------------
 
 ; Built-In Functions (BIFs) of Erlang. BIFs are found in multiple packages,
-; though mostly in 'erlang'. Most BIFs are auto-imported.
+; though mostly in the 'erlang' package. Most BIFs are auto-imported.
 ; 
 ; Since none of the Erlang packages are implemented, the following frequently
 ; used BIFs are added to the world directly.
 ;
 ; Remark: All of these BIFs can be used in guards. If more BIFs are addded in
-; the future, a distinction might be needed for guards with side effects which
+; the future, a distinction might be needed for BIFs with side effects which
 ; are not allowed to be called by guard expressions.
+;
+; Remark 2: In fact, I recently added 'spawn' which should be a BIF, but I have
+; not added it to this list as it has side effects.
 ;
 (define erl-bif-p ((x acl2::any-p))
   :returns (ok booleanp)

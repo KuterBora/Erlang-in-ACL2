@@ -53,7 +53,7 @@
   :enable pattern-fix))
 
 
-; Evaluate Erlang Pattern Matching ---------------------------------------------
+; Erlang Pattern Matching ------------------------------------------------------
 
 ; Erlang reference manual explains: In pattern matching, a left-hand side pattern 
 ; is matched against a right-hand side term. If the matching succeeds, any unbound 
@@ -69,9 +69,8 @@
 ; An arithmetic expressions can be used in patterns if:
 ; - It uses only numeric or bitwise operators.
 ; - Its value can be evaluated to a constant when complied.
-; which is implemented by the type arithm-expr. 
 ;
-; Patterns allowed by Erlang that are not supported:
+; Patterns allowed by Erlang that are not supported currently:
 ; - String Prefix in Patterns, for example: "hello " ++ X = "hello world".
 ;
 ; Implementation:
@@ -79,12 +78,12 @@
 ;   check if the result is equal to the right-hand side value. The arithmetic
 ;   expression should have been evaluated at compile time, so the AST will be
 ;   rejected if there is an exception raised.
-; - If the pattern is a term or bound variable, check if it is equal
+; - If the pattern is a term or a bound variable, check if it is equal
 ;   to the right-hand side value. Lists and tuples are checked element by element.
 ; - If there is an unbound variable, bind the variable to the right-hand side 
 ;   value. Ignore this step if the variable is a wildcard, '_'. 
 ; - If sucessful, return the right-hand side value and the new bindings,
-;   otherwise a badmatch exception.
+;   otherwise throw a badmatch exception.
 ;
 (define eval-match ((p pattern-p) (s erl-state-p))
   :returns (rs erl-state-p)
@@ -94,11 +93,11 @@
        ((erl-state s) (erl-state-fix s))
        
        ; Exception to throw if there is a badmatch.
-       (badmatch (update-erl-state->in 
-                    s 
-                    (make-erl-val-excpt 
-                      :err (make-erl-err :class (make-err-class-error) 
-                                         :reason (make-exit-reason-badmatch :val s.in)))))
+       (badmatch
+         (update-erl-state->in s
+          (make-erl-val-excpt
+            :err-class (make-erl-val-atom :val 'error)
+            :err-reason (make-erl-val-tuple :lst (list (make-erl-val-atom :val 'badmatch) s.in)))))
       
        ; Rejection to throw if there is an illegal pattern.
        (badpattern (update-erl-state->in s (make-erl-val-reject :err "Illegal pattern."))))
@@ -147,7 +146,7 @@
                     (eval-match 
                       p.tl 
                       (update-erl-state->in 
-                        s 
+                        s
                         (make-erl-val-cons :lst (cdr (erl-val-cons->lst s.in))))))
                     
                    ; Propagate rejections.
@@ -215,6 +214,7 @@
                   (update-erl-state->bind s (omap::update* r.bind l.bind))))
             (:if badpattern)
             (:case-of badpattern)
+            (:try badpattern)
             (:remote-call badpattern)
             (:call badpattern)
             (:fun-call badpattern)
@@ -234,8 +234,8 @@
           :name erl-val-kind-of-eval-match)))
 
 ; Match each pattern to the corresponding argument, accumulate the bindings.
-; - When callfed by 'if' or 'case-of' clauses, this is simply a wrapper 
-;   around eval-match
+; - When called by 'if' or 'case-of' clauses, this is simply a wrapper 
+;   around eval-match.
 (define match-args ((ps pattern-list-p) (vs erl-vlst-p) (s erl-state-p))
   :returns (rs erl-state-p)
   :measure (len (pattern-list-fix ps))
@@ -256,7 +256,7 @@
        ((erl-state hd) (eval-match (car ps) (update-erl-state->in s (car vs))))
        
        ; Propagate exceptions and rejections.
-       ((if (not (wf-state-p hd))) hd))
+       ((if (or (not (wf-state-p hd)) (equal (erl-val-kind (erl-state->in hd)) :excpt))) hd))
 
      ; Recursively match the rest of the list.
      (match-args (cdr ps) (cdr vs) hd))

@@ -9,8 +9,10 @@
 
 (in-package "ACL2")
 (include-book "abstract")
-(include-book "../theorems/state/self")
+(include-book "../eval/theorems/state/self")
 
+
+; Given a process that is evaluating a receive expression, try to receive from the message queue.
 (define proc-receive ((proc proc-p))
   :returns (rp proc-p)
   :measure (len (proc->inbox-new (proc-fix proc)))
@@ -25,13 +27,15 @@
        (rs (update-erl-state->in (proc->s proc) (car (proc->inbox-new proc))))
        (rs (apply-k rs (proc->klst proc))))
       (cond
+        ; If the first message did not match any of the receive clauses, try the rest of the queue.
         ((equal (erl-val-kind (erl-state->in rs)) :blocked)
          (b* ((- (cw "Could not receive message. Trying next one.~%")))
               (proc-receive
-                (change-proc
-                   proc
-                     :inbox-new (cdr (proc->inbox-new proc))
-                     :inbox-tried (append (proc->inbox-tried proc) (list (car (proc->inbox-new proc))))))))
+                (change-proc proc
+                  :inbox-new (cdr (proc->inbox-new proc))
+                  :inbox-tried (append (proc->inbox-tried proc) (list (car (proc->inbox-new proc))))))))
+        
+        ; If the message was received successfully, check if it is still runnable or if it has terminated.
         ((equal (erl-val-kind (erl-state->in rs)) :receive)
          (b* ((klst (erl-val-receive->klst (erl-state->in rs)))
               ((unless (erl-klst-p klst))
@@ -58,22 +62,18 @@
         (equal (proc->pid rp) (proc->pid proc))
         :hints (("Goal" :in-theory (enable proc->pid))))))
 
-(local (defrule crock-2
-  (implies
-    (omap::assoc p (network-fix net))
-    (equal (proc->pid (omap::lookup p (network-fix net))) p))
-  :enable (omap::lookup network-fix network-p)))
 
-(local (defrule crock-3
-  (implies
-    (omap::assoc p (network-fix net))
-    (equal (erl-state->self (proc->s (omap::lookup p (network-fix net)))) p))
-  :disable crock-2
-  :enable proc->pid
-  :use (:instance crock-2)))
-
-
+; A single step of the Erlang runtime. Invoke the scheduler and follow its decision.
 (define erl-step ((net network-p))
+  :prepwork
+    ((defrule crock-1
+      (implies (omap::assoc p (network-fix net))
+               (equal (proc->pid (omap::lookup p (network-fix net))) p))
+      :enable (omap::lookup network-fix network-p))
+    (defrule crock-2
+      (implies (omap::assoc p (network-fix net))
+               (equal (erl-state->self (proc->s (omap::lookup p (network-fix net)))) p))
+      :disable crock-1 :enable proc->pid :use (:instance crock-1)))
   :returns rnet
   :guard-hints
     (("Goal"
@@ -87,6 +87,7 @@
             (:instance scheduler-correct-when-deliver))))
   (b* ((net (network-fix net))
        ((if (terminated? net)) net)
+       ; Invoke the scheduler.
        (sc (schedule net))
        (- (cw "Scheduler decision: ~x0.~%~%" sc)))
     (scheduling-case sc
@@ -100,58 +101,49 @@
              ((unless (erl-klst-p klst))
               (b* ((- (cw "erl-step: bad continuation list.~%"))) nil)))
             (if (equal (proc->ps proc) :idle)
-
-                ; The program is running for the first time.
+                ; The process is running for the first time.
                 (b* ((- (cw "Evaluating ~x0 for the first time. ~%" pid))
                      (ns (apply-k s klst)))
                     (if (equal (erl-val-kind (erl-state->in ns)) :receive)
-                        ; The program ran until a receive was encountered.
+                        ; The process ran until a receive was encountered.
                         (b*
                           ((- (cw "Evaluated ~x0 till the next receive. ~%~%" pid))
                            (nklst (erl-val-receive->klst (erl-state->in ns)))
                            ((unless (erl-klst-p nklst))
                             (b* ((- (cw "erl-step: bad continuation list.~%"))) nil)))
-                          (omap::update
-                            pid
+                          (omap::update pid
                             (change-proc proc
                                 :s (update-erl-state->in ns (make-erl-val-none))
                                 :ps :receive
                                 :klst nklst)
                             net))
-                        ; The program terminated.
+                        ; The process terminated.
                         (b*
                           ((- (cw "~x0 terminated. ~%~%" pid)))
-                          (omap::update
-                            pid
+                          (omap::update pid
                             (change-proc proc
                               :s ns
                               :ps :terminated
                              :klst nil)
                             net))))
-                ; The program is attempting to receive.
+                ; The process is attempting to receive.
                 (b* ((- (cw "~x0 is trying to receive. ~%" pid)))
-                    (omap::update
-                      pid
-                      (proc-receive proc)
-                      net)))))
+                    (omap::update pid (proc-receive proc) net)))))
         (:deliver
           (b* ((src (scheduling-deliver->p1 sc))
                (dst (scheduling-deliver->p2 sc))
-
                (psrc (omap::lookup src net))
                (ssrc (proc->s psrc))
-
                (- (cw "Delivering message from: ~x0 to ~x1~%" src dst))
- 
+               
+               ; If the destination does not exist, drop the message.
                ((unless (omap::assoc dst net))
                 (b* ((- (cw "Destination: ~x0 does not exist.~%" dst)))
                      (omap::update
                        src
                        (change-proc psrc
-                         :s  (update-erl-state->outbox
-                               ssrc
-                               (omap::update
-                                 dst
+                         :s  (update-erl-state->outbox ssrc
+                               (omap::update dst
                                  (cdr (omap::lookup dst (proc->outbox psrc)))
                                  (proc->outbox psrc))))
                        net)))
@@ -160,71 +152,58 @@
 
                (- (cw "Message delivered from: ~x0 to ~x1.~%~%" src dst)))
               (if (equal (proc->ps pdst) :blocked)
+                  ; The destination should no longer be blocked.
                   (b*
                     ((- (cw "Dst: ~x0 is now unblocked.~%" dst)))
-                    (omap::update
-                      dst
+                    (omap::update dst
                       (change-proc pdst
                         :inbox-new (append (proc->inbox-tried pdst)
                                            (proc->inbox-new pdst)
                                            (list (car (omap::lookup dst (proc->outbox psrc)))))
                         :inbox-tried nil
                         :ps :receive)
-                      (omap::update
-                        src
+                      (omap::update src
                         (change-proc psrc
-                          :s (update-erl-state->outbox
-                               ssrc
-                               (omap::update
-                                 dst
+                          :s (update-erl-state->outbox ssrc
+                               (omap::update dst
                                  (cdr (omap::lookup dst (proc->outbox psrc)))
                                  (proc->outbox psrc))))
                         net)))
-                  (omap::update
-                      dst
+                  (omap::update dst
                       (change-proc pdst
                         :inbox-new (append (proc->inbox-new pdst)
                                            (list (car (omap::lookup dst (proc->outbox psrc))))))
-                      (omap::update
-                        src
+                      (omap::update src
                         (change-proc psrc
-                          :s (update-erl-state->outbox
-                               ssrc
-                               (omap::update
-                                 dst
+                          :s (update-erl-state->outbox ssrc
+                               (omap::update dst
                                  (cdr (omap::lookup dst (proc->outbox psrc)))
                                  (proc->outbox psrc))))
                         net)))))))
   ///
     (more-returns
       (rnet network-p :rule-classes :type-prescription
-        ; TODO: This can be done with single computational hint.
-        ;       Alas, I do not have time for that right now.
+        ; BOZO: This can be done with single computational hint.
         :hints
           (("Subgoal 9"
             :in-theory
-              (e/d (runnable? proc-runnable? network-p-of-update)
-                   (scheduler-correct-when-run))
+              (e/d (runnable? proc-runnable? network-p-of-update) (scheduler-correct-when-run))
             :use ((:instance scheduler-correct-when-run)))
           ("Subgoal 8"
             :in-theory
-              (e/d (runnable? proc-runnable? proc->pid)
-                   (scheduler-correct-when-run))
+              (e/d (runnable? proc-runnable? proc->pid) (scheduler-correct-when-run))
             :use ((:instance scheduler-correct-when-run)))
           ("Subgoal 7"
             :in-theory
-              (e/d (runnable? proc-runnable? proc->pid)
-                   (scheduler-correct-when-run))
+              (e/d (runnable? proc-runnable? proc->pid) (scheduler-correct-when-run))
             :use ((:instance scheduler-correct-when-run)))
           ("Subgoal 6"
             :in-theory
-              (e/d (runnable? proc-runnable? proc->pid)
-                   (scheduler-correct-when-run))
+              (e/d (runnable? proc-runnable? proc->pid) (scheduler-correct-when-run))
             :use ((:instance scheduler-correct-when-run)))
           ("Subgoal 5"
             :in-theory
-              (e/d (runnable? proc-runnable? proc->pid)
-                   (scheduler-correct-when-run))
+              (e/d (runnable? proc-runnable? proc->pid) (scheduler-correct-when-run))
             :use ((:instance scheduler-correct-when-run)))
           ("Subgoal 4"
             :in-theory
@@ -243,10 +222,7 @@
             :use ((:instance scheduler-correct-when-deliver))))))
       (defcong network-equiv equal (erl-step net) 1))
 
-; Erlang Runtime --------------------------------------------------------------
-
-; Run the Erlang processes, given the next step by the scheduler.
-; TODO: lookup the terminology of choice variables
+; Run multiple Erlang processes.
 (define erl-runner ((net network-p) (fuel natp))
   :measure (nfix fuel)
   :returns (rnet network-p)

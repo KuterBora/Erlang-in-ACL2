@@ -19,12 +19,9 @@
 ; forall messages in inbox
 ; the sender exists in cpids and net,
 ; the sender is terminated and has drained its outbox,
-; the received message has the same value as the terminated
-; process' value,
-; and no two messages have the same sender, which is enforced by
-; dropping each sender from cpids as it goes.
-(define received-messages-wf
-  ((inbox erl-vlst-p) (cpids erl-vlst-p) (net network-p))
+; the received message has the same value as the terminated process' value,
+; no two messages have the same sender
+(define received-messages-wf ((inbox erl-vlst-p) (cpids erl-vlst-p) (net network-p))
   :returns (r booleanp)
   :measure (acl2-count (erl-vlst-fix inbox))
   (b* ((inbox (erl-vlst-fix inbox))
@@ -53,8 +50,7 @@
        ((unless (equal sval val)) nil)
        ; the value is an integer
        ((unless (equal (erl-val-kind val) :integer)) nil))
-      ; Ensure that no two messages have arrived from the same sender
-      ; by dropping it from cpids.
+      ; Ensure that no two messages have arrived from the same sender.
       (received-messages-wf (cdr inbox) (remove-equal sender cpids) net))
   ///
     (defcong erl-vlst-equiv equal (received-messages-wf x y z) 1
@@ -68,23 +64,25 @@
                                (received-messages-wf x y z-equiv)))))
     
     (defrule received-messages-wf-of-nil
+      (received-messages-wf nil nil net))
+
+    (defrule inbox-of-received-messages-wf-of-nil
       (implies
-        (and (erl-vlst-p inbox)
-             (received-messages-wf inbox nil net))
+        (and (erl-vlst-p inbox) (received-messages-wf inbox nil net))
         (not inbox))
       :rule-classes :forward-chaining)
 
     ; Removing a message from the inbox maintains the invariant.
-    (defrule received-messages-wf-of-inbox-without
+    (defrule received-messages-wf-of-remove
       (implies
-        (and (network-p net)
-             (erl-vlst-p cpids) (pid-p pid)
+        (and (network-p net) (erl-vlst-p cpids) (pid-p pid)
              (received-messages-wf inbox cpids net))
         (received-messages-wf (inbox-without inbox pid)
                               (remove-equal pid cpids) net))
       :enable inbox-without)
     
-    (defrule not-inbox-contains-of-received-messages-wf
+    ; The inbox cannot contain a message that has not yet been received.
+    (defrule inbox-contains-of-received-messages-wf-1
       (implies
         (and
           (network-p net) (omap::assoc sender net)
@@ -93,17 +91,9 @@
         (not (inbox-contains inbox sender)))
       :enable inbox-contains)
     
-    (defrule received-messages-wf-of-update-of-non-terminated
-      (implies
-        (and
-          (network-p net) (network-p (omap::update q qproc net))
-          (omap::assoc q net)
-          (not (equal (proc->ps (omap::lookup q net)) :terminated))
-          (received-messages-wf inbox cpids net))
-        (received-messages-wf inbox cpids (omap::update q qproc net)))
-      :enable omap::lookup-of-update)
-    
-    (defrule received-messages-wf-fields
+    ; If the inbox contains a message, the well-formedness properties
+    ; are the follwing:
+    (defrule inbox-contains-of-received-messages-wf-2
       (implies
         (and (network-p net) (pid-p pid)
              (received-messages-wf inbox cpids net)
@@ -113,22 +103,32 @@
              (outbox-emptyp (proc->outbox (omap::lookup pid net)))
              (equal (inbox->value inbox pid)
                     (erl-state->in (proc->s (omap::lookup pid net))))))
-      :enable (inbox->value inbox-contains)))
-
+      :enable (inbox->value inbox-contains))
+    
+    ; updating the network with a non-terminated process has no
+    ; effect in received messages since in this implementation, only
+    ; terminating processes send messages.
+    (defrule received-messages-wf-of-update-of-non-terminated
+      (implies
+        (and
+          (network-p net) (network-p (omap::update p proc net))
+          (omap::assoc p net)
+          (not (equal (proc->ps (omap::lookup p net)) :terminated))
+          (received-messages-wf inbox cpids net))
+        (received-messages-wf inbox cpids (omap::update p proc net)))
+      :enable omap::lookup-of-update))
 
 ; Sent Messages Well Formed ---------------------------------------------------
 
-; TODO: better description
-; if outbox not null
-;   it has a single message, same as the process's value
-; if the outbox is null
-;   if the parent is terminated
-;     ok
-;     else: either inbox-new or inbox-tried contains the message
-;           or Cpids does not contain the message,
-;           index of Chd is greater than self's index
-(define sent-message-wf
-  ((self proc-p) (outbox outbox-p) (parent erl-val-p) (net network-p))
+; The sender counterpart of received-messages-wf
+; - the root always has an empty outbox.
+; - if the outbox holds a message for the parent, it is a single message:
+;   {self, value}
+; - The parent has not terminated yet, or removed this pid from the remaining children.
+; - otherwise the outbox is empty and the message has reached the parent:
+;   it is in the parent's inbox-new (or inbox-tried, when :blocked), or the
+;   parent has already processed it, or the parent has terminated.
+(define sent-message-wf ((self proc-p) (outbox outbox-p) (parent erl-val-p) (net network-p))
   :returns (r booleanp)
   (b* ((self (proc-fix self))
        (outbox (outbox-fix outbox))
@@ -136,8 +136,7 @@
        (net (network-fix net)) 
        ; the root does not send messages
        ((unless (pid-p parent)) (omap::emptyp outbox))
-       ; the parent exists, though we know this when
-       ;  calling this helper.
+       ; the parent exists, though we already know this when calling this helper.
        ((unless (omap::assoc parent net)) nil)
        (pproc (omap::lookup parent net))
        (ps (proc->ps pproc))
@@ -145,55 +144,48 @@
        ; Check if the message has been received and processed
        ; by the parent.
        (received
-         (and (omap::assoc 'CPids pbind)
-              (equal (erl-val-kind (omap::lookup 'CPids pbind)) :cons)
+         (and (remaining-children-p pbind)
               (not (member-equal
                     (proc->pid self)
-                    (erl-val-cons->lst (omap::lookup 'CPids pbind))))))
+                    (remaining-children pbind)))))
        (val (erl-state->in (proc->s self))))
-      (if (not (and (omap::assoc parent outbox)
-                    (omap::lookup parent outbox)))
-          ; If there is no message for the parent
+      (if (not (and (omap::assoc parent outbox) (omap::lookup parent outbox)))
+          ; If there is no message for the parent, then
           (and
-           ; all messages have been sent.
+           ; all messages must have been sent, and
            (outbox-emptyp outbox)
            (case ps
             ; if the parent has terminated, we are done.
             (:terminated t)
-            ; message must be in the correct inbox.
-            ; The received helper checks that the message
-            ; is also correct.
+            ; if the parent is idle, the message must be in
+            ; the correct inbox (new).
             (:idle
-              (inbox-contains (proc->inbox-new pproc)
-                              (proc->pid self)))
+              (inbox-contains (proc->inbox-new pproc) (proc->pid self)))
+            ; if the parent is blocked, then
             (:blocked
-              ; Either the message is in one of the inboxes,
+              ; either the message is in one of the inboxes,
               ; or it was already received and processed.
-              (or
-                (inbox-contains (proc->inbox-new pproc)
-                                (proc->pid self))
-                (inbox-contains (proc->inbox-tried pproc)
-                                (proc->pid self))
-                received))
-            ; Same as above, but the process has not tried
-            ; to receive the message yet.
+              (or (inbox-contains (proc->inbox-new pproc) (proc->pid self))
+                  (inbox-contains (proc->inbox-tried pproc) (proc->pid self))
+                  received))
+            ; if the parent is receiving, the same conditions as blocked hold,
+            ; execpt that the message must not have been tried yet.
             (:receive
-              (or
-                (inbox-contains (proc->inbox-new pproc)
-                                (proc->pid self))
-                received))))
-          ; If there is a message for the parent:
+              (or (inbox-contains (proc->inbox-new pproc) (proc->pid self))
+                  received))))
+          ; If there is a message for the parent, then
           (b* ((ms (omap::lookup parent outbox))
-               ; The parent should be have terminated,
-               ; or received the message yet.
+               ; the parent should not have terminated yet
                ((if (equal ps :terminated)) nil)
+               ; the parent obviously should not have received the message yet,
+               ; as it is not sent yet. 
                ((if received) nil)
-               ; there is a single message
+               ; there must be only one message, since this implementation
+               ; only sends one.
                ((unless (and ms (not (cdr ms)))) nil)
-               (m (car ms))
-               ; this implementation sends no other message
                ((unless (omap::emptyp (omap::tail outbox))) nil)
-               ; message should be in form: {sender, value}
+               (m (car ms))
+               ; the message should be in form: {sender, value}
                ((unless (equal (erl-val-kind m) :tuple)) nil)
                (lst (erl-val-tuple->lst m))
                ((unless (equal (len lst) 2)) nil)
@@ -206,54 +198,42 @@
     (defcong erl-val-equiv equal (sent-message-wf a b c d) 3)
     (defcong network-equiv equal (sent-message-wf a b c d) 4)
     
+    ; The seneder is well-formed, if its parent has the message in its inbox-new,
+    ; and its outbox is empty.
     (defrule sent-message-wf-when-parent-has-message
       (implies
         (and
           (network-p net) (outbox-p outbox)
           (outbox-emptyp outbox)
           (omap::assoc parent net)
-          (inbox-contains (proc->inbox-new (omap::lookup parent net))
-                          (proc->pid self)))
+          (inbox-contains (proc->inbox-new (omap::lookup parent net)) (proc->pid self)))
         (sent-message-wf self outbox parent net))))
 
 ; Klst Well Formed ------------------------------------------------------------
 
-; Initial klst
-(defconst *reduce-receive-body*
-  '((:call sum_reduce
-           (:cons (:var parentpid)
-                  (:cons (:var childtl)
-                         (:cons (:binop + (:var lefttotal)
-                                          (:var righttotal))
-                                (:nil)))))))
 ; Continuation after the receive
 (defconst *reduce-receive-clauses*
-  '(((cases (:tuple (:cons (:var childhd)
-                           (:cons (:var righttotal) (:nil)))))
+  '(((cases (:tuple (:cons (:var ChildHd) (:cons (:var RightTotal) (:nil)))))
      (guards)
-     (body (:call sum_reduce
-                  (:cons (:var parentpid)
-                         (:cons (:var childtl)
-                                (:cons (:binop + (:var lefttotal)
-                                                 (:var righttotal))
-                                       (:nil)))))))))
+     (body
+      (:call sum_reduce
+        (:cons (:var ParentPid)
+          (:cons (:var ChildTl)
+              (:cons (:binop + (:var LeftTotal) (:var RightTotal)) (:nil)))))))))
 
-; TODO: This was another last minute realization. It is caused because
-; my implementation of reduce is not tail recursive.
-; As a worker node calls
-; reduce again and again, it will accumluate a list of continuations
-; where every three row of continuations are:
-; 1- exprs nil, remaining form the body of the matched receive clauses
-; 2- exprs nil, remaining from the body of reduce function clauses
-; 3- function-return, the return from the call to reduce
-; I would prefer to look for a better way to solve this problem, alas,
-; I realized this very late when removing a skip-proofs, which is,
-; after all, "a quick way to introduce unsoundness".
-(define reduce-klst-lst-p ((klst erl-klst-p) (rbind bind-p))
+; TODO: Here is another consequence of not having tail-call elimination.
+; As a worker node calls reduce again and again, it will accumluate a list
+; of continuations where every three continuations in a row are:
+; 1- (:exprs nil), remaining form the body of the matched receive clauses
+; 2- (:exprs nil), remaining from the body of reduce function clauses
+; 3- (:function-return ..), the return from the call to reduce
+; As a temporary solution, the following predicate defines such lists of
+; continuations produced by calls to reduce.
+(define reduce-klst-lst-p ((klst erl-klst-p) (bind bind-p))
   :returns (r booleanp)
   :measure (len (erl-klst-fix klst))
   (b* ((klst (erl-klst-fix klst))
-       (rbind (bind-fix rbind))
+       (bind (bind-fix bind))
        ((unless (<= 3 (len klst))) nil)
        (k1 (car klst))
        (k2 (cadr klst))
@@ -267,38 +247,34 @@
        ((unless (equal (kont-function-return->module (erl-k->kont k3)) 'local)) nil)
        ; The last bindings is the one the process was spawned with.
        ((unless (cdddr klst))
-        (equal (kont-function-return->bind (erl-k->kont k3)) rbind)))
-      (reduce-klst-lst-p (cdddr klst) rbind))
+        (equal (kont-function-return->bind (erl-k->kont k3)) bind)))
+      (reduce-klst-lst-p (cdddr klst) bind))
   ///
-    (defcong erl-klst-equiv equal (reduce-klst-lst-p klst rbind) 1)
-    (defcong bind-equiv equal (reduce-klst-lst-p klst rbind) 2)
+    (defcong erl-klst-equiv equal (reduce-klst-lst-p klst bind) 1)
+    (defcong bind-equiv equal (reduce-klst-lst-p klst bind) 2))
 
-    (defrule last-of-reduce-klst-lst-p
-      (implies
-        (reduce-klst-lst-p klst rbind)
-        (and
-          (equal
-            (kont-kind (erl-k->kont (car (last (erl-klst-fix klst)))))
-            :function-return)
-          (equal
-            (kont-function-return->bind
-              (erl-k->kont (car (last (erl-klst-fix klst)))))
-            (bind-fix rbind)))))
-    (defrule wtree-bind0-of-reduce-klst-lst-p
-      (implies (reduce-klst-lst-p klst rbind)
-               (equal (wtree-bind0 bind klst) (bind-fix rbind)))
-      :enable wtree-bind0))
+(local (defrule last-of-reduce-klst-lst-p
+  (implies
+    (reduce-klst-lst-p klst bind)
+    (and
+      (equal (kont-kind (erl-k->kont (car (last (erl-klst-fix klst)))))
+             :function-return)
+      (equal (kont-function-return->bind (erl-k->kont (car (last (erl-klst-fix klst)))))
+             (bind-fix bind))))
+  :enable reduce-klst-lst-p))
 
-; Check if the klst of a process that is awaiting to receive is well fromed. 
-(define reduce-receive-klst-p ((klst erl-klst-p) (rbind bind-p))
+; Check if the klst of a process that is awaiting to receive is well fromed.
+; TODO: Exactly the same as above, but with an extra check on the first continuation.
+;       These two can easily be refactored.
+(define reduce-receive-klst-p ((klst erl-klst-p) (bind bind-p))
   :returns (r booleanp)
   (b* ((klst (erl-klst-fix klst))
-       (rbind (bind-fix rbind))
+       (bind (bind-fix bind))
        ((unless (<= 3 (len klst))) nil)
        (k1 (car klst))
        (k2 (cadr klst))
        (k3 (caddr klst))
-       ; There must be enough fuel, let's overshoot and say > 100.
+       ; There must be enough fuel, let's overshoot and say at least 100.
        ((unless (> (erl-k->fuel k1) 100)) nil)
        ((unless (> (erl-k->fuel k2) 100)) nil)
        ((unless (> (erl-k->fuel k3) 100)) nil)
@@ -307,54 +283,55 @@
        (kont2 (erl-k->kont k2))
        (kont3 (erl-k->kont k3))
        ((unless
-          (equal kont1
-                 (make-kont-receive :clauses *reduce-receive-clauses*)))
+        (equal kont1 (make-kont-receive :clauses *reduce-receive-clauses*)))
         nil)
        ((unless (equal kont2 (make-kont-exprs :exprs nil))) nil)
        ((unless (equal (kont-kind kont3) :function-return)) nil)
        ((unless (equal (kont-function-return->module kont3) 'local)) nil)
        ; Ensure that the auxillary varaibles have not changed.
        ((unless (cdddr klst))
-        (equal (kont-function-return->bind kont3) rbind)))
+        (equal (kont-function-return->bind kont3) bind)))
       ; If there are more continuations, then they must be call stacks
       ; of previous calls to reduce.
-      (reduce-klst-lst-p (cdddr klst) rbind))
+      (reduce-klst-lst-p (cdddr klst) bind))
   ///
-    (defcong erl-klst-equiv equal (reduce-receive-klst-p klst rbind) 1)
-    (defcong bind-equiv equal (reduce-receive-klst-p klst rbind) 2)
+    (defcong erl-klst-equiv equal (reduce-receive-klst-p klst bind) 1)
+    (defcong bind-equiv equal (reduce-receive-klst-p klst bind) 2)
 
     (defrule wtree-bind0-of-reduce-receive-klst-p
-      (implies (reduce-receive-klst-p nklst rbind)
-               (equal (wtree-bind0 bind nklst) (bind-fix rbind)))
+      (implies (reduce-receive-klst-p klst rbind)
+               (equal (wtree-bind0 bind klst) (bind-fix rbind)))
       :enable wtree-bind0)
     
     (defruled normalize-reduce-receive-klst-p
       (implies
-        (reduce-receive-klst-p (proc->klst p) rbind)
+        (reduce-receive-klst-p (proc->klst p) bind)
         (reduce-receive-klst-p (proc->klst p) (wtree-bind p)))
       :enable wtree-bind
-      :disable (wtree-bind0-to-wtree-bind reduce-receive-klst-p)))
+      :disable reduce-receive-klst-p)
+      )
 
-(defrule reduce-receive-klst-p-new-call-stack
+; This is how the call stack grows, when apply-k returns.
+(defrule reduce-receive-klst-p-of-append
   (implies
     (and
-      (reduce-receive-klst-p klst rbind)
-      (> (erl-k->fuel (car klst)) 106))
+      (reduce-receive-klst-p klst bind) (> (erl-k->fuel (car klst)) 104))
     (reduce-receive-klst-p
       (append
-        (list (erl-k (- (erl-k->fuel (car klst)) 6) (erl-k->kont (car klst)))
-              (erl-k (- (erl-k->fuel (car klst)) 6)
+        (list (erl-k (- (erl-k->fuel (car klst)) 4) (erl-k->kont (car klst)))
+              (erl-k (- (erl-k->fuel (car klst)) 4)
                      (make-kont-exprs :exprs nil))
               (erl-k (- (erl-k->fuel (car klst)) 3)
                      (make-kont-function-return :bind b :module 'local))
               (erl-k (- (erl-k->fuel (car klst)) 1)
                      (make-kont-exprs :exprs nil)))
         (cdr klst))
-      rbind))
+      bind))
   :enable (reduce-receive-klst-p reduce-klst-lst-p))
 
-; Inbox Formed ----------------------------------------------------------------
+; Inbox Well-Formed ----------------------------------------------------------------
 
+; An inbox is well formed if every message is of the form {pid, val}.
 (define wf-inbox-p ((inbox erl-vlst-p))
   :returns (r booleanp)
   :measure (acl2-count (erl-vlst-fix inbox))
@@ -374,8 +351,7 @@
     (defrule wf-inbox-p-of-received-messages-wf
       (implies (received-messages-wf inbox cpids net)
                (wf-inbox-p inbox))
-      :enable received-messages-wf
-      :induct (received-messages-wf inbox cpids net))
+      :enable received-messages-wf)
 
     (defrule wf-inbox-p-of-car
       (implies
@@ -384,10 +360,8 @@
              (equal (erl-val-kind (car inbox)) :tuple)
              (equal (len (erl-val-tuple->lst (car inbox))) 2)
              (equal (erl-val-kind (cadr (erl-val-tuple->lst (car inbox))))
-                    :integer)))
-      :enable erl-vlst-p)
+                    :integer))))
 
     (defrule wf-inbox-p-of-cdr
       (implies (and (wf-inbox-p inbox) (erl-vlst-p inbox))
-               (wf-inbox-p (cdr inbox)))
-      :enable erl-vlst-p))
+               (wf-inbox-p (cdr inbox)))))

@@ -6,6 +6,7 @@
 ;
 ; Main Author: Kuter Bora
 ; Contributing Author: Mark Greenstreet
+
 (in-package "ACL2")
 (include-book "erl-state")
 
@@ -38,9 +39,9 @@
              (make-erl-val-atom :val 'false)))
         ((equal fn (make-fn :name 'is_function :arity 2))
          (b* (((unless (equal (erl-val-kind (cadr args)) :integer))
-               (make-erl-val-excpt 
-                  :err (make-erl-err :class (make-err-class-error)
-                                     :reason (make-exit-reason-badarg))))
+               (make-erl-val-excpt
+                 :err-class (make-erl-val-atom :val 'error)
+                 :err-reason (make-erl-val-atom :val 'badarg)))
               ((unless (equal (erl-val-kind (car args)) :fun))
                 (make-erl-val-atom :val 'false))
               (fun-arity (erl-val-fun->arity (car args)))
@@ -70,30 +71,30 @@
              (make-erl-val-atom :val 'false)))
         ((equal fn (make-fn :name 'element :arity 2))
          (b* (((unless (equal (erl-val-kind (car args)) :integer))
-               (make-erl-val-excpt 
-                  :err (make-erl-err :class (make-err-class-error)
-                                     :reason (make-exit-reason-badarg))))
+               (make-erl-val-excpt
+                 :err-class (make-erl-val-atom :val 'error)
+                 :err-reason (make-erl-val-atom :val 'badarg)))
               (n (erl-val-integer->val (car args)))
               ((unless 
                 (and (equal (erl-val-kind (cadr args)) :tuple)
                      (> n 0)
                      (<= n (len (erl-val-tuple->lst (cadr args))))))
-                (make-erl-val-excpt 
-                  :err (make-erl-err :class (make-err-class-error)
-                                     :reason (make-exit-reason-badarg) ))))
+                (make-erl-val-excpt
+                 :err-class (make-erl-val-atom :val 'error)
+                 :err-reason (make-erl-val-atom :val 'badarg))))
               (nth (1- n) (erl-val-tuple->lst (cadr args)))))
         ((equal fn (make-fn :name 'hd :arity 1))
          (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
                             (consp (erl-val-cons->lst (car args)))))
                (make-erl-val-excpt
-                 :err (make-erl-err :class (make-err-class-error)
-                                    :reason (make-exit-reason-badarg)))))
+                 :err-class (make-erl-val-atom :val 'error)
+                 :err-reason (make-erl-val-atom :val 'badarg))))
              (car (erl-val-cons->lst (car args)))))
         ((equal fn (make-fn :name 'length :arity 1))
          (b* (((unless (equal (erl-val-kind (car args)) :cons))
                (make-erl-val-excpt
-                 :err (make-erl-err :class (make-err-class-error)
-                                    :reason (make-exit-reason-badarg))))
+                 :err-class (make-erl-val-atom :val 'error)
+                 :err-reason (make-erl-val-atom :val 'badarg)))
               (l (len (erl-val-cons->lst (car args)))))
              (make-erl-val-integer :val l)))
         ((equal fn (make-fn :name 'max :arity 2))
@@ -115,14 +116,14 @@
          (b* (((unless (and (equal (erl-val-kind (car args)) :cons)
                             (consp (erl-val-cons->lst (car args)))))
                (make-erl-val-excpt
-                 :err (make-erl-err :class (make-err-class-error)
-                                    :reason (make-exit-reason-badarg)))))
+                 :err-class (make-erl-val-atom :val 'error)
+                 :err-reason (make-erl-val-atom :val 'badarg))))
              (make-erl-val-cons :lst (cdr (erl-val-cons->lst (car args))))))
         ((equal fn (make-fn :name 'tuple_size :arity 1))
          (b* (((unless (equal (erl-val-kind (car args)) :tuple))
                (make-erl-val-excpt
-                 :err (make-erl-err :class (make-err-class-error)
-                                    :reason (make-exit-reason-badarg))))
+                 :err-class (make-erl-val-atom :val 'error)
+                 :err-reason (make-erl-val-atom :val 'badarg)))
               (l (len (erl-val-tuple->lst (car args)))))
              (make-erl-val-integer :val l)))
         (t (make-erl-val-reject :err "eval-bif: bad bif"))))

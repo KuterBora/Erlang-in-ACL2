@@ -38,7 +38,6 @@
       :rule-classes :linear
       :enable (node-index omap::lookup))))
 
-
 ; Some helper rules
 (local (defrule ps-of-terminated-network
   (implies
@@ -57,8 +56,8 @@
 (local (defrule member-equal-of-rev-prefixp
   (implies (and (prefixp (rev l2) (rev l1)) (member-equal e l2))
            (member-equal e l1))
-  :use ((:instance member-equal-of-prefixp
-          (x (rev l2)) (y (rev l1))))))
+  :use (:instance member-equal-of-prefixp
+          (x (rev l2)) (y (rev l1)))))
 
 (local (defruled parent-of-member-of-check-children
   (implies
@@ -70,10 +69,10 @@
          (equal (omap::lookup 'Parent
                   (wtree-bind (omap::lookup cpid net)))
                 pid)))
-  :enable check-children
-  :induct (check-children pid children net)))
+  :enable check-children))
 
-(local (defrule inv-blocked-node-props
+; BOZO: another brute-force solution
+(local (defruled inv-blocked-node-props
   (implies
     (and
       (inv pid net)
@@ -81,59 +80,93 @@
       (or (leaf-p (omap::lookup pid net))
           (root-p (omap::lookup pid net)))
       (equal (proc->ps (omap::lookup pid net)) :blocked))
-    (b* ((proc (omap::lookup pid net))
-         (bind (erl-state->bind (proc->s proc)))
-         (wbind (wtree-bind proc))
-         (children (erl-val-cons->lst (omap::lookup 'ChildPids wbind)))
-         (index (erl-val-integer->val (omap::lookup 'Index wbind)))
-         (cps (erl-val-cons->lst (omap::lookup 'CPids bind)))
-         (chd (omap::lookup 'ChildHd bind)))
-      (and
-        (omap::assoc 'CPids bind)
-        (equal
-          (erl-val-kind
-            (omap::lookup 'CPids bind)) :cons)
-        (consp cps)
-        (equal chd (car cps))
-        (prefixp (rev cps) (rev children))
-        (omap::assoc chd net)
-        (leaf-p (omap::lookup chd net))
-        (< index
-           (erl-val-integer->val
-             (omap::lookup 'Index
-               (wtree-bind (omap::lookup chd net)))))
-        (null (proc->inbox-new proc))
-        (not (inbox-contains (proc->inbox-tried proc) chd)))))
-  :expand ((inv pid net))))
+    (and
+      (remaining-children-p
+        (erl-state->bind (proc->s (omap::lookup pid net))))
+      (erl-val-p
+        (omap::lookup 'ChildHd
+          (erl-state->bind (proc->s (omap::lookup pid net)))))
+      (prefixp
+        (rev (remaining-children
+               (erl-state->bind (proc->s (omap::lookup pid net)))))
+        (rev (erl-val-cons->lst
+               (omap::lookup 'ChildPids
+                 (wtree-bind (omap::lookup pid net))))))
+      (omap::assoc
+        (omap::lookup 'ChildHd
+          (erl-state->bind (proc->s (omap::lookup pid net))))
+        net)
+      (leaf-p
+        (omap::lookup
+          (omap::lookup 'ChildHd
+            (erl-state->bind (proc->s (omap::lookup pid net))))
+          net))
+      (< (erl-val-integer->val
+           (omap::lookup 'Index (wtree-bind (omap::lookup pid net))))
+         (erl-val-integer->val
+           (omap::lookup 'Index
+             (wtree-bind
+               (omap::lookup
+                 (omap::lookup 'ChildHd
+                   (erl-state->bind (proc->s (omap::lookup pid net))))
+                 net)))))
+      (null (proc->inbox-new (omap::lookup pid net)))
+      (not (inbox-contains
+             (proc->inbox-tried (omap::lookup pid net))
+             (omap::lookup 'ChildHd
+               (erl-state->bind (proc->s (omap::lookup pid net))))))))
+  :enable remaining-children-p
+  :expand (inv pid net)))
 
-(local (defrule inv-blocked-node-child-props
+; BOZO: another brute-force solution
+(local (defruled inv-blocked-node-child-props
   (implies
     (and
       (inv-all net) (network-p net)
       (pid-p pid) (omap::assoc pid net)
       (equal (proc->ps (omap::lookup pid net)) :blocked))
-    (b* ((proc (omap::lookup pid net))
-         (bind (erl-state->bind (proc->s proc)))
-         (chd (omap::lookup 'ChildHd bind)))
-      (and
-        (pid-p chd)
-        (omap::assoc chd net)
-        (leaf-p (omap::lookup chd net))
-        (equal (omap::lookup 'Parent
-                 (wtree-bind (omap::lookup chd net))) pid)
-        (omap::assoc 'CPids bind)
-        (equal (erl-val-kind (omap::lookup 'CPids bind))
-               :cons)
-        (member-equal chd
-          (erl-val-cons->lst (omap::lookup 'CPids bind)))
-        (null (proc->inbox-new proc))
-        (not (inbox-contains (proc->inbox-tried proc) chd))
-        (< (node-index pid net) (node-index chd net)))))
+    (and
+      (pid-p
+        (omap::lookup 'ChildHd
+          (erl-state->bind (proc->s (omap::lookup pid net)))))
+      (omap::assoc
+        (omap::lookup 'ChildHd
+          (erl-state->bind (proc->s (omap::lookup pid net))))
+        net)
+      (leaf-p
+        (omap::lookup
+          (omap::lookup 'ChildHd
+            (erl-state->bind (proc->s (omap::lookup pid net))))
+          net))
+      (equal
+        (omap::lookup 'Parent
+          (wtree-bind
+            (omap::lookup
+              (omap::lookup 'ChildHd
+                (erl-state->bind (proc->s (omap::lookup pid net))))
+              net)))
+        pid)
+      (remaining-children-p
+        (erl-state->bind (proc->s (omap::lookup pid net))))
+      (member-equal
+        (omap::lookup 'ChildHd
+          (erl-state->bind (proc->s (omap::lookup pid net))))
+        (remaining-children
+          (erl-state->bind (proc->s (omap::lookup pid net)))))
+      (null (proc->inbox-new (omap::lookup pid net)))
+      (not (inbox-contains
+             (proc->inbox-tried (omap::lookup pid net))
+             (omap::lookup 'ChildHd
+               (erl-state->bind (proc->s (omap::lookup pid net))))))
+      (< (node-index pid net)
+         (node-index
+           (omap::lookup 'ChildHd
+             (erl-state->bind (proc->s (omap::lookup pid net))))
+           net))))
   :enable node-index
   :disable wtree-p-of-inv
   :use
-    ((:instance inv-of-inv-all)
-     (:instance inv-blocked-node-props)
+    ((:instance inv-blocked-node-props)
      (:instance wtree-nodes-are-leaf-or-root)
      (:instance wtree-p-of-inv)
      (:instance parent-of-member-of-check-children
@@ -143,7 +176,7 @@
                    (omap::lookup 'ChildPids
                      (wtree-bind (omap::lookup pid net)))))))))
 
-(local (defruled inv-terminated-node-sent-message-wf
+(local (defrule inv-terminated-node-sent-message-wf
   (implies
     (and
       (network-p net) (pid-p pid) (omap::assoc pid net)
@@ -157,9 +190,9 @@
       (omap::lookup 'Parent 
         (wtree-bind (omap::lookup pid net)))
       net))
-  :do-not-induct t
-  :expand ((inv pid net))))
+  :expand (inv pid net)))
 
+; If a process is blocked, ChildHd should not have terminated yet.
 (local (defrule blocked-child-not-terminated
   (implies
     (and
@@ -168,18 +201,11 @@
       (equal (proc->ps (omap::lookup pid net)) :blocked)
       (equal (omap::lookup 'Parent
                (wtree-bind (omap::lookup chd net))) pid)
-      (omap::assoc 'CPids
+      (remaining-children-p
         (erl-state->bind (proc->s (omap::lookup pid net))))
-      (equal
-        (erl-val-kind
-          (omap::lookup 'CPids
-            (erl-state->bind (proc->s (omap::lookup pid net)))))
-        :cons)
       (member-equal chd
-        (erl-val-cons->lst
-          (omap::lookup 'CPids
-            (erl-state->bind
-              (proc->s (omap::lookup pid net))))))
+        (remaining-children
+          (erl-state->bind (proc->s (omap::lookup pid net)))))
       (null (proc->inbox-new (omap::lookup pid net)))
       (not (inbox-contains
             (proc->inbox-tried (omap::lookup pid net))
@@ -190,8 +216,8 @@
       (inv chd net))
     (not (equal (proc->ps (omap::lookup chd net)) :terminated)))
   :enable sent-message-wf
-  :expand ((inbox-contains nil chd))
-  :use ((:instance inv-terminated-node-sent-message-wf (pid chd)))))
+  :expand (inbox-contains nil chd)
+  :use (:instance inv-terminated-node-sent-message-wf (pid chd))))
 
 (local (defruled proc-state-cases
   (implies (proc-p p)
@@ -201,23 +227,34 @@
         (equal (proc->ps p) :blocked)))
   :enable proc-state-p))
 
+; If the network is terminated, a blocked worker's child must also be blocked.
 (local (defrule blocked-node-has-blocked-child-when-terminated
   (implies
     (and
       (network-p net) (inv-all net) (terminated? net)
       (pid-p pid) (omap::assoc pid net)
       (equal (proc->ps (omap::lookup pid net)) :blocked))
-    (b* ((chd (omap::lookup 'ChildHd
-                (erl-state->bind (proc->s (omap::lookup pid net))))))
-      (and
-        (pid-p chd)
-        (omap::assoc chd net)
-        (equal (proc->ps (omap::lookup chd net)) :blocked)
-        (< (node-index pid net) (node-index chd net)))))
+    (and
+      (pid-p
+        (omap::lookup 'ChildHd
+          (erl-state->bind (proc->s (omap::lookup pid net)))))
+      (omap::assoc
+        (omap::lookup 'ChildHd
+          (erl-state->bind (proc->s (omap::lookup pid net))))
+        net)
+      (equal
+        (proc->ps
+          (omap::lookup
+            (omap::lookup 'ChildHd
+              (erl-state->bind (proc->s (omap::lookup pid net))))
+            net))
+        :blocked)
+      (< (node-index pid net)
+         (node-index
+           (omap::lookup 'ChildHd
+             (erl-state->bind (proc->s (omap::lookup pid net))))
+           net))))
   :use ((:instance inv-blocked-node-child-props)
-        (:instance inv-of-inv-all
-          (pid (omap::lookup 'ChildHd
-                 (erl-state->bind (proc->s (omap::lookup pid net))))))
         (:instance proc-state-cases
           (p (omap::lookup
                (omap::lookup 'ChildHd
@@ -231,7 +268,6 @@
       (pid-p pid) (omap::assoc pid net))
     (not (equal (proc->ps (omap::lookup pid net)) :blocked)))
   :induct (index-induct pid net)
-  :enable blocked-node-has-blocked-child-when-terminated
   :prep-lemmas
     ((define index-induct (pid net)
       :enabled t
@@ -253,7 +289,4 @@
       (inv-all net) (terminated? net) (network-p net)
       (pid-p pid) (omap::assoc pid net))
     (equal (proc->ps (omap::lookup pid net)) :terminated))
-  :do-not-induct t
-  :use ((:instance no-blocked-node-when-terminated)
-        (:instance ps-of-terminated-network)
-        (:instance proc-state-cases (p (omap::lookup pid net)))))
+  :use (:instance proc-state-cases (p (omap::lookup pid net))))
