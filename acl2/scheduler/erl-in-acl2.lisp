@@ -183,7 +183,7 @@
   ///
     (more-returns
       (rnet network-p :rule-classes :type-prescription
-        ; TODO: This can be done with single computational hint.
+        ; BOZO: This can be done with single computational hint.
         :hints
           (("Subgoal 9"
             :in-theory

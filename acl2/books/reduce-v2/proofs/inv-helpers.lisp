@@ -73,7 +73,7 @@
       :rule-classes :forward-chaining)
 
     ; Removing a message from the inbox maintains the invariant.
-    (defrule ionbox-without-of-received-messages-wf-of
+    (defrule received-messages-wf-of-remove
       (implies
         (and (network-p net) (erl-vlst-p cpids) (pid-p pid)
              (received-messages-wf inbox cpids net))
@@ -315,11 +315,11 @@
 (defrule reduce-receive-klst-p-of-append
   (implies
     (and
-      (reduce-receive-klst-p klst bind) (> (erl-k->fuel (car klst)) 106))
+      (reduce-receive-klst-p klst bind) (> (erl-k->fuel (car klst)) 104))
     (reduce-receive-klst-p
       (append
-        (list (erl-k (- (erl-k->fuel (car klst)) 6) (erl-k->kont (car klst)))
-              (erl-k (- (erl-k->fuel (car klst)) 6)
+        (list (erl-k (- (erl-k->fuel (car klst)) 4) (erl-k->kont (car klst)))
+              (erl-k (- (erl-k->fuel (car klst)) 4)
                      (make-kont-exprs :exprs nil))
               (erl-k (- (erl-k->fuel (car klst)) 3)
                      (make-kont-function-return :bind b :module 'local))

@@ -9,7 +9,7 @@
 
 (in-package "ACL2")
 
-(include-book "run")
+(include-book "run/top")
 (include-book "deliver")
 
 (defrule inv-of-erl-step-of-assoc

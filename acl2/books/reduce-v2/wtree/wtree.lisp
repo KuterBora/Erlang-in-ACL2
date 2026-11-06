@@ -143,19 +143,6 @@
   :use wtree-node-p-when-wtree-p
   :enable wtree-node-p)
 
-; The root's subtree spans the indices 0 .. size-1 of the network.
-; (defruled rightmost-index-of-wtree-root
-;   (implies
-;     (and (network-p net) (wtree-p net) (omap::assoc pid net)
-;          (root-p (omap::lookup pid net)))
-;     (equal
-;       (erl-val-integer->val
-;         (omap::lookup 'Index
-;           (wtree-bind (omap::lookup (rightmost-child pid net) net))))
-;       (+ -1 (omap::size net))))
-;   :use wtree-node-p-when-wtree-p
-;   :enable wtree-node-p)
-
 (defrule parent-not-self-of-wtree
   (implies
     (and (network-p net) (wtree-p net) (omap::assoc pid net))
@@ -165,123 +152,122 @@
   :disable check-parent-of-wtree-p
   :use check-parent-of-wtree-p)
 
-; (defruled node-is-childpid-of-parent
-;   (implies
-;     (and
-;       (network-p net) (wtree-p net)
-;       (pid-p pid) (pid-p p) (omap::assoc pid net)
-;       (equal (omap::lookup 'Parent
-;                (wtree-bind (omap::lookup pid net))) p))
-;     (and
-;       (omap::assoc p net)
-;       (member-equal
-;         pid
-;         (erl-val-cons->lst
-;           (omap::lookup
-;             'ChildPids
-;             (wtree-bind (omap::lookup p net)))))))
-;   :enable check-parent
-;   :use ((:instance check-parent-of-wtree-p (pid pid))))
-
-
 ; Rightmost Child of a Wtree Node ----------------------------------------------
 
-; (defruled rightmost-child-of-parent-is-rightmost-of-last-child
-;   (implies
-;     (and
-;       (network-p net) (omap::assoc pid net)
-;       (or (leaf-p (omap::lookup pid net)) (root-p (omap::lookup pid net)))
-;       (erl-val-cons->lst
-;         (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net))))
-;       (pid-p
-;         (car (last (erl-val-cons->lst
-;                      (omap::lookup 'ChildPids
-;                        (wtree-bind (omap::lookup pid net)))))))
-;       (omap::assoc
-;         (car (last (erl-val-cons->lst
-;                      (omap::lookup 'ChildPids
-;                        (wtree-bind (omap::lookup pid net)))))) net)
-;       (leaf-p (omap::lookup
-;                 (car (last (erl-val-cons->lst
-;                              (omap::lookup 'ChildPids
-;                                (wtree-bind (omap::lookup pid net)))))) net))
-;       (rightmost-child pid net))
-;     (equal
-;       (rightmost-child
-;         (car (last (erl-val-cons->lst
-;                       (omap::lookup 'ChildPids
-;                         (wtree-bind (omap::lookup pid net)))))) net)
-;       (rightmost-child pid net)))
-;   :enable rightmost-child
-;   :expand ((rightmost-child0 pid net (omap::size net)))
-;   :use ((:instance increase-fuel-of-rightmost-child0
-;           (pid (car (last (erl-val-cons->lst
-;                             (omap::lookup 'ChildPids
-;                               (wtree-bind (omap::lookup pid net)))))))
-;           (f1 (- (omap::size net) 1)) (f2 (omap::size net)))))
+; A suffix of a list without duplicates has no duplicates.
+(defruled no-duplicatesp-of-suffix
+  (implies (and (prefixp (rev x) (rev y)) (no-duplicatesp-equal y))
+           (no-duplicatesp-equal x))
+  :use ((:instance no-duplicatesp-of-prefix (x (rev x)) (y (rev y))))
+  :disable no-duplicatesp-of-prefix
+  :prep-lemmas
+    ((defrule member-of-rev
+       (iff (member-equal e (rev l)) (member-equal e l))
+       :enable rev)
+     (defrule no-duplicatesp-of-append-singleton
+       (equal (no-duplicatesp-equal (append x (list a)))
+              (and (no-duplicatesp-equal x) (not (member-equal a x)))))
+     (defrule no-duplicatesp-of-rev
+       (equal (no-duplicatesp-equal (rev l)) (no-duplicatesp-equal l))
+       :enable rev)
+     (defrule member-of-prefix
+       (implies (and (prefixp x y) (member-equal e x)) (member-equal e y))
+       :enable prefixp)
+     (defruled no-duplicatesp-of-prefix
+       (implies (and (prefixp x y) (no-duplicatesp-equal y))
+                (no-duplicatesp-equal x))
+       :enable prefixp)))
 
-; (defruled rightmost-child-when-check-indices
-;   (implies
-;     (and
-;       (network-p net) (pid-lst-p cps)
-;       (member-equal cpid cps)
-;       (erl-val-cons->lst
-;         (omap::lookup 'ChildPids (wtree-bind (omap::lookup cpid net))))
-;       (check-indices i cps net))
-;     (rightmost-child cpid net))
-;   :enable check-indices
-;   :induct (check-indices i cps net))
+; In a suffix cps of the children, the second child comes right after the
+; rightmost child of the first one.
+(defruled check-indices-next-child
+  (implies
+    (and (network-p net) (pid-lst-p children) (pid-lst-p cps)
+         (consp (cdr cps))
+         (prefixp (rev cps) (rev children))
+         (check-indices i children net))
+    (and (omap::assoc (car cps) net)
+         (leaf-p (omap::lookup (car cps) net))
+         (rightmost-child (car cps) net)
+         (omap::assoc (cadr cps) net)
+         (leaf-p (omap::lookup (cadr cps) net))
+         (equal (erl-val-integer->val
+                  (omap::lookup 'Index
+                    (wtree-bind (omap::lookup (cadr cps) net))))
+                (+ 1 (erl-val-integer->val
+                       (omap::lookup 'Index
+                         (wtree-bind
+                           (omap::lookup (rightmost-child (car cps) net)
+                                         net))))))))
+  :expand ((:free (i) (check-indices i cps net))
+           (:free (i) (check-indices i (cdr cps) net)))
+  :use (check-indices-of-cdr
+        (:instance node-p-of-rightmost-child (pid (car cps)))))
 
-; (defruled first-child-of-check-indices
-;   (implies
-;     (and
-;       (network-p net) (pid-p pid) (natp index)
-;       (pid-lst-p children) children
-;       (check-children pid children net)
-;       (check-indices index children net))
-;     (and
-;       (omap::assoc (car children) net)
-;       (leaf-p (omap::lookup (car children) net))
-;       (equal
-;         (omap::lookup 'Parent (wtree-bind (omap::lookup (car children) net)))
-;         pid)
-;       (equal
-;         (erl-val-integer->val
-;           (omap::lookup 'Index (wtree-bind (omap::lookup (car children) net))))
-;         (+ 1 index))))
-;   :enable (check-children check-indices))
+(defruled rightmost-child-when-member-of-check-indices
+  (implies (and (network-p net) (pid-lst-p cps) (member-equal cpid cps)
+                (check-indices i cps net))
+           (rightmost-child cpid net))
+  :induct (check-indices i cps net)
+  :enable check-indices)
 
-; (defruled rightmost-child-of-wtree-node
-;   (implies
-;     (and
-;       (network-p net) (wtree-p net)
-;       (omap::assoc pid net)
-;       (erl-val-cons->lst
-;         (omap::lookup 'ChildPids (wtree-bind (omap::lookup pid net)))))
-;     (rightmost-child pid net))
-;   :enable check-parent
-;   :disable
-;     (wtree-nodes-are-leaf-or-root check-parent-of-wtree-p
-;      check-indices-of-wtree-node)
-;   :use ((:instance wtree-nodes-are-leaf-or-root)
-;         (:instance check-parent-of-wtree-p)
-;         (:instance check-indices-of-wtree-node
-;           (pid (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))))
-;         (:instance rightmost-child-when-member-of-check-indices
-;           (cpid pid)
-;           (cps (erl-val-cons->lst
-;                  (omap::lookup 'ChildPids
-;                    (wtree-bind
-;                      (omap::lookup
-;                        (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
-;                        net)))))
-;           (i (erl-val-integer->val
-;                (omap::lookup 'Index
-;                  (wtree-bind
-;                    (omap::lookup
-;                      (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
-;                      net))))))))
+; Every node of a worker tree has a rightmost child.
+(defruled rightmost-child-of-wtree-node
+  (implies (and (network-p net) (wtree-p net) (omap::assoc pid net))
+           (rightmost-child pid net))
+  :enable check-parent
+  :disable (wtree-nodes-are-leaf-or-root check-parent-of-wtree-p
+            check-indices-of-wtree-node)
+  :use ((:instance wtree-nodes-are-leaf-or-root)
+        (:instance check-parent-of-wtree-p)
+        (:instance check-indices-of-wtree-node
+          (pid (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))))
+        (:instance rightmost-child-when-member-of-check-indices
+          (cpid pid)
+          (cps (erl-val-cons->lst
+                 (omap::lookup 'ChildPids
+                   (wtree-bind
+                     (omap::lookup
+                       (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+                       net)))))
+          (i (erl-val-integer->val
+               (omap::lookup 'Index
+                 (wtree-bind
+                   (omap::lookup
+                     (omap::lookup 'Parent (wtree-bind (omap::lookup pid net)))
+                     net))))))))
 
+; The rightmost child of a node is the rightmost child of its last child.
+(defruled rightmost-child-of-last-child
+  (implies
+    (and (network-p net) (wtree-p net) (omap::assoc p net)
+         (consp (erl-val-cons->lst
+                  (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))))
+         (omap::assoc
+           (car (last (erl-val-cons->lst
+                        (omap::lookup 'ChildPids
+                          (wtree-bind (omap::lookup p net))))))
+           net)
+         (leaf-p
+           (omap::lookup
+             (car (last (erl-val-cons->lst
+                          (omap::lookup 'ChildPids
+                            (wtree-bind (omap::lookup p net))))))
+             net)))
+    (equal (rightmost-child
+             (car (last (erl-val-cons->lst
+                          (omap::lookup 'ChildPids
+                            (wtree-bind (omap::lookup p net))))))
+             net)
+           (rightmost-child p net)))
+  :enable rightmost-child
+  :expand ((rightmost-child0 p net (omap::size net)))
+  :use ((:instance rightmost-child-of-wtree-node (pid p))
+        (:instance increase-fuel-of-rightmost-child0
+          (pid (car (last (erl-val-cons->lst
+                            (omap::lookup 'ChildPids
+                              (wtree-bind (omap::lookup p net)))))))
+          (f1 (- (omap::size net) 1)) (f2 (omap::size net)))))
 
 ; Updating a Wtree -------------------------------------------------------------
 
@@ -316,3 +302,47 @@
           (net0 (omap::update pid proc net)))
         (:instance wtree0-p-when-subset-of-keys
           (net1 (omap::update pid proc net)) (net net) (net0 net))))
+
+
+; TODO: This is a temporary solution for a proof in run.lisp.
+(defruled wtree-node-props
+  (b* ((wbind (wtree-bind (omap::lookup p net)))
+       (parent (omap::lookup 'Parent wbind))
+       (index (erl-val-integer->val (omap::lookup 'Index wbind)))
+       (children (erl-val-cons->lst (omap::lookup 'ChildPids wbind)))
+       (chd (car children)))
+    (implies
+      (and (network-p net) (wtree-p net) (pid-p p) (omap::assoc p net)
+           (omap::assoc pid net))
+      (and
+        (or (pid-p parent) (equal parent (make-erl-val-atom :val 'none)))
+        (not (equal parent p))
+        (natp index)
+        (pid-lst-p children)
+        (implies (consp children)
+          (and (omap::assoc chd net)
+               (not (equal chd p))
+               (leaf-p (omap::lookup chd net))
+               (equal (erl-val-integer->val
+                        (omap::lookup 'Index (wtree-bind (omap::lookup chd net))))
+                      (+ 1 index))))
+        (or (not (equal (omap::lookup 'Parent (wtree-bind (omap::lookup pid net))) p))
+            (member-equal pid children)))))
+  :enable check-parent
+  :disable (wtree-nodes-are-leaf-or-root check-parent-of-wtree-p
+            check-indices-of-wtree-node check-children-of-wtree-node)
+  :expand
+    ((:free (i n)
+      (check-indices i
+        (erl-val-cons->lst (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))) n))
+     (:free (n)
+      (check-children p
+        (erl-val-cons->lst (omap::lookup 'ChildPids (wtree-bind (omap::lookup p net)))) n)))
+  :use ((:instance wtree-nodes-are-leaf-or-root (pid p))
+        (:instance check-parent-of-wtree-p)
+        (:instance check-indices-of-wtree-node (pid p))
+        (:instance check-children-of-wtree-node (pid p))
+        (:instance parent-not-self-of-wtree
+          (pid (car (erl-val-cons->lst
+                      (omap::lookup 'ChildPids
+                        (wtree-bind (omap::lookup p net)))))))))
