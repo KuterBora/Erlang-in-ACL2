@@ -56,8 +56,8 @@
 (local (defrule member-equal-of-rev-prefixp
   (implies (and (prefixp (rev l2) (rev l1)) (member-equal e l2))
            (member-equal e l1))
-  :use ((:instance member-equal-of-prefixp
-          (x (rev l2)) (y (rev l1))))))
+  :use (:instance member-equal-of-prefixp
+          (x (rev l2)) (y (rev l1)))))
 
 (local (defruled parent-of-member-of-check-children
   (implies
@@ -69,10 +69,10 @@
          (equal (omap::lookup 'Parent
                   (wtree-bind (omap::lookup cpid net)))
                 pid)))
-  :enable check-children
-  :induct (check-children pid children net)))
+  :enable check-children))
 
-(local (defrule inv-blocked-node-props
+; BOZO: another brute-force solution
+(local (defruled inv-blocked-node-props
   (implies
     (and
       (inv pid net)
@@ -118,7 +118,8 @@
   :enable remaining-children-p
   :expand (inv pid net)))
 
-(local (defrule inv-blocked-node-child-props
+; BOZO: another brute-force solution
+(local (defruled inv-blocked-node-child-props
   (implies
     (and
       (inv-all net) (network-p net)
@@ -165,8 +166,7 @@
   :enable node-index
   :disable wtree-p-of-inv
   :use
-    ((:instance inv-of-inv-all)
-     (:instance inv-blocked-node-props)
+    ((:instance inv-blocked-node-props)
      (:instance wtree-nodes-are-leaf-or-root)
      (:instance wtree-p-of-inv)
      (:instance parent-of-member-of-check-children
@@ -176,7 +176,7 @@
                    (omap::lookup 'ChildPids
                      (wtree-bind (omap::lookup pid net)))))))))
 
-(local (defruled inv-terminated-node-sent-message-wf
+(local (defrule inv-terminated-node-sent-message-wf
   (implies
     (and
       (network-p net) (pid-p pid) (omap::assoc pid net)
@@ -190,9 +190,9 @@
       (omap::lookup 'Parent 
         (wtree-bind (omap::lookup pid net)))
       net))
-  :do-not-induct t
-  :expand ((inv pid net))))
+  :expand (inv pid net)))
 
+; If a process is blocked, ChildHd should not have terminated yet.
 (local (defrule blocked-child-not-terminated
   (implies
     (and
@@ -216,8 +216,8 @@
       (inv chd net))
     (not (equal (proc->ps (omap::lookup chd net)) :terminated)))
   :enable sent-message-wf
-  :expand ((inbox-contains nil chd))
-  :use ((:instance inv-terminated-node-sent-message-wf (pid chd)))))
+  :expand (inbox-contains nil chd)
+  :use (:instance inv-terminated-node-sent-message-wf (pid chd))))
 
 (local (defruled proc-state-cases
   (implies (proc-p p)
@@ -227,6 +227,7 @@
         (equal (proc->ps p) :blocked)))
   :enable proc-state-p))
 
+; If the network is terminated, a blocked worker's child must also be blocked.
 (local (defrule blocked-node-has-blocked-child-when-terminated
   (implies
     (and
@@ -254,9 +255,6 @@
              (erl-state->bind (proc->s (omap::lookup pid net))))
            net))))
   :use ((:instance inv-blocked-node-child-props)
-        (:instance inv-of-inv-all
-          (pid (omap::lookup 'ChildHd
-                 (erl-state->bind (proc->s (omap::lookup pid net))))))
         (:instance proc-state-cases
           (p (omap::lookup
                (omap::lookup 'ChildHd
@@ -270,7 +268,6 @@
       (pid-p pid) (omap::assoc pid net))
     (not (equal (proc->ps (omap::lookup pid net)) :blocked)))
   :induct (index-induct pid net)
-  :enable blocked-node-has-blocked-child-when-terminated
   :prep-lemmas
     ((define index-induct (pid net)
       :enabled t
@@ -292,7 +289,4 @@
       (inv-all net) (terminated? net) (network-p net)
       (pid-p pid) (omap::assoc pid net))
     (equal (proc->ps (omap::lookup pid net)) :terminated))
-  :do-not-induct t
-  :use ((:instance no-blocked-node-when-terminated)
-        (:instance ps-of-terminated-network)
-        (:instance proc-state-cases (p (omap::lookup pid net)))))
+  :use (:instance proc-state-cases (p (omap::lookup pid net))))
