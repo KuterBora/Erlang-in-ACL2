@@ -103,27 +103,12 @@
                ((unless (omap::assoc 'ParentPid bind)) nil)
                ((unless (equal parent (omap::lookup 'ParentPid bind))) nil)
                
-               ; the childpids are a non-empty list
-               ((unless (omap::assoc 'CPids bind)) nil)
-               (cps (omap::lookup 'CPids bind))
-               ((unless (equal (erl-val-kind Cps) :cons)) nil)
-               (cps (erl-val-cons->lst cps))
-               ((unless cps) nil)
-               ; The remaining children are a postfix of the original children.
-               ; TODO: I might need a better representation for this.
-               ((unless (prefixp (rev cps) (rev children))))
-               
-               ; ChildHead and ChildTail are bound correctly.
-               ; needed: proving chd /= nil would take a lemma that nil is
-               ; never a key of a network.
-               ((unless (omap::assoc 'ChildHd bind)) nil)
-               (chd (omap::lookup 'ChildHd bind))
-               ((unless (equal chd (car cps))) nil)
-               ((unless (omap::assoc 'ChildTl bind)) nil)
-               (ctl (omap::lookup 'ChildTl bind))
-               ((unless (equal (erl-val-kind ctl) :cons)) nil)
-               (ctl (erl-val-cons->lst ctl))
-               ((unless (equal ctl (cdr cps))) nil)
+               ; The remaining children [ChildHd | ChildTl] are bound,
+               ; and they are a postfix of the original children.
+               ((unless (remaining-children-p bind)) nil)
+               (cps (remaining-children bind))
+               (chd (car cps))
+               ((unless (prefixp (rev cps) (rev children))) nil)
               
                ; TODO: This follows from wtree-p
                ((unless (omap::assoc chd net)) nil)

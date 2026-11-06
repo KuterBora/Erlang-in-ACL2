@@ -124,7 +124,7 @@
 ; - the root always has an empty outbox.
 ; - if the outbox holds a message for the parent, it is a single message:
 ;   {self, value}
-; - The parent has not terminated yet, or removed this pid from its CPids.
+; - The parent has not terminated yet, or removed this pid from the remaining children.
 ; - otherwise the outbox is empty and the message has reached the parent:
 ;   it is in the parent's inbox-new (or inbox-tried, when :blocked), or the
 ;   parent has already processed it, or the parent has terminated.
@@ -144,11 +144,10 @@
        ; Check if the message has been received and processed
        ; by the parent.
        (received
-         (and (omap::assoc 'CPids pbind)
-              (equal (erl-val-kind (omap::lookup 'CPids pbind)) :cons)
+         (and (remaining-children-p pbind)
               (not (member-equal
                     (proc->pid self)
-                    (erl-val-cons->lst (omap::lookup 'CPids pbind))))))
+                    (remaining-children pbind)))))
        (val (erl-state->in (proc->s self))))
       (if (not (and (omap::assoc parent outbox) (omap::lookup parent outbox)))
           ; If there is no message for the parent, then

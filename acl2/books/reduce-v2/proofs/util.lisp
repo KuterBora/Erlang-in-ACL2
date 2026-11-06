@@ -70,6 +70,45 @@
 
 ; Wtree Utility ---------------------------------------------------------------
 
+; The children a node whose messages have no been received yet.
+; Remark: In an earlier implementation, instead of ChildHd and ChildTl,
+; the last clause of reduce had CPids as a parameter, and then
+; matched head and tail of the arguments in the body of the function.
+; Now, it has a single pattern [ChildHd | ChildTl] instead of Cpids. The
+; function 'remaining-children' creates the would be Cpids corresponding to
+; ChildHd and ChildTl, such that it can be used by existing proofs without a
+; major change.
+(define remaining-children-p ((bind bind-p))
+  :returns (r booleanp)
+  (b* ((bind (bind-fix bind)))
+      (and (omap::assoc 'ChildHd bind)
+           (omap::assoc 'ChildTl bind)
+           (equal (erl-val-kind (omap::lookup 'ChildTl bind)) :cons)
+           t))
+  ///
+    (defcong bind-equiv equal (remaining-children-p bind) 1))
+
+(define remaining-children ((bind bind-p))
+  :guard (remaining-children-p bind)
+  :guard-hints (("Goal" :in-theory (enable remaining-children-p)))
+  :returns (cpids erl-vlst-p)
+  (b* ((bind (bind-fix bind)))
+      (cons (erl-val-fix (omap::lookup 'ChildHd bind))
+            (erl-val-cons->lst (omap::lookup 'ChildTl bind))))
+  ///
+    (defcong bind-equiv equal (remaining-children bind) 1)
+
+    (defrule consp-of-remaining-children
+      (consp (remaining-children bind)))
+
+    (defrule car-of-remaining-children
+      (equal (car (remaining-children bind))
+             (erl-val-fix (omap::lookup 'ChildHd (bind-fix bind)))))
+
+    (defrule cdr-of-remaining-children
+      (equal (cdr (remaining-children bind))
+             (erl-val-cons->lst (omap::lookup 'ChildTl (bind-fix bind))))))
+
 ; Check if the parent of a process has not yet received its message.
 (define parent-still-waiting-p ((self pid-p) (parent erl-val-p) (net network-p))
   :returns (r booleanp)
@@ -83,10 +122,10 @@
        (pbind (erl-state->bind (proc->s pproc)))
        ; the parent cannot terminate until it receives all messages.
        ((if (equal (proc->ps pproc) :terminated)) nil)
-       ; the parent must have CPids bound to a list.
-       ((unless (omap::assoc 'CPids pbind)) t)
-       ((unless (equal (erl-val-kind (omap::lookup 'CPids pbind)) :cons)) t)) 
-    (consp (member-equal self (erl-val-cons->lst (omap::lookup 'CPids pbind)))))
+       ; ChildHd and ChildTl must be bound, because there should
+       ; be at least one more child.
+       ((unless (remaining-children-p pbind)) t))
+    (consp (member-equal self (remaining-children pbind))))
   ///
     (defcong pid-equiv equal (parent-still-waiting-p a b c) 1)
     (defcong erl-val-equiv equal (parent-still-waiting-p a b c) 2)
@@ -121,10 +160,10 @@
         (network-p net) (network-p (omap::update p proc net))
         (not (equal (proc->ps proc) :terminated))
         ; The auxillary variables do not change after a run step.
-        (equal (omap::lookup 'CPids (erl-state->bind (proc->s proc)))
-               (omap::lookup 'CPids (erl-state->bind (proc->s (omap::lookup p net)))))
-        (iff (omap::assoc 'CPids (erl-state->bind (proc->s proc)))
-             (omap::assoc 'CPids (erl-state->bind (proc->s (omap::lookup p net)))))
+        (equal (remaining-children (erl-state->bind (proc->s proc)))
+               (remaining-children (erl-state->bind (proc->s (omap::lookup p net)))))
+        (equal (remaining-children-p (erl-state->bind (proc->s proc)))
+               (remaining-children-p (erl-state->bind (proc->s (omap::lookup p net)))))
         (parent-still-waiting-p self parent net))
       (parent-still-waiting-p self parent (omap::update p proc net)))
     :enable omap::lookup-of-update))

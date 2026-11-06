@@ -178,16 +178,9 @@
       (member-equal src
         (erl-val-cons->lst
           (omap::lookup 'ChildPids (wtree-bind (omap::lookup dst net)))))
-      (or (not (and (omap::assoc 'CPids
-                      (erl-state->bind (proc->s (omap::lookup dst net))))
-                    (equal (erl-val-kind
-                             (omap::lookup 'CPids
-                               (erl-state->bind (proc->s (omap::lookup dst net)))))
-                           :cons)))
+      (or (not (remaining-children-p (erl-state->bind (proc->s (omap::lookup dst net)))))
           (member-equal src
-            (erl-val-cons->lst
-              (omap::lookup 'CPids
-                (erl-state->bind (proc->s (omap::lookup dst net))))))))
+            (remaining-children (erl-state->bind (proc->s (omap::lookup dst net)))))))
     (inv dst (omap::update dst pdst (omap::update src psrc net))))
   :enable wtree-fields
   :disable (inv-of-inv-all wtree-bind0-of-reduce-receive-klst-p member-equal
@@ -197,7 +190,7 @@
            (inv dst net) (proc->outbox pdst) (proc->outbox (omap::lookup dst net))
            (wtree-bind psrc) (wtree-bind (omap::lookup src net))
            (wtree-bind pdst) (wtree-bind (omap::lookup dst net)))
-  
+  :do-not-induct t
   :use ((:instance inv-of-inv-all (pid src)) (:instance inv-of-inv-all (pid dst))
         (:instance integer-value-of-inv-terminated (pid src)) ; this causes speedup?
         (:instance received-messages-wf-of-append-message
@@ -210,16 +203,12 @@
           (net (omap::update dst pdst (omap::update src psrc net))) (sender src)
           (m (car (omap::lookup dst (proc->outbox (omap::lookup src net)))))
           (inbox (proc->inbox-new (omap::lookup dst net)))
-          (cpids (erl-val-cons->lst
-                   (omap::lookup 'CPids
-                     (erl-state->bind (proc->s (omap::lookup dst net)))))))
+          (cpids (remaining-children (erl-state->bind (proc->s (omap::lookup dst net))))))
         (:instance received-messages-wf-of-append-message
           (net (omap::update dst pdst (omap::update src psrc net))) (sender src)
           (m (car (omap::lookup dst (proc->outbox (omap::lookup src net)))))
           (inbox (proc->inbox-tried (omap::lookup dst net)))
-          (cpids (erl-val-cons->lst
-                   (omap::lookup 'CPids
-                     (erl-state->bind (proc->s (omap::lookup dst net))))))))))
+          (cpids (remaining-children (erl-state->bind (proc->s (omap::lookup dst net)))))))))
 
 ; inv of deliver ---------------------------------------------------------------
 
@@ -253,17 +242,9 @@
           (car (omap::lookup dst
                 (proc->outbox (omap::lookup src net))))))
         (erl-state->in (proc->s (omap::lookup src net))))
-      (or (not (and (omap::assoc 'CPids
-                      (erl-state->bind (proc->s (omap::lookup dst net))))
-                    (equal (erl-val-kind
-                             (omap::lookup 'CPids
-                               (erl-state->bind
-                                 (proc->s (omap::lookup dst net)))))
-                           :cons)))
+      (or (not (remaining-children-p (erl-state->bind (proc->s (omap::lookup dst net)))))
           (member-equal src
-            (erl-val-cons->lst
-              (omap::lookup 'CPids
-                (erl-state->bind (proc->s (omap::lookup dst net)))))))))
+            (remaining-children (erl-state->bind (proc->s (omap::lookup dst net))))))))
   :enable (sent-message-wf has-message-for-dst? proc-has-message-for-dst?
            proc->outbox make-reduce-proc)
   :disable (omap::assoc-of-tail-when-not-head)
