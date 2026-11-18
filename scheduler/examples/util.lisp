@@ -9,7 +9,7 @@
 
 (in-package "ACL2")
 (include-book "../top")
-(include-book "../../eval/examples/util")
+(include-book "../../evaluator/examples/util")
 
 ; Some utility for testing
 

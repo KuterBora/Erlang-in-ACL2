@@ -9,7 +9,7 @@
 
 (in-package "ACL2")
 (include-book "../inv")
-(include-book "../../../../eval/theorems/top")
+(include-book "../../../../evaluator/theorems/top")
 
 ; All reasoning regarding apply-k for the reduce proof.
 

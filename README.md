@@ -2,9 +2,9 @@
 
 ## Erlang in ACL2
 
-There are a few naming differences in the paper, in this repo:
+Some names from the paper are different at the moment:
 - `estate` is `erl-state`
-- `eval-cont-list is `apply-k`
+- `eval-cont-list` is `apply-k`
 - `cont-binop` and `cont-expr` are `kont-binop` and `kont-expr`
 
 ## Certify with:
@@ -16,22 +16,23 @@ where `ACL2_DIR` denotes your ACL2 sources directory and `ACL2` denotes a recent
 ## Important files:
 
 ### The Translator
-erl-to-acl2/erl-to-acl2.lisp : translator for Erlang modules and expressions.
+erl-to-acl2.erl : translator for Erlang modules and expressions. (It is not fully automated).
 
 ### The AST Evaluator:
-- acl2/eval/erl-ast : the ACL2 representation of Erlang AST
-- acl2/eval/erl-kont : the continuations.
-- acl2/eval/erl-eval : the AST evaluator
-- acl2/eval/erl-state : the program state
+- eval/erl-ast : the ACL2 representation of Erlang ASTs
+- evaluator/erl-kont : the continuations.
+- evaluator/erl-eval : the CPS evaluator
+- evaluator/erl-state : program states
 
 ### The Scheduler:
--acl2/scheduler/proc : process states
-- acl2/scheduler/network : map from pid to process
-- acl2/scheduler/abstract : the abstract scheduler
-- acl2/scheduler/erl-in-acl2 : run the entire pipeline here.
+- scheduler/proc : process states
+- scheduler/network : map from pid to process
+- scheduler/abstract : the abstract scheduler
+- scheduler/erl-in-acl2 : run the entire pipeline here.
 
 ### Examples:
-- acl2/scheduler/examples : message passing examples
-- acl2/books/erl-arithmetic/sum_of_nats : prove the closed form of summation for Erlang
-- acl2/books/reduce-v2 : the reduce implementation and proofs.
-- acl2/books/reduce-v2 : the top file describing what is done.
+- evaluator/examples : test cases for the CPS evaluator.
+- scheduler/examples : test cases for concurrent execution.
+- examples/ : the examples from the paper
++ erl-arithmetic/sum_of_nats : closed form of sum.
++ reduce-v2 : work in progress reduce proof.

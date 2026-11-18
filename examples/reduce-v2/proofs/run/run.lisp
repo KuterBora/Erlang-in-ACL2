@@ -17,7 +17,7 @@
 
 ; Inv of Run -------------------------------------------------------------------
 
-; BOZO: It is expesnive to expand inv, it causes way too many big subgoals.
+; It is expesnive to expand inv, it splits into many subgoals.
 ; The following is a temporary brute-force solution.
 
 (local (defruled run-idle-props
@@ -339,7 +339,7 @@
             (parent-still-waiting-p pid parent net)))))
   :expand (inv pid net)))
 
-; receive -> any, for every node: the facts from inv-all.
+; receive -> any, for every node.
 (local (defruled inv-of-run-receive
   (implies
     (and

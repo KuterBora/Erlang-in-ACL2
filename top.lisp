@@ -8,4 +8,13 @@
 ; Contributing Author: Mark Greenstreet
 
 (in-package "ACL2")
-(include-book "acl2/top")
+
+(include-book "evaluator/top")
+(include-book "evaluator/examples/top")
+(include-book "evaluator/theorems/top")
+
+(include-book "scheduler/top")
+(include-book "scheduler/examples/top")
+(include-book "scheduler/theorems/top")
+
+(include-book "examples/top")

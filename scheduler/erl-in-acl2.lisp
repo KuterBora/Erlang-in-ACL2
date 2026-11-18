@@ -9,7 +9,7 @@
 
 (in-package "ACL2")
 (include-book "abstract")
-(include-book "../eval/theorems/state/self")
+(include-book "../evaluator/theorems/state/self")
 
 
 ; Given a process that is evaluating a receive expression, try to receive from the message queue.
